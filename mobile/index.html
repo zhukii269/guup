@@ -134,6 +134,7 @@
     /* 主内容视口容器 */
     main {
       flex: 1;
+      min-height: 0;
       overflow: hidden;
       position: relative;
     }
@@ -144,13 +145,27 @@
       left: 0;
       width: 100%;
       height: 100%;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      display: none;
+      background-color: var(--bg-primary);
+      display: none !important;
       flex-direction: column;
+      overflow: hidden;
+      z-index: 1;
     }
     .view-page.active {
-      display: flex;
+      display: flex !important;
+      z-index: 10;
+    }
+
+    #view-watchpool {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #view-portfolio {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 14px 16px 20px 16px;
+      gap: 14px;
     }
 
     /* =========================================================================
@@ -193,7 +208,7 @@
     }
 
     .stock-list {
-      padding: 8px 16px calc(16px + var(--nav-height) + var(--safe-bottom)) 16px;
+      padding: 8px 16px 20px 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -299,8 +314,6 @@
        Tab 2: 日K线页面
        ========================================================================= */
     #view-kline {
-      display: flex;
-      flex-direction: column;
       height: 100%;
       overflow: hidden;
     }
@@ -313,6 +326,24 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+    .btn-back-pool {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--bg-card-hover);
+      color: var(--color-primary);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      margin-right: 4px;
+    }
+    .btn-back-pool:active {
+      transform: scale(0.94);
+      opacity: 0.8;
     }
     .kline-meta {
       display: flex;
@@ -390,7 +421,7 @@
       flex-shrink: 0;
       background: var(--bg-card);
       border-top: 1px solid var(--border-color);
-      padding: 8px 16px calc(8px + var(--nav-height) + var(--safe-bottom)) 16px;
+      padding: 8px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -413,10 +444,6 @@
     /* =========================================================================
        Tab 3: 模拟持仓页面
        ========================================================================= */
-    #view-portfolio {
-      padding: 14px 16px calc(24px + var(--nav-height) + var(--safe-bottom)) 16px;
-      gap: 14px;
-    }
 
     .asset-card {
       background: linear-gradient(135deg, #1e3a8a, #1e293b);
@@ -497,9 +524,7 @@
 
     /* 底部导航栏 */
     nav.bottom-nav {
-      position: fixed;
-      bottom: 0;
-      left: 0;
+      flex-shrink: 0;
       width: 100%;
       height: calc(var(--nav-height) + var(--safe-bottom));
       padding-bottom: var(--safe-bottom);
@@ -677,6 +702,7 @@
         <div class="kline-header">
           <div class="kline-meta">
             <div class="kline-title-row">
+              <button class="btn-back-pool" id="btnBackToPool" title="返回观察池">◀ 观察池</button>
               <span class="kline-stock-name" id="klineStockName">通信ETF</span>
               <span class="kline-stock-code" id="klineStockCode">sh515880</span>
             </div>
@@ -854,9 +880,15 @@
         dom.viewPortfolio.classList.toggle('active', tab === 'portfolio');
 
         if (tab === 'kline') {
-          setTimeout(() => {
-            if (chartInstance) chartInstance.resize();
-          }, 100);
+          requestAnimationFrame(() => {
+            if (dom.dailyChart.clientWidth > 0) {
+              if (!chartInstance && currentKlines.length > 0) {
+                renderDailyChart(currentKlines);
+              } else if (chartInstance) {
+                chartInstance.resize();
+              }
+            }
+          });
         } else if (tab === 'portfolio') {
           renderPortfolioView();
         }
@@ -960,9 +992,16 @@
       // 渲染高保真日K线图 (MA, VOL, MACD, KDJ, 买卖标记, 持仓成本线)
       function renderDailyChart(klines) {
         if (!klines || klines.length === 0) return;
+        if (dom.dailyChart.clientWidth === 0 || dom.dailyChart.clientHeight === 0) {
+          return; // 视口尚未就绪，等待 switchTab 时渲染
+        }
         if (!chartInstance) {
           chartInstance = echarts.init(dom.dailyChart);
-          window.addEventListener('resize', () => chartInstance.resize());
+          window.addEventListener('resize', () => {
+            if (chartInstance && dom.viewKline.classList.contains('active')) {
+              chartInstance.resize();
+            }
+          });
         }
 
         const dates = klines.map(k => k.date);
@@ -978,6 +1017,12 @@
         const kVals = klines.map(k => k.k);
         const dVals = klines.map(k => k.d);
         const jVals = klines.map(k => k.j);
+
+        const lastBar = klines[klines.length - 1] || {};
+        const ma5Str = lastBar.ma5 ? lastBar.ma5.toFixed(3) : '--';
+        const ma10Str = lastBar.ma10 ? lastBar.ma10.toFixed(3) : '--';
+        const ma20Str = lastBar.ma20 ? lastBar.ma20.toFixed(3) : '--';
+        const maTitle = `日K线  MA5:${ma5Str}  MA10:${ma10Str}  MA20:${ma20Str}`;
 
         // 买卖信号 markPoints
         const markPoints = [];
@@ -1050,7 +1095,7 @@
             { left: '46', right: '16', top: '84%', height: '12%' }  // KDJ
           ],
           title: [
-            { text: '日K线 MA5:-- MA10:-- MA20:--', left: 48, top: 4, textStyle: { fontSize: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+            { text: maTitle, left: 48, top: 4, textStyle: { fontSize: 10, color: isDark ? '#94a3b8' : '#64748b' } },
             { text: 'VOL', left: 48, top: '49%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } },
             { text: 'MACD', left: 48, top: '65%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } },
             { text: 'KDJ', left: 48, top: '82%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } }
@@ -1195,21 +1240,26 @@
       // 渲染模拟持仓页面
       function renderPortfolioView() {
         const data = MobileQuantEngine.PortfolioManager.getData();
-        dom.pTotalCapital.textContent = `¥${data.total_capital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
-        dom.pAvailableCash.textContent = `¥${data.available_cash.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
-
         const posKeys = Object.keys(data.positions);
         dom.portfolioList.innerHTML = '';
-        if (posKeys.length === 0) {
-          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，系统将在触发尾盘买点时自动建仓</div>';
+
+        // 收集所有持仓标的 (包括本地手动持仓 + 量化策略跟踪持仓)
+        const strategyHoldings = (watchPoolData || []).filter(item => item.tag_group === '持有' || item.tag_group === '买入');
+        
+        if (posKeys.length === 0 && strategyHoldings.length === 0) {
+          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，系统将在触发尾盘买点时自动建仓跟踪</div>';
+          dom.pTotalCapital.textContent = `¥${data.total_capital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+          dom.pAvailableCash.textContent = `¥${data.available_cash.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
           dom.pStockVal.textContent = '¥0.00';
           return;
         }
 
         let totalStockVal = 0;
+
+        // 1. 渲染手动自定义持仓
         posKeys.forEach(k => {
           const p = data.positions[k];
-          const stockVal = p.hands * 100 * p.cost_price;
+          const stockVal = p.hands * 100 * (p.cost_price || 1.0);
           totalStockVal += stockVal;
           const card = document.createElement('div');
           card.className = 'stock-card';
@@ -1221,9 +1271,9 @@
             <div class="card-mid">
               <div class="card-price-group">
                 <span class="stat-label">成本价</span>
-                <span class="stat-val">${p.cost_price.toFixed(3)}</span>
+                <span class="stat-val">${(p.cost_price || 0).toFixed(3)}</span>
               </div>
-              <span class="card-badge" style="background:#3b82f6;">持仓中</span>
+              <span class="card-badge" style="background:#3b82f6;">自定持仓</span>
             </div>
           `;
           card.addEventListener('click', () => {
@@ -1234,6 +1284,50 @@
           dom.portfolioList.appendChild(card);
         });
 
+        // 2. 渲染量化策略跟踪持仓标的
+        strategyHoldings.forEach(item => {
+          const isUp = item.pct_change >= 0;
+          const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
+          const cost = item.cost_price > 0 ? item.cost_price : item.current;
+          const pnlPct = cost > 0 ? ((item.current - cost) / cost * 100) : 0;
+          const pnlSign = pnlPct >= 0 ? '+' : '';
+          const simulatedHands = 10; // 模拟默认建仓10手
+          const stockVal = simulatedHands * 100 * item.current;
+          totalStockVal += stockVal;
+
+          const card = document.createElement('div');
+          card.className = 'stock-card';
+          card.innerHTML = `
+            <div class="card-top">
+              <div class="card-name-group">
+                <span class="card-name">${item.name}</span>
+                <span class="card-code">${item.code}</span>
+              </div>
+              <span class="card-sector">${item.sector}</span>
+            </div>
+            <div class="card-mid">
+              <div class="card-price-group">
+                <span class="card-price" style="color:${chgColor};">${item.current.toFixed(3)}</span>
+                <span style="font-size:11px; color:var(--text-muted); margin-left:6px;">成本:${cost.toFixed(3)}</span>
+              </div>
+              <span class="card-badge" style="background:${pnlPct >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">浮盈 ${pnlSign}${pnlPct.toFixed(2)}%</span>
+            </div>
+            <div class="card-bot">
+              <span class="decision-tag" style="background:${item.tag_color}22; color:${item.tag_color}; border:1px solid ${item.tag_color};">${item.tag}</span>
+              <span class="decision-reason">${item.reason_summary}</span>
+            </div>
+          `;
+          card.addEventListener('click', () => {
+            currentSymbol = item.symbol || item.code;
+            switchTab('kline');
+            loadStockKline(currentSymbol);
+          });
+          dom.portfolioList.appendChild(card);
+        });
+
+        const totalCap = Math.max(data.total_capital, totalStockVal + data.available_cash);
+        dom.pTotalCapital.textContent = `¥${totalCap.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+        dom.pAvailableCash.textContent = `¥${data.available_cash.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
         dom.pStockVal.textContent = `¥${totalStockVal.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
       }
 
@@ -1262,6 +1356,21 @@
       document.getElementById('btnCloseSearch').addEventListener('click', () => {
         dom.searchModal.classList.remove('active');
       });
+
+      // 点击遮罩外部关闭搜索框
+      dom.searchModal.addEventListener('click', (e) => {
+        if (e.target === dom.searchModal) {
+          dom.searchModal.classList.remove('active');
+        }
+      });
+
+      // 返回观察池按钮
+      const btnBack = document.getElementById('btnBackToPool');
+      if (btnBack) {
+        btnBack.addEventListener('click', () => {
+          switchTab('watchpool');
+        });
+      }
 
       let searchTimer = null;
       dom.searchInput.addEventListener('input', () => {
@@ -1306,9 +1415,22 @@
         else if (currentTab === 'portfolio') renderPortfolioView();
       });
 
-      // 启动加载
+      // 切换手机前后台时自动更新最新行情数据
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          if (currentTab === 'watchpool') loadWatchPool();
+          else if (currentTab === 'kline') loadStockKline(currentSymbol);
+          else if (currentTab === 'portfolio') renderPortfolioView();
+        }
+      });
+
+      // 启动加载：先渲染观察池，后台静默准备日K数据
       loadWatchPool();
-      loadStockKline(currentSymbol);
+      MobileQuantEngine.getDailyKlines(currentSymbol, 400).then(res => {
+        currentKlines = res.klines || [];
+        dom.klineStockName.textContent = res.name;
+        dom.klineStockCode.textContent = res.symbol;
+      });
     })();
   </script>
 </body>

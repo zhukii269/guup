@@ -834,6 +834,7 @@ const MobileQuantEngine = (function() {
     else if (presetKey === "3m") count = 60;
     else if (presetKey === "6m") count = 120;
     else if (presetKey === "1y") count = 240;
+    else if (presetKey === "all") count = totalCount;
 
     const startIdx = Math.max(0, totalCount - count);
     const sub = klines.slice(startIdx);

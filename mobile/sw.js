@@ -1,4 +1,4 @@
-const CACHE_NAME = 'etf-master-v1';
+const CACHE_NAME = 'etf-master-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -30,14 +30,42 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-  // 对于静态前端资源使用 Cache First 策略
-  if (ASSETS.some(a => event.request.url.includes(a.replace('./', '')))) {
-    event.respondWith(
-      caches.match(event.request).then(cached => cached || fetch(event.request))
-    );
-  } else {
-    // 对于实时金融行情走 Network First
-    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // 1. 外部行情API请求 (qt.gtimg.cn / ifzq.gtimg.cn) 直接走网络
+  if (url.origin !== self.location.origin) {
+    event.respondWith(fetch(req).catch(() => new Response('{"error":"offline"}', { status: 503 })));
+    return;
   }
+
+  // 2. HTML 导航与引擎代码使用 Network-First 策略，确保每次打开都获取最新页面修复
+  if (req.mode === 'navigate' || req.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('engine.js')) {
+    event.respondWith(
+      fetch(req)
+        .then(response => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(req).then(cached => cached || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // 3. 静态图标与庞大第三方库 (echarts.min.js, png) 使用 Cache-First 提高性能
+  event.respondWith(
+    caches.match(req).then(cached => {
+      if (cached) return cached;
+      return fetch(req).then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
+        }
+        return networkResponse;
+      });
+    })
+  );
 });
