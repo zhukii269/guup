@@ -16,7 +16,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 18
+        node-version: 20
 
     - name: Setup Java JDK
       uses: actions/setup-java@v4
@@ -24,22 +24,22 @@ jobs:
         distribution: 'zulu'
         java-version: 17
 
-    - name: Install Capacitor Dependencies
+    - name: Install Dependencies
       run: |
-        npm install @capacitor/core @capacitor/cli @capacitor/android
+        npm install
 
-    - name: Add Android Platform & Copy Web Assets
+    - name: Add Android Platform & Sync Web Assets
       run: |
         npx cap add android
-        npx cap copy
+        npx cap sync android
 
     - name: Build Android Debug APK
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --no-daemon
 
-    - name: Upload APK
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ETF量化大师-Android-APK
