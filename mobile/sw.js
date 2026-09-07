@@ -1,4 +1,4 @@
-const CACHE_NAME = 'etf-master-v3';
+const CACHE_NAME = 'etf-master-v4';
 const ASSETS = [
   './',
   './index.html',

@@ -912,6 +912,57 @@
       font-weight: 700;
       cursor: pointer;
     }
+
+    /* 同花顺风格：左下角浮动平移与缩放工具栏 */
+    .kline-float-tools {
+      position: absolute;
+      left: 8px;
+      bottom: 25px; /* 悬浮于时间刻度线上方，与同花顺位置完全一致 */
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 20px;
+      padding: 3px 5px;
+      z-index: 50;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body.light-theme .kline-float-tools {
+      background: rgba(255, 255, 255, 0.88);
+      border-color: rgba(0, 0, 0, 0.12);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+    }
+    .tool-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background 0.15s, transform 0.1s;
+    }
+    body.light-theme .tool-btn {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.08);
+      color: #1e293b;
+    }
+    .tool-btn:active {
+      background: var(--color-primary);
+      color: #ffffff;
+      transform: scale(0.88);
+    }
   </style>
 </head>
 <body>
@@ -992,6 +1043,16 @@
           <div id="dailyChart"></div>
           <div class="loading-overlay" id="chartLoading">
             <div class="spinner"></div>
+          </div>
+
+          <!-- 同花顺风格：左下角平移与缩放小悬浮栏 -->
+          <div class="kline-float-tools" id="klineFloatTools">
+            <button class="tool-btn" id="btnPanFarLeft" title="跳到最早 (<<)">≪</button>
+            <button class="tool-btn" id="btnZoomIn" title="放大 (+)">＋</button>
+            <button class="tool-btn" id="btnZoomOut" title="缩小 (-)">－</button>
+            <button class="tool-btn" id="btnPanLeft" title="向左平移 (<)">‹</button>
+            <button class="tool-btn" id="btnPanRight" title="向右平移 (>)">›</button>
+            <button class="tool-btn" id="btnPanFarRight" title="回到最新 (>>)">≫</button>
           </div>
         </div>
 
@@ -1208,7 +1269,15 @@
         searchInput: document.getElementById('searchInput'),
         searchResults: document.getElementById('searchResults'),
         navItems: document.querySelectorAll('.nav-item'),
-        filterPills: document.querySelectorAll('.filter-pill')
+        filterPills: document.querySelectorAll('.filter-pill'),
+        // 同花顺左下角浮动控制按钮
+        klineFloatTools: document.getElementById('klineFloatTools'),
+        btnPanFarLeft: document.getElementById('btnPanFarLeft'),
+        btnZoomIn: document.getElementById('btnZoomIn'),
+        btnZoomOut: document.getElementById('btnZoomOut'),
+        btnPanLeft: document.getElementById('btnPanLeft'),
+        btnPanRight: document.getElementById('btnPanRight'),
+        btnPanFarRight: document.getElementById('btnPanFarRight')
       };
 
       // 初始化深浅色主题
@@ -1480,8 +1549,11 @@
               chartInstance.resize();
             }
           });
-          // 监听双指缩放手势事件，动态联动更新底部统计指标
+          // 监听缩放事件，动态联动更新底部统计指标
           chartInstance.on('dataZoom', updateVisibleStats);
+          // 初始化自定义温和双指缩放手势与浮动栏控制
+          initCustomPinchZoom();
+          initFloatToolActions();
         }
 
         const dates = klines.map(k => k.date);
@@ -1636,8 +1708,8 @@
               xAxisIndex: [0, 1, 2, 3],
               start: startPct,
               end: 100,
-              zoomOnTouch: true,       // 仅保留双指捏合缩放
-              moveOnMouseMove: false,  // 取消单指拖动平移，由十字线移动替代
+              zoomOnTouch: false,      // 关闭 ECharts 内置无阻尼跳跃缩放，交由自定义温和阻尼双指手势接管
+              moveOnMouseMove: false,  // 取消单指拖动平移，由左下角小按钮与十字线光标接管
               moveOnMouseWheel: false,
               preventDefaultMouseMove: true
             }
@@ -1706,6 +1778,202 @@
 
         chartInstance.setOption(option, true);
         updateVisibleStats();
+      }
+
+      // 自定义温和阻尼双指捏合缩放（彻底解决双指过于灵敏问题）
+      let pinchTouchDist = null;
+      function initCustomPinchZoom() {
+        if (!dom.dailyChart) return;
+
+        dom.dailyChart.addEventListener('touchstart', (e) => {
+          if (e.touches.length === 2) {
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            pinchTouchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+            if (chartInstance) {
+              chartInstance.dispatchAction({ type: 'hideTip' });
+            }
+          } else {
+            pinchTouchDist = null;
+          }
+        }, { passive: false });
+
+        dom.dailyChart.addEventListener('touchmove', (e) => {
+          if (e.touches.length === 2 && pinchTouchDist && chartInstance && currentKlines && currentKlines.length > 0) {
+            e.preventDefault();
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            const curDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+            const distDelta = curDist - pinchTouchDist;
+            pinchTouchDist = curDist; // 帧间微量增量
+
+            const opt = chartInstance.getOption();
+            if (!opt || !opt.dataZoom || opt.dataZoom.length === 0) return;
+            const dz = opt.dataZoom[0];
+            let start = typeof dz.start === 'number' ? dz.start : 0;
+            let end = typeof dz.end === 'number' ? dz.end : 100;
+            const span = end - start;
+
+            // 关键：采用 0.0035 平滑阻尼系数，手势缩放温润丝滑
+            const factor = distDelta * 0.0035;
+            let newSpan = span * (1 - factor);
+
+            const totalBars = currentKlines.length;
+            const minSpan = Math.max(2.5, (12 / totalBars) * 100);
+            newSpan = Math.max(minSpan, Math.min(100, newSpan));
+
+            const center = (start + end) / 2;
+            let newStart = center - newSpan / 2;
+            let newEnd = center + newSpan / 2;
+
+            if (newStart < 0) {
+              newStart = 0;
+              newEnd = Math.min(100, newStart + newSpan);
+            }
+            if (newEnd > 100) {
+              newEnd = 100;
+              newStart = Math.max(0, newEnd - newSpan);
+            }
+
+            chartInstance.dispatchAction({
+              type: 'dataZoom',
+              start: newStart,
+              end: newEnd
+            });
+            updateVisibleStats();
+          }
+        }, { passive: false });
+
+        dom.dailyChart.addEventListener('touchend', (e) => {
+          if (e.touches.length < 2) {
+            pinchTouchDist = null;
+          }
+        });
+      }
+
+      // 同花顺风格：平移与缩放逻辑
+      function panChart(direction, isSmoothTick = false) {
+        if (!chartInstance || !currentKlines || currentKlines.length === 0) return;
+        const opt = chartInstance.getOption();
+        if (!opt || !opt.dataZoom || opt.dataZoom.length === 0) return;
+        const dz = opt.dataZoom[0];
+        let start = typeof dz.start === 'number' ? dz.start : 0;
+        let end = typeof dz.end === 'number' ? dz.end : 100;
+        const span = end - start;
+
+        // 单击步进 ~18% 跨度，长按微步进 ~5%
+        const step = isSmoothTick ? Math.max(1.2, span * 0.05) : Math.max(2.5, span * 0.18);
+
+        if (direction === 'left') { // 往左平移：查看历史
+          start = Math.max(0, start - step);
+          end = start + span;
+        } else if (direction === 'right') { // 往右平移：查看最新
+          end = Math.min(100, end + step);
+          start = end - span;
+        } else if (direction === 'farLeft') { // 跳到最早
+          start = 0;
+          end = Math.min(100, span);
+        } else if (direction === 'farRight') { // 回到最新
+          end = 100;
+          start = Math.max(0, 100 - span);
+          restoreLatestQuote();
+        }
+
+        chartInstance.dispatchAction({
+          type: 'dataZoom',
+          start: start,
+          end: end
+        });
+        updateVisibleStats();
+      }
+
+      function zoomChart(direction, isSmoothTick = false) {
+        if (!chartInstance || !currentKlines || currentKlines.length === 0) return;
+        const opt = chartInstance.getOption();
+        if (!opt || !opt.dataZoom || opt.dataZoom.length === 0) return;
+        const dz = opt.dataZoom[0];
+        let start = typeof dz.start === 'number' ? dz.start : 0;
+        let end = typeof dz.end === 'number' ? dz.end : 100;
+        const span = end - start;
+        const totalBars = currentKlines.length || 400;
+        const minSpan = Math.max(2.5, (12 / totalBars) * 100);
+
+        let newSpan = span;
+        const ratio = isSmoothTick ? 0.05 : 0.22;
+        if (direction === 'in') { // 放大：缩短span，蜡烛变粗
+          newSpan = Math.max(minSpan, span * (1 - ratio));
+        } else { // 缩小：拉长span，蜡烛变细
+          newSpan = Math.min(100, span * (1 + ratio));
+        }
+
+        const center = (start + end) / 2;
+        let newStart = center - newSpan / 2;
+        let newEnd = center + newSpan / 2;
+
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = Math.min(100, newStart + newSpan);
+        }
+        if (newEnd > 100) {
+          newEnd = 100;
+          newStart = Math.max(0, newEnd - newSpan);
+        }
+
+        chartInstance.dispatchAction({
+          type: 'dataZoom',
+          start: newStart,
+          end: newEnd
+        });
+        updateVisibleStats();
+      }
+
+      // 绑定支持单击与长按连续触发
+      function bindHoldAction(element, tickAction, clickAction) {
+        if (!element) return;
+        let timer = null;
+        let interval = null;
+        let isPressed = false;
+
+        const start = (e) => {
+          e.stopPropagation();
+          if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+          isPressed = true;
+          clickAction();
+          timer = setTimeout(() => {
+            if (isPressed) {
+              interval = setInterval(() => {
+                if (isPressed) tickAction();
+                else stop();
+              }, 80);
+            }
+          }, 300);
+        };
+
+        const stop = () => {
+          isPressed = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          if (interval) { clearInterval(interval); interval = null; }
+        };
+
+        element.addEventListener('touchstart', start, { passive: false });
+        element.addEventListener('touchend', stop);
+        element.addEventListener('touchcancel', stop);
+        element.addEventListener('mousedown', start);
+        element.addEventListener('mouseup', stop);
+        element.addEventListener('mouseleave', stop);
+      }
+
+      // 初始化浮动工具栏按钮点击与长按
+      function initFloatToolActions() {
+        if (!dom.btnPanLeft) return;
+
+        bindHoldAction(dom.btnPanLeft, () => panChart('left', true), () => panChart('left', false));
+        bindHoldAction(dom.btnPanRight, () => panChart('right', true), () => panChart('right', false));
+        bindHoldAction(dom.btnZoomIn, () => zoomChart('in', true), () => zoomChart('in', false));
+        bindHoldAction(dom.btnZoomOut, () => zoomChart('out', true), () => zoomChart('out', false));
+
+        dom.btnPanFarLeft.addEventListener('click', () => panChart('farLeft'));
+        dom.btnPanFarRight.addEventListener('click', () => panChart('farRight'));
       }
 
       // 根据当前视口缩放计算底部统计看板
