@@ -879,6 +879,36 @@ const MobileQuantEngine = (function() {
       };
       this.saveData(data);
       return data;
+    },
+    setAvailableCash: function(amount) {
+      const data = this.getData();
+      data.available_cash = Math.max(0, parseFloat(amount) || 0);
+      this.saveData(data);
+      return data;
+    },
+    setHolding: function(symbol, name, hands, costPrice) {
+      const data = this.getData();
+      if (!data.positions) data.positions = {};
+      const s = String(symbol).trim().toLowerCase();
+      data.positions[s] = {
+        symbol: s,
+        code: s.replace(/^[a-z]+/, ''),
+        name: name || s,
+        hands: Math.max(1, parseInt(hands, 10) || 1),
+        cost_price: Math.max(0.001, parseFloat(costPrice) || 1.0),
+        buy_date: new Date().toISOString().slice(0, 10)
+      };
+      this.saveData(data);
+      return data;
+    },
+    removeHolding: function(symbol) {
+      const data = this.getData();
+      const s = String(symbol).trim().toLowerCase();
+      if (data.positions && data.positions[s]) {
+        delete data.positions[s];
+        this.saveData(data);
+      }
+      return data;
     }
   };
 

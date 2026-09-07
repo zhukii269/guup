@@ -320,12 +320,22 @@
 
     .kline-header {
       flex-shrink: 0;
-      padding: 10px 16px;
+      padding: 8px 14px;
       background: var(--bg-card);
       border-bottom: 1px solid var(--border-color);
       display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .kline-top-row {
+      display: flex;
       align-items: center;
       justify-content: space-between;
+    }
+    .kline-title-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
     .btn-back-pool {
       display: inline-flex;
@@ -339,24 +349,13 @@
       color: var(--color-primary);
       border: 1px solid var(--border-color);
       cursor: pointer;
-      margin-right: 4px;
     }
     .btn-back-pool:active {
       transform: scale(0.94);
       opacity: 0.8;
     }
-    .kline-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .kline-title-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
     .kline-stock-name {
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 800;
     }
     .kline-stock-code {
@@ -364,44 +363,71 @@
       color: var(--text-muted);
       font-family: monospace;
     }
-    .kline-price-row {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-    .kline-main-price {
-      font-size: 22px;
-      font-weight: 900;
-      font-family: monospace;
-    }
-    .kline-main-chg {
-      font-size: 13px;
+    .kline-cursor-date {
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--color-primary-bg);
+      color: var(--color-primary);
       font-weight: 700;
+      display: none;
+    }
+    .kline-gesture-hint {
+      font-size: 10.5px;
+      color: var(--text-muted);
     }
 
-    .kline-tools {
+    .kline-quote-bar {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
+      gap: 10px;
     }
-    .range-btn-row {
+    .kline-price-block {
       display: flex;
-      gap: 4px;
+      flex-direction: column;
+      min-width: 90px;
     }
-    .range-pill {
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
+    .kline-main-price {
+      font-size: 24px;
+      font-weight: 900;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      line-height: 1.1;
+    }
+    .kline-chg-sub {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .kline-metrics-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px 6px;
       background: var(--bg-primary);
+      padding: 5px 8px;
+      border-radius: 8px;
       border: 1px solid var(--border-color);
-      color: var(--text-sub);
-      cursor: pointer;
     }
-    .range-pill.active {
-      background: var(--color-primary);
-      color: #fff;
-      border-color: var(--color-primary);
+    .metric-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10.5px;
+    }
+    .m-lbl {
+      color: var(--text-muted);
+      margin-right: 2px;
+      font-size: 10px;
+    }
+    .m-val {
+      font-weight: 700;
+      font-family: monospace;
+      color: var(--text-main);
     }
 
     /* K线画布容器 */
@@ -501,13 +527,15 @@
       gap: 4px;
       transition: all 0.2s;
     }
-    .btn-deposit {
-      background: #3b82f6;
+    .btn-edit-cash {
+      background: #2563eb;
       color: #fff;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     }
-    .btn-reset {
-      background: rgba(255,255,255,0.15);
-      color: #fff;
+    .btn-edit-holdings {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
     }
     .btn-action:active {
       transform: scale(0.96);
@@ -656,6 +684,234 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    /* 通用操作弹窗 Modal & Sheet */
+    .action-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(4px);
+      z-index: 300;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .action-modal.active {
+      display: flex;
+    }
+    .action-sheet {
+      width: 100%;
+      max-width: 500px;
+      background: var(--bg-card);
+      border-radius: 20px 20px 0 0;
+      padding: 18px 16px calc(20px + var(--safe-bottom)) 16px;
+      border-top: 1px solid var(--border-color);
+      box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+      max-height: 85vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      animation: sheetSlideUp 0.25s ease-out;
+    }
+    @keyframes sheetSlideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .sheet-title {
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .sheet-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+    }
+    .sheet-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .input-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-sub);
+    }
+    .input-wrap {
+      display: flex;
+      align-items: center;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px 12px;
+      gap: 6px;
+    }
+    .currency-prefix {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--color-primary);
+    }
+    .modal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-size: 16px;
+      font-weight: 800;
+      font-family: monospace;
+    }
+    .modal-select {
+      width: 100%;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+    }
+    .quick-cash-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .quick-pill {
+      flex: 1;
+      padding: 6px 0;
+      text-align: center;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-sub);
+      cursor: pointer;
+    }
+    .quick-pill:active {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .sheet-tip {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .sheet-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .sheet-btn {
+      flex: 1;
+      padding: 10px 0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 800;
+      border: none;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-primary {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .btn-secondary {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    /* 持仓修改表单与列表 */
+    .holding-form-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .form-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--color-primary);
+    }
+    .form-row {
+      display: flex;
+      gap: 8px;
+    }
+    .form-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sheet-subtitle {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-top: 4px;
+    }
+    .holding-manage-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .manage-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+    }
+    .manage-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .manage-name {
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .manage-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .manage-del-btn {
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -700,25 +956,34 @@
       <!-- ======================================================= -->
       <div class="view-page" id="view-kline">
         <div class="kline-header">
-          <div class="kline-meta">
-            <div class="kline-title-row">
+          <div class="kline-top-row">
+            <div class="kline-title-group">
               <button class="btn-back-pool" id="btnBackToPool" title="返回观察池">◀ 观察池</button>
               <span class="kline-stock-name" id="klineStockName">通信ETF</span>
               <span class="kline-stock-code" id="klineStockCode">sh515880</span>
+              <span class="kline-cursor-date" id="klineCursorDate"></span>
             </div>
-            <div class="kline-price-row">
-              <span class="kline-main-price" id="klineMainPrice">0.677</span>
-              <span class="kline-main-chg" id="klineMainChg">+3.20%</span>
+            <div class="kline-gesture-hint">
+              <span>双指缩放 · 单指十字线</span>
             </div>
           </div>
 
-          <div class="kline-tools">
-            <div class="range-btn-row">
-              <button class="range-pill" data-range="1m">1月</button>
-              <button class="range-pill active" data-range="3m">3月</button>
-              <button class="range-pill" data-range="6m">半年</button>
-              <button class="range-pill" data-range="1y">1年</button>
-              <button class="range-pill" data-range="all">全部</button>
+          <div class="kline-quote-bar">
+            <div class="kline-price-block">
+              <span class="kline-main-price" id="klineMainPrice">0.677</span>
+              <div class="kline-chg-sub">
+                <span class="kline-chg-val" id="klineMainChgVal">+0.000</span>
+                <span class="kline-chg-pct" id="klineMainChg">+0.00%</span>
+              </div>
+            </div>
+
+            <div class="kline-metrics-grid">
+              <div class="metric-item"><span class="m-lbl">高</span><span class="m-val" id="kmHigh">--</span></div>
+              <div class="metric-item"><span class="m-lbl">开</span><span class="m-val" id="kmOpen">--</span></div>
+              <div class="metric-item"><span class="m-lbl">量</span><span class="m-val" id="kmVol">--</span></div>
+              <div class="metric-item"><span class="m-lbl">低</span><span class="m-val" id="kmLow">--</span></div>
+              <div class="metric-item"><span class="m-lbl">额</span><span class="m-val" id="kmAmount">--</span></div>
+              <div class="metric-item"><span class="m-lbl">幅</span><span class="m-val" id="kmAmp">--</span></div>
             </div>
           </div>
         </div>
@@ -765,8 +1030,8 @@
             </div>
           </div>
           <div class="asset-actions">
-            <button class="btn-action btn-deposit" id="btnDeposit">💵 发工资 (+¥1万)</button>
-            <button class="btn-action btn-reset" id="btnResetPortfolio">🔄 重置账户</button>
+            <button class="btn-action btn-edit-cash" id="btnEditCash">💵 修改现金</button>
+            <button class="btn-action btn-edit-holdings" id="btnEditHoldings">📊 修改持仓</button>
           </div>
         </div>
 
@@ -806,6 +1071,82 @@
         </div>
       </div>
     </div>
+
+    <!-- 修改可用现金 Modal -->
+    <div class="action-modal" id="modalEditCash">
+      <div class="action-sheet">
+        <div class="sheet-header">
+          <span class="sheet-title">💵 修改可用现金</span>
+          <button class="sheet-close" id="btnCloseEditCash">✕</button>
+        </div>
+        <div class="sheet-body">
+          <div class="input-group">
+            <label class="input-label">可用现金金额 (元)</label>
+            <div class="input-wrap">
+              <span class="currency-prefix">¥</span>
+              <input type="number" step="1000" class="modal-input" id="inputCashAmount" placeholder="如 100000">
+            </div>
+          </div>
+          <div class="quick-cash-row">
+            <button class="quick-pill" data-val="50000">5万</button>
+            <button class="quick-pill" data-val="100000">10万</button>
+            <button class="quick-pill" data-val="200000">20万</button>
+            <button class="quick-pill" data-val="500000">50万</button>
+            <button class="quick-pill" data-val="1000000">100万</button>
+          </div>
+          <div class="sheet-tip">💡 提示：保存后将自动更新总持仓资产、可用现金与仓位分配。</div>
+          <div class="sheet-actions">
+            <button class="sheet-btn btn-secondary" id="btnCancelEditCash">取消</button>
+            <button class="sheet-btn btn-primary" id="btnConfirmEditCash">保存修改</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 管理与修改持仓 Modal -->
+    <div class="action-modal" id="modalEditHoldings">
+      <div class="action-sheet">
+        <div class="sheet-header">
+          <span class="sheet-title">📊 管理与修改持仓</span>
+          <button class="sheet-close" id="btnCloseEditHoldings">✕</button>
+        </div>
+        <div class="sheet-body">
+          <div class="holding-form-box">
+            <div class="form-title" id="holdingFormTitle">➕ 添加 / 修改持仓标的</div>
+            <div class="form-item">
+              <label class="input-label">选择ETF标的</label>
+              <select class="modal-select" id="selectHoldingSymbol">
+                <!-- 动态填充 -->
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-item" style="flex:1;">
+                <label class="input-label">持仓手数 (手)</label>
+                <div class="input-wrap">
+                  <input type="number" min="1" step="1" class="modal-input" id="inputHoldingHands" placeholder="如 10">
+                </div>
+              </div>
+              <div class="form-item" style="flex:1.2;">
+                <label class="input-label">成本均价 (元)</label>
+                <div class="input-wrap">
+                  <input type="number" step="0.001" class="modal-input" id="inputHoldingCost" placeholder="如 0.677">
+                </div>
+              </div>
+            </div>
+            <button class="sheet-btn btn-primary" id="btnSaveHolding" style="margin-top:4px;">保存该标的持仓</button>
+          </div>
+
+          <div class="sheet-subtitle">📋 当前已设定的持仓标的</div>
+          <div class="holding-manage-list" id="holdingManageList">
+            <!-- 动态渲染当前持仓项，带编辑和删除 -->
+          </div>
+
+          <div class="sheet-actions">
+            <button class="sheet-btn btn-secondary" id="btnDoneEditHoldings" style="width:100%;">完成并返回</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -819,7 +1160,6 @@
       let watchPoolData = [];
       let currentKlines = [];
       let chartInstance = null;
-      let currentRangePreset = '3m';
       let isDark = true;
 
       const dom = {
@@ -830,8 +1170,16 @@
         portfolioList: document.getElementById('portfolioList'),
         klineStockName: document.getElementById('klineStockName'),
         klineStockCode: document.getElementById('klineStockCode'),
+        klineCursorDate: document.getElementById('klineCursorDate'),
         klineMainPrice: document.getElementById('klineMainPrice'),
         klineMainChg: document.getElementById('klineMainChg'),
+        klineMainChgVal: document.getElementById('klineMainChgVal'),
+        kmHigh: document.getElementById('kmHigh'),
+        kmOpen: document.getElementById('kmOpen'),
+        kmVol: document.getElementById('kmVol'),
+        kmLow: document.getElementById('kmLow'),
+        kmAmount: document.getElementById('kmAmount'),
+        kmAmp: document.getElementById('kmAmp'),
         dailyChart: document.getElementById('dailyChart'),
         chartLoading: document.getElementById('chartLoading'),
         statRange: document.getElementById('statRange'),
@@ -840,15 +1188,30 @@
         pTotalCapital: document.getElementById('pTotalCapital'),
         pAvailableCash: document.getElementById('pAvailableCash'),
         pStockVal: document.getElementById('pStockVal'),
+        btnEditCash: document.getElementById('btnEditCash'),
+        btnEditHoldings: document.getElementById('btnEditHoldings'),
+        modalEditCash: document.getElementById('modalEditCash'),
+        btnCloseEditCash: document.getElementById('btnCloseEditCash'),
+        btnCancelEditCash: document.getElementById('btnCancelEditCash'),
+        btnConfirmEditCash: document.getElementById('btnConfirmEditCash'),
+        inputCashAmount: document.getElementById('inputCashAmount'),
+        modalEditHoldings: document.getElementById('modalEditHoldings'),
+        btnCloseEditHoldings: document.getElementById('btnCloseEditHoldings'),
+        btnDoneEditHoldings: document.getElementById('btnDoneEditHoldings'),
+        holdingFormTitle: document.getElementById('holdingFormTitle'),
+        selectHoldingSymbol: document.getElementById('selectHoldingSymbol'),
+        inputHoldingHands: document.getElementById('inputHoldingHands'),
+        inputHoldingCost: document.getElementById('inputHoldingCost'),
+        btnSaveHolding: document.getElementById('btnSaveHolding'),
+        holdingManageList: document.getElementById('holdingManageList'),
         searchModal: document.getElementById('searchModal'),
         searchInput: document.getElementById('searchInput'),
         searchResults: document.getElementById('searchResults'),
         navItems: document.querySelectorAll('.nav-item'),
-        filterPills: document.querySelectorAll('.filter-pill'),
-        rangePills: document.querySelectorAll('.range-pill')
+        filterPills: document.querySelectorAll('.filter-pill')
       };
 
-      // 初始化主题
+      // 初始化深浅色主题
       const savedTheme = localStorage.getItem(MobileQuantEngine.STORAGE_KEY_THEME);
       if (savedTheme === 'light') {
         isDark = false;
@@ -894,7 +1257,7 @@
         }
       }
 
-      // 观察池分类药丸
+      // 观察池分类筛选药丸
       dom.filterPills.forEach(pill => {
         pill.addEventListener('click', () => {
           dom.filterPills.forEach(p => p.classList.remove('active'));
@@ -910,7 +1273,7 @@
           watchPoolData = await MobileQuantEngine.getWatchPool();
           renderWatchPoolCards();
         } catch (e) {
-          console.error("Failed to load watch pool:", e);
+          console.error('Failed to load watch pool:', e);
         }
       }
 
@@ -922,7 +1285,7 @@
 
         dom.stockList.innerHTML = '';
         if (filtered.length === 0) {
-          dom.stockList.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">暂无【${currentFilter}】分类标的</div>`;
+          dom.stockList.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">暂无【' + currentFilter + '】分类标的</div>';
           return;
         }
 
@@ -963,7 +1326,116 @@
         });
       }
 
-      // 加载个股日K线
+      // 格式化成交量 (手)
+      function formatVolumeHands(rawVol) {
+        if (!rawVol || isNaN(rawVol)) return '--';
+        const v = rawVol > 1000000 ? rawVol / 100 : rawVol;
+        if (v >= 100000000) return (v / 100000000).toFixed(2) + '亿手';
+        if (v >= 10000) return (v / 10000).toFixed(2) + '万手';
+        return Math.round(v) + '手';
+      }
+
+      // 格式化成交额 (元)
+      function formatAmountYuan(amt, fallbackBar) {
+        let a = amt;
+        if (!a || isNaN(a) || a === 0) {
+          if (fallbackBar && fallbackBar.close) {
+            const rawVol = fallbackBar.volume || 0;
+            const shares = rawVol > 1000000 ? rawVol : rawVol * 100;
+            a = fallbackBar.close * shares;
+          }
+        }
+        if (!a || isNaN(a)) return '--';
+        if (a >= 100000000) return (a / 100000000).toFixed(2) + '亿';
+        if (a >= 10000) return (a / 10000).toFixed(1) + '万';
+        return Math.round(a) + '元';
+      }
+
+      // 更新顶部股票行情看板 (同花顺风格：高、开、低、量、额、幅与价格联动)
+      function updateHeaderQuote(bar, isHistorical, prevBar) {
+        if (!bar) return;
+
+        // 1. 光标状态与日期标签
+        if (isHistorical) {
+          dom.klineCursorDate.textContent = `${bar.date} ✕`;
+          dom.klineCursorDate.classList.add('historical');
+          dom.klineCursorDate.title = '点击返回最新行情';
+        } else {
+          dom.klineCursorDate.textContent = bar.date ? `${bar.date}` : '最新收盘';
+          dom.klineCursorDate.classList.remove('historical');
+          dom.klineCursorDate.title = '';
+        }
+
+        // 2. 现价与涨跌幅计算
+        const close = bar.close || bar.current || 0;
+        dom.klineMainPrice.textContent = close.toFixed(3);
+
+        let prevClose = 0;
+        if (prevBar && prevBar.close) {
+          prevClose = prevBar.close;
+        } else if (bar.prev_close) {
+          prevClose = bar.prev_close;
+        } else if (bar.open) {
+          prevClose = bar.open;
+        } else {
+          prevClose = close;
+        }
+
+        const chgVal = close - prevClose;
+        const chgSign = chgVal >= 0 ? '+' : '';
+        dom.klineMainChgVal.textContent = `${chgSign}${chgVal.toFixed(3)}`;
+
+        const pct = prevClose > 0 ? (chgVal / prevClose * 100) : (bar.pct_change || 0);
+        const pctSign = pct >= 0 ? '+' : '';
+        dom.klineMainChg.textContent = `${pctSign}${pct.toFixed(2)}%`;
+
+        const isUp = chgVal >= 0;
+        const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
+        dom.klineMainPrice.style.color = chgColor;
+        dom.klineMainChgVal.style.color = chgColor;
+        dom.klineMainChg.style.color = chgColor;
+
+        // 3. 高、开、低、量、额、幅 详细指标
+        const high = bar.high || close;
+        const open = bar.open || close;
+        const low = bar.low || close;
+
+        dom.kmHigh.textContent = high.toFixed(3);
+        dom.kmHigh.style.color = high >= prevClose ? 'var(--color-up)' : 'var(--color-down)';
+
+        dom.kmOpen.textContent = open.toFixed(3);
+        dom.kmOpen.style.color = open >= prevClose ? 'var(--color-up)' : 'var(--color-down)';
+
+        dom.kmLow.textContent = low.toFixed(3);
+        dom.kmLow.style.color = low >= prevClose ? 'var(--color-up)' : 'var(--color-down)';
+
+        dom.kmVol.textContent = formatVolumeHands(bar.volume);
+        dom.kmAmount.textContent = formatAmountYuan(bar.amount, bar);
+
+        const amp = prevClose > 0 ? ((high - low) / prevClose * 100) : 0;
+        dom.kmAmp.textContent = `${amp.toFixed(2)}%`;
+      }
+
+      // 点击日期光标徽章或顶部行情栏，迅速恢复为最新行情
+      dom.klineCursorDate.addEventListener('click', restoreLatestQuote);
+      document.querySelector('.kline-quote-bar').addEventListener('click', () => {
+        if (dom.klineCursorDate.classList.contains('historical')) {
+          restoreLatestQuote();
+        }
+      });
+
+      function restoreLatestQuote() {
+        if (currentKlines && currentKlines.length > 0) {
+          const lastBar = currentKlines[currentKlines.length - 1];
+          const prevBar = currentKlines.length > 1 ? currentKlines[currentKlines.length - 2] : null;
+          updateHeaderQuote(lastBar, false, prevBar);
+          if (chartInstance) {
+            chartInstance.dispatchAction({ type: 'hideTip' });
+          }
+        }
+      }
+
+      // 加载个股日K线数据
       async function loadStockKline(symbol) {
         dom.chartLoading.style.display = 'flex';
         try {
@@ -972,28 +1444,34 @@
           dom.klineStockName.textContent = res.name;
           dom.klineStockCode.textContent = res.symbol;
 
-          const quote = await MobileQuantEngine.getRealtimeQuote(symbol);
-          const isUp = quote.pct_change >= 0;
-          const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
-          dom.klineMainPrice.textContent = quote.current.toFixed(3);
-          dom.klineMainPrice.style.color = chgColor;
-          dom.klineMainChg.textContent = `${isUp ? '+' : ''}${quote.pct_change.toFixed(2)}%`;
-          dom.klineMainChg.style.color = chgColor;
+          // 初始展示最新K线行情数据
+          if (currentKlines.length > 0) {
+            const lastBar = currentKlines[currentKlines.length - 1];
+            const prevBar = currentKlines.length > 1 ? currentKlines[currentKlines.length - 2] : null;
+            updateHeaderQuote(lastBar, false, prevBar);
+          }
+
+          // 盘中最新跳动异步刷新
+          MobileQuantEngine.getRealtimeQuote(symbol).then(quote => {
+            if (quote && quote.current > 0 && !dom.klineCursorDate.classList.contains('historical')) {
+              updateHeaderQuote(quote, false, { close: quote.prev_close });
+            }
+          }).catch(() => {});
 
           renderDailyChart(currentKlines);
-          updateIntervalStats();
+          updateVisibleStats();
         } catch (e) {
-          console.error("loadStockKline error:", e);
+          console.error('loadStockKline error:', e);
         } finally {
           dom.chartLoading.style.display = 'none';
         }
       }
 
-      // 渲染高保真日K线图 (MA, VOL, MACD, KDJ, 买卖标记, 持仓成本线)
+      // 渲染高保真日K线图 (MA, VOL, MACD, KDJ, 买卖信号, 持仓成本线)
       function renderDailyChart(klines) {
         if (!klines || klines.length === 0) return;
         if (dom.dailyChart.clientWidth === 0 || dom.dailyChart.clientHeight === 0) {
-          return; // 视口尚未就绪，等待 switchTab 时渲染
+          return;
         }
         if (!chartInstance) {
           chartInstance = echarts.init(dom.dailyChart);
@@ -1002,6 +1480,8 @@
               chartInstance.resize();
             }
           });
+          // 监听双指缩放手势事件，动态联动更新底部统计指标
+          chartInstance.on('dataZoom', updateVisibleStats);
         }
 
         const dates = klines.map(k => k.date);
@@ -1024,7 +1504,7 @@
         const ma20Str = lastBar.ma20 ? lastBar.ma20.toFixed(3) : '--';
         const maTitle = `日K线  MA5:${ma5Str}  MA10:${ma10Str}  MA20:${ma20Str}`;
 
-        // 买卖信号 markPoints
+        // 买卖信号标记
         const markPoints = [];
         klines.forEach(b => {
           if (b.signal_type) {
@@ -1054,10 +1534,10 @@
           }
         });
 
-        // 持仓成本线
+        // 持仓成本参考线
         const markLines = [];
         const portData = MobileQuantEngine.PortfolioManager.getData();
-        const pos = portData.positions[currentSymbol];
+        const pos = (portData.positions || {})[currentSymbol];
         if (pos && pos.cost_price > 0) {
           const lastC = klines[klines.length - 1].close;
           const pnlPct = ((lastC - pos.cost_price) / pos.cost_price * 100);
@@ -1067,8 +1547,8 @@
             lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
             label: {
               show: true,
-              position: 'insideEndTop', // 右对齐防碰撞
-              formatter: `💼 成本: ${pos.cost_price.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
+              position: 'insideEndTop',
+              formatter: `💼 持仓成本: ${pos.cost_price.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
               fontSize: 9.5,
               fontWeight: 'bold',
               color: '#f59e0b',
@@ -1081,7 +1561,7 @@
           });
         }
 
-        // 计算初始视口跨度 (默认近60根)
+        // 默认显示近 60 根K线
         const total = dates.length;
         const visibleBars = 60;
         const startPct = Math.max(0, Math.floor((1 - visibleBars / total) * 100));
@@ -1102,36 +1582,65 @@
           ],
           tooltip: {
             trigger: 'axis',
-            axisPointer: { type: 'cross', crossStyle: { color: isDark ? '#4a5568' : '#90a4ae' } },
-            backgroundColor: isDark ? 'rgba(24, 27, 36, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-            borderColor: isDark ? '#33394b' : '#cfd8dc',
+            triggerOn: 'mousemove|click',
+            axisPointer: {
+              type: 'cross',
+              animation: false,
+              crossStyle: {
+                color: isDark ? '#94a3b8' : '#475569',
+                width: 1,
+                type: 'dashed'
+              },
+              label: {
+                show: true,
+                backgroundColor: isDark ? '#1e293b' : '#334155',
+                borderColor: isDark ? '#3b82f6' : '#2563eb',
+                borderWidth: 1,
+                borderRadius: 4,
+                padding: [2, 4],
+                fontSize: 9.5,
+                color: '#ffffff'
+              }
+            },
+            showContent: true,
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            borderColor: isDark ? '#334155' : '#cbd5e1',
             borderWidth: 1,
-            textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontSize: 11 },
+            padding: [4, 8],
+            position: function (point, params, dom, rect, size) {
+              const x = point[0] < size.viewSize[0] / 2 ? point[0] + 15 : point[0] - size.contentSize[0] - 15;
+              return [x, 30];
+            },
             formatter: function(params) {
               if (!params || params.length === 0) return '';
               const idx = params[0].dataIndex;
               const bar = klines[idx];
               if (!bar) return '';
 
-              const isUp = bar.close >= bar.open;
-              const chgColor = isUp ? '#ef4444' : '#10b981';
-              let sigHtml = '';
+              // 同花顺核心体验：单指左右拖动十字线时，顶部指标看板实时联动更新
+              const prevBar = idx > 0 ? klines[idx - 1] : null;
+              updateHeaderQuote(bar, true, prevBar);
+
               if (bar.signal_type) {
                 const isB = bar.signal_type.startsWith('B');
-                sigHtml = `<div style="color:${isB ? '#ef4444':'#10b981'}; font-weight:bold; margin-top:4px;">🚨 ${bar.signal_name}</div>`;
+                const sigColor = isB ? '#ef4444' : '#10b981';
+                return `<div style="font-weight:bold; font-size:12px; color:${sigColor};">🚨 ${bar.signal_name} (${bar.signal_type})</div><div style="font-size:10px; color:#94a3b8; margin-top:2px;">${bar.date}</div>`;
               }
-              return `
-                <div style="font-weight:bold; margin-bottom:2px;">${bar.date}</div>
-                <div>收盘: <b style="color:${chgColor};">${bar.close.toFixed(3)}</b> (${bar.pct_change >= 0 ? '+':''}${bar.pct_change.toFixed(2)}%)</div>
-                <div>开: ${bar.open.toFixed(3)} 高: ${bar.high.toFixed(3)} 低: ${bar.low.toFixed(3)}</div>
-                <div style="color:#94a3b8; font-size:10px;">MA5: ${bar.ma5?.toFixed(3)||'--'} MACD: ${bar.macd?.toFixed(3)||'--'} KDJ: ${bar.k?.toFixed(1)||'--'}</div>
-                ${sigHtml}
-              `;
+              return '';
             }
           },
           axisPointer: { link: [{ xAxisIndex: 'all' }] },
           dataZoom: [
-            { type: 'inside', xAxisIndex: [0, 1, 2, 3], start: startPct, end: 100 }
+            {
+              type: 'inside',
+              xAxisIndex: [0, 1, 2, 3],
+              start: startPct,
+              end: 100,
+              zoomOnTouch: true,       // 仅保留双指捏合缩放
+              moveOnMouseMove: false,  // 取消单指拖动平移，由十字线移动替代
+              moveOnMouseWheel: false,
+              preventDefaultMouseMove: true
+            }
           ],
           xAxis: [
             { type: 'category', data: dates, boundaryGap: true, axisLabel: { show: false } },
@@ -1196,59 +1705,65 @@
         };
 
         chartInstance.setOption(option, true);
+        updateVisibleStats();
       }
 
-      // 更新区间统计
-      function updateIntervalStats() {
-        if (!currentKlines || currentKlines.length === 0) return;
-        const res = MobileQuantEngine.calculateIntervalByPreset(currentKlines, currentRangePreset);
-        if (!res) return;
+      // 根据当前视口缩放计算底部统计看板
+      function updateVisibleStats() {
+        if (!chartInstance || !currentKlines || currentKlines.length === 0) return;
+        try {
+          const opt = chartInstance.getOption();
+          if (!opt || !opt.dataZoom || opt.dataZoom.length === 0) return;
+          const dz = opt.dataZoom[0];
+          const total = currentKlines.length;
+          const startPct = typeof dz.start === 'number' ? dz.start : 0;
+          const endPct = typeof dz.end === 'number' ? dz.end : 100;
+          const startIdx = Math.min(Math.max(0, Math.floor(total * startPct / 100)), total - 1);
+          const endIdx = Math.min(total - 1, Math.max(startIdx, Math.ceil(total * endPct / 100) - 1));
+          const subBars = currentKlines.slice(startIdx, endIdx + 1);
+          if (subBars.length === 0) return;
 
-        dom.statRange.textContent = `${res.start_date.slice(5)} ~ ${res.end_date.slice(5)} (${res.bar_count}日)`;
-        const isUp = res.pct_change >= 0;
-        dom.statPctChg.textContent = `${isUp ? '+' : ''}${res.pct_change.toFixed(2)}%`;
-        dom.statPctChg.style.color = isUp ? 'var(--color-up)' : 'var(--color-down)';
-        dom.statHiLo.textContent = `${res.max_price.toFixed(3)} / ${res.min_price.toFixed(3)}`;
-      }
+          const startBar = subBars[0];
+          const endBar = subBars[subBars.length - 1];
+          let maxP = -Infinity;
+          let minP = Infinity;
+          subBars.forEach(b => {
+            if (b.high > maxP) maxP = b.high;
+            if (b.low < minP) minP = b.low;
+          });
 
-      // 区间选择药丸点击
-      dom.rangePills.forEach(pill => {
-        pill.addEventListener('click', () => {
-          dom.rangePills.forEach(p => p.classList.remove('active'));
-          pill.classList.add('active');
-          currentRangePreset = pill.getAttribute('data-range');
+          const pct = startBar.open > 0 ? ((endBar.close - startBar.open) / startBar.open * 100) : 0;
+          const isUp = pct >= 0;
 
-          if (chartInstance && currentKlines.length > 0) {
-            let count = 60;
-            if (currentRangePreset === '1m') count = 20;
-            else if (currentRangePreset === '3m') count = 60;
-            else if (currentRangePreset === '6m') count = 120;
-            else if (currentRangePreset === '1y') count = 240;
-            else if (currentRangePreset === 'all') count = currentKlines.length;
-
-            const startPct = Math.max(0, Math.floor((1 - count / currentKlines.length) * 100));
-            chartInstance.dispatchAction({
-              type: 'dataZoom',
-              start: startPct,
-              end: 100
-            });
+          if (dom.statRange) {
+            dom.statRange.textContent = `${startBar.date.slice(5)} ~ ${endBar.date.slice(5)} (${subBars.length}日)`;
           }
-          updateIntervalStats();
-        });
-      });
+          if (dom.statPctChg) {
+            dom.statPctChg.textContent = `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
+            dom.statPctChg.style.color = isUp ? 'var(--color-up)' : 'var(--color-down)';
+          }
+          if (dom.statHiLo) {
+            dom.statHiLo.textContent = `${maxP.toFixed(3)} / ${minP.toFixed(3)}`;
+          }
+        } catch (e) {
+          console.warn('updateVisibleStats error:', e);
+        }
+      }
 
       // 渲染模拟持仓页面
       function renderPortfolioView() {
         const data = MobileQuantEngine.PortfolioManager.getData();
-        const posKeys = Object.keys(data.positions);
+        const posKeys = Object.keys(data.positions || {});
         dom.portfolioList.innerHTML = '';
 
-        // 收集所有持仓标的 (包括本地手动持仓 + 量化策略跟踪持仓)
-        const strategyHoldings = (watchPoolData || []).filter(item => item.tag_group === '持有' || item.tag_group === '买入');
+        // 收集量化策略跟踪标的 (排除已在自定持仓中的，防止重复展示)
+        const strategyHoldings = (watchPoolData || []).filter(item => 
+          (item.tag_group === '持有' || item.tag_group === '买入') && !data.positions[item.symbol]
+        );
         
         if (posKeys.length === 0 && strategyHoldings.length === 0) {
-          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，系统将在触发尾盘买点时自动建仓跟踪</div>';
-          dom.pTotalCapital.textContent = `¥${data.total_capital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，点击上方【修改持仓】可添加自选标的</div>';
+          dom.pTotalCapital.textContent = `¥${data.available_cash.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
           dom.pAvailableCash.textContent = `¥${data.available_cash.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
           dom.pStockVal.textContent = '¥0.00';
           return;
@@ -1256,24 +1771,37 @@
 
         let totalStockVal = 0;
 
-        // 1. 渲染手动自定义持仓
+        // 1. 渲染用户自定设定的持仓
         posKeys.forEach(k => {
           const p = data.positions[k];
-          const stockVal = p.hands * 100 * (p.cost_price || 1.0);
+          const poolItem = (watchPoolData || []).find(w => w.symbol === k);
+          const currentPrice = poolItem ? poolItem.current : (p.cost_price || 1.0);
+          const stockVal = p.hands * 100 * currentPrice;
           totalStockVal += stockVal;
+
+          const pnlPct = p.cost_price > 0 ? ((currentPrice - p.cost_price) / p.cost_price * 100) : 0;
+          const pnlSign = pnlPct >= 0 ? '+' : '';
+          const chgColor = pnlPct >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+          const pnlMoney = (currentPrice - p.cost_price) * p.hands * 100;
+
           const card = document.createElement('div');
           card.className = 'stock-card';
           card.innerHTML = `
             <div class="card-top">
-              <span class="card-name">${p.name || k}</span>
-              <span class="card-code">${p.hands}手 (${p.hands * 100}股)</span>
+              <div class="card-name-group">
+                <span class="card-name">${p.name || k}</span>
+                <span class="card-code">${k} · ${p.hands}手 (${p.hands * 100}股)</span>
+              </div>
+              <span class="card-sector" style="color:var(--color-primary); background:rgba(59,130,246,0.12); padding:2px 6px; border-radius:4px; font-weight:700;">自定持仓</span>
             </div>
             <div class="card-mid">
               <div class="card-price-group">
-                <span class="stat-label">成本价</span>
-                <span class="stat-val">${(p.cost_price || 0).toFixed(3)}</span>
+                <span class="card-price" style="color:${chgColor};">${currentPrice.toFixed(3)}</span>
+                <span style="font-size:11px; color:var(--text-muted); margin-left:6px;">成本:${(p.cost_price || 0).toFixed(3)}</span>
               </div>
-              <span class="card-badge" style="background:#3b82f6;">自定持仓</span>
+              <span class="card-badge" style="background:${pnlPct >= 0 ? 'var(--color-up)' : 'var(--color-down)'};">
+                ${pnlSign}${pnlPct.toFixed(2)}% (${pnlSign}¥${pnlMoney.toFixed(2)})
+              </span>
             </div>
           `;
           card.addEventListener('click', () => {
@@ -1284,14 +1812,14 @@
           dom.portfolioList.appendChild(card);
         });
 
-        // 2. 渲染量化策略跟踪持仓标的
+        // 2. 渲染量化策略跟踪标的
         strategyHoldings.forEach(item => {
           const isUp = item.pct_change >= 0;
           const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
           const cost = item.cost_price > 0 ? item.cost_price : item.current;
           const pnlPct = cost > 0 ? ((item.current - cost) / cost * 100) : 0;
           const pnlSign = pnlPct >= 0 ? '+' : '';
-          const simulatedHands = 10; // 模拟默认建仓10手
+          const simulatedHands = 10;
           const stockVal = simulatedHands * 100 * item.current;
           totalStockVal += stockVal;
 
@@ -1301,7 +1829,7 @@
             <div class="card-top">
               <div class="card-name-group">
                 <span class="card-name">${item.name}</span>
-                <span class="card-code">${item.code}</span>
+                <span class="card-code">${item.code} · 策略跟踪10手</span>
               </div>
               <span class="card-sector">${item.sector}</span>
             </div>
@@ -1325,24 +1853,217 @@
           dom.portfolioList.appendChild(card);
         });
 
-        const totalCap = Math.max(data.total_capital, totalStockVal + data.available_cash);
+        const totalCap = data.available_cash + totalStockVal;
         dom.pTotalCapital.textContent = `¥${totalCap.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
         dom.pAvailableCash.textContent = `¥${data.available_cash.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
         dom.pStockVal.textContent = `¥${totalStockVal.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
       }
 
-      // 发工资与重置
-      document.getElementById('btnDeposit').addEventListener('click', () => {
-        MobileQuantEngine.PortfolioManager.deposit(10000);
-        renderPortfolioView();
-        alert('成功发工资追加 ¥10,000 可用现金！');
+      // -------------------------------------------------------------
+      // 模态弹窗 1: 修改可用现金
+      // -------------------------------------------------------------
+      function openModalCash() {
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        dom.inputCashAmount.value = Math.round(portData.available_cash);
+        dom.modalEditCash.classList.add('active');
+        setTimeout(() => dom.inputCashAmount.focus(), 150);
+      }
+
+      function closeModalCash() {
+        dom.modalEditCash.classList.remove('active');
+      }
+
+      dom.btnEditCash.addEventListener('click', openModalCash);
+      dom.btnCloseEditCash.addEventListener('click', closeModalCash);
+      dom.btnCancelEditCash.addEventListener('click', closeModalCash);
+      dom.modalEditCash.addEventListener('click', (e) => {
+        if (e.target === dom.modalEditCash) closeModalCash();
       });
 
-      document.getElementById('btnResetPortfolio').addEventListener('click', () => {
-        if (confirm('确定要重置模拟账户为 ¥100,000 初始本金吗？')) {
-          MobileQuantEngine.PortfolioManager.reset(100000);
-          renderPortfolioView();
+      // 快捷现金药丸按钮
+      document.querySelectorAll('#modalEditCash .quick-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          const val = pill.getAttribute('data-val');
+          if (val) dom.inputCashAmount.value = val;
+        });
+      });
+
+      // 确认保存现金修改
+      dom.btnConfirmEditCash.addEventListener('click', () => {
+        const val = parseFloat(dom.inputCashAmount.value);
+        if (isNaN(val) || val < 0) {
+          alert('请输入有效的现金金额 (>= 0)');
+          return;
         }
+        MobileQuantEngine.PortfolioManager.setAvailableCash(val);
+        closeModalCash();
+        renderPortfolioView();
+      });
+
+      // -------------------------------------------------------------
+      // 模态弹窗 2: 管理与修改持仓
+      // -------------------------------------------------------------
+      function openModalHoldings() {
+        populateHoldingSymbolOptions();
+        renderModalHoldingsList();
+        dom.modalEditHoldings.classList.add('active');
+      }
+
+      function closeModalHoldings() {
+        dom.modalEditHoldings.classList.remove('active');
+        renderPortfolioView();
+        if (currentKlines && currentKlines.length > 0 && currentTab === 'kline') {
+          renderDailyChart(currentKlines);
+        }
+      }
+
+      dom.btnEditHoldings.addEventListener('click', openModalHoldings);
+      dom.btnCloseEditHoldings.addEventListener('click', closeModalHoldings);
+      dom.btnDoneEditHoldings.addEventListener('click', closeModalHoldings);
+      dom.modalEditHoldings.addEventListener('click', (e) => {
+        if (e.target === dom.modalEditHoldings) closeModalHoldings();
+      });
+
+      // 填充标的选择下拉框
+      function populateHoldingSymbolOptions() {
+        dom.selectHoldingSymbol.innerHTML = '';
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        const existingSyms = new Set(Object.keys(portData.positions || {}));
+
+        // 先放 10 个系统跟踪 ETF
+        const etfs = MobileQuantEngine.TRACKED_ETFS || [];
+        const optGroup1 = document.createElement('optgroup');
+        optGroup1.label = '系统推荐跟踪 ETF';
+        etfs.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = item.symbol;
+          opt.textContent = `${item.name} (${item.code})`;
+          optGroup1.appendChild(opt);
+        });
+        dom.selectHoldingSymbol.appendChild(optGroup1);
+
+        // 如果用户有其他自定义持仓标的
+        const customSyms = Array.from(existingSyms).filter(s => !etfs.some(e => e.symbol === s));
+        if (customSyms.length > 0) {
+          const optGroup2 = document.createElement('optgroup');
+          optGroup2.label = '其他已持仓标的';
+          customSyms.forEach(sym => {
+            const p = portData.positions[sym];
+            const opt = document.createElement('option');
+            opt.value = sym;
+            opt.textContent = `${p.name || sym} (${sym})`;
+            optGroup2.appendChild(opt);
+          });
+          dom.selectHoldingSymbol.appendChild(optGroup2);
+        }
+
+        // 默认选中当前选中的股票或第一个
+        if (currentSymbol && dom.selectHoldingSymbol.querySelector(`option[value="${currentSymbol}"]`)) {
+          dom.selectHoldingSymbol.value = currentSymbol;
+        }
+        updateHoldingFormPrefill();
+      }
+
+      // 下拉框改变时自动带入已有持仓数据
+      dom.selectHoldingSymbol.addEventListener('change', updateHoldingFormPrefill);
+
+      function updateHoldingFormPrefill() {
+        const sym = dom.selectHoldingSymbol.value;
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        const pos = (portData.positions || {})[sym];
+        if (pos) {
+          dom.inputHoldingHands.value = pos.hands;
+          dom.inputHoldingCost.value = pos.cost_price;
+          dom.holdingFormTitle.textContent = `📝 修改持仓: ${pos.name || sym}`;
+        } else {
+          dom.inputHoldingHands.value = '';
+          const poolItem = (watchPoolData || []).find(w => w.symbol === sym);
+          dom.inputHoldingCost.value = poolItem ? poolItem.current.toFixed(3) : '';
+          dom.holdingFormTitle.textContent = '➕ 添加新持仓标的';
+        }
+      }
+
+      // 渲染弹窗内的已设持仓列表
+      function renderModalHoldingsList() {
+        dom.holdingManageList.innerHTML = '';
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        const keys = Object.keys(portData.positions || {});
+        if (keys.length === 0) {
+          dom.holdingManageList.innerHTML = '<div style="text-align:center; padding:12px; color:var(--text-muted); font-size:12px;">暂未设置自定义持仓，请在上方选择标的添加</div>';
+          return;
+        }
+
+        keys.forEach(sym => {
+          const p = portData.positions[sym];
+          const row = document.createElement('div');
+          row.className = 'manage-item';
+          row.innerHTML = `
+            <div class="manage-info">
+              <span class="manage-name">${p.name || sym}</span>
+              <span class="manage-sub">${p.hands}手 (${p.hands * 100}股) · 成本: ¥${p.cost_price.toFixed(3)}</span>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="manage-del-btn" style="background:rgba(59,130,246,0.15); color:#3b82f6; border-color:rgba(59,130,246,0.3);" data-edit="${sym}">编辑</button>
+              <button class="manage-del-btn" data-del="${sym}">删除</button>
+            </div>
+          `;
+          row.querySelector(`[data-edit="${sym}"]`).addEventListener('click', () => {
+            dom.selectHoldingSymbol.value = sym;
+            dom.inputHoldingHands.value = p.hands;
+            dom.inputHoldingCost.value = p.cost_price;
+            dom.holdingFormTitle.textContent = `📝 修改持仓: ${p.name || sym}`;
+            dom.inputHoldingHands.focus();
+          });
+          row.querySelector(`[data-del="${sym}"]`).addEventListener('click', () => {
+            if (confirm(`确定删除 ${p.name || sym} 的持仓记录吗？`)) {
+              MobileQuantEngine.PortfolioManager.removeHolding(sym);
+              renderModalHoldingsList();
+              updateHoldingFormPrefill();
+              renderPortfolioView();
+              if (currentKlines && currentKlines.length > 0 && currentTab === 'kline') {
+                renderDailyChart(currentKlines);
+              }
+            }
+          });
+          dom.holdingManageList.appendChild(row);
+        });
+      }
+
+      // 保存标的持仓按钮
+      dom.btnSaveHolding.addEventListener('click', () => {
+        const sym = dom.selectHoldingSymbol.value;
+        const hands = parseInt(dom.inputHoldingHands.value, 10);
+        const cost = parseFloat(dom.inputHoldingCost.value);
+
+        if (!sym) {
+          alert('请选择ETF标的');
+          return;
+        }
+        if (isNaN(hands) || hands <= 0) {
+          alert('请输入合法的持仓手数 (大于0的整数)');
+          return;
+        }
+        if (isNaN(cost) || cost <= 0) {
+          alert('请输入合法的成本均价 (大于0)');
+          return;
+        }
+
+        let name = sym;
+        const poolItem = (watchPoolData || []).find(w => w.symbol === sym);
+        if (poolItem) name = poolItem.name;
+        else {
+          const etf = (MobileQuantEngine.TRACKED_ETFS || []).find(e => e.symbol === sym);
+          if (etf) name = etf.name;
+        }
+
+        MobileQuantEngine.PortfolioManager.setHolding(sym, name, hands, cost);
+        renderModalHoldingsList();
+        updateHoldingFormPrefill();
+        renderPortfolioView();
+        if (currentKlines && currentKlines.length > 0 && currentTab === 'kline') {
+          renderDailyChart(currentKlines);
+        }
+        alert(`已成功保存 ${name} 的持仓配置！`);
       });
 
       // 搜索功能
@@ -1357,7 +2078,6 @@
         dom.searchModal.classList.remove('active');
       });
 
-      // 点击遮罩外部关闭搜索框
       dom.searchModal.addEventListener('click', (e) => {
         if (e.target === dom.searchModal) {
           dom.searchModal.classList.remove('active');
@@ -1415,7 +2135,7 @@
         else if (currentTab === 'portfolio') renderPortfolioView();
       });
 
-      // 切换手机前后台时自动更新最新行情数据
+      // 切换手机前后台时自动更新最新行情
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           if (currentTab === 'watchpool') loadWatchPool();
@@ -1424,14 +2144,19 @@
         }
       });
 
-      // 启动加载：先渲染观察池，后台静默准备日K数据
+      // 启动加载：渲染观察池并初始化第一支标的日K
       loadWatchPool();
       MobileQuantEngine.getDailyKlines(currentSymbol, 400).then(res => {
         currentKlines = res.klines || [];
         dom.klineStockName.textContent = res.name;
         dom.klineStockCode.textContent = res.symbol;
+        if (currentKlines.length > 0) {
+          const lastBar = currentKlines[currentKlines.length - 1];
+          const prevBar = currentKlines.length > 1 ? currentKlines[currentKlines.length - 2] : null;
+          updateHeaderQuote(lastBar, false, prevBar);
+        }
       });
     })();
-  </script>
+    </script>
 </body>
 </html>
