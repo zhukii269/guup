@@ -1,0 +1,15 @@
+{
+  "appId": "com.stockmaster.etf",
+  "appName": "ETF量化大师",
+  "webDir": "mobile",
+  "bundledWebRuntime": false,
+  "server": {
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "ios": {
+    "contentInset": "always"
+  }
+}

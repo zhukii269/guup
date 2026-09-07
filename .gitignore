@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+build/
+dist/
+temp_clone/
+*.spec
+etf_mobile_deploy.zip

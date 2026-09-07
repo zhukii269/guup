@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ETF量化决策系统 (手机版)</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ETF量化大师">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.json">
+  <script src="echarts.min.js"></script>
+  <script src="engine.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --text-muted: #64748b;
+      --color-up: #ef4444;
+      --color-down: #10b981;
+      --color-primary: #3b82f6;
+      --color-primary-bg: rgba(59, 130, 246, 0.15);
+      --color-warning: #f59e0b;
+      --nav-height: 56px;
+      --header-height: 52px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    body.light-theme {
+      --bg-primary: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f1f5f9;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-sub: #475569;
+      --text-muted: #94a3b8;
+      --color-up: #dc2626;
+      --color-down: #16a34a;
+      --color-primary: #2563eb;
+      --color-primary-bg: rgba(37, 99, 235, 0.1);
+      --color-warning: #d97706;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* 顶部导航状态栏 */
+    header {
+      flex-shrink: 0;
+      height: calc(var(--header-height) + var(--safe-top));
+      padding-top: var(--safe-top);
+      background-color: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-left: 16px;
+      padding-right: 16px;
+      z-index: 50;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-logo {
+      font-size: 20px;
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--color-primary), #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--bg-card-hover);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .icon-btn:active {
+      transform: scale(0.92);
+      opacity: 0.8;
+    }
+
+    /* 主内容视口容器 */
+    main {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .view-page {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      display: none;
+      flex-direction: column;
+    }
+    .view-page.active {
+      display: flex;
+    }
+
+    /* =========================================================================
+       Tab 1: 观察池页面
+       ========================================================================= */
+    .filter-bar {
+      padding: 12px 16px 8px 16px;
+      background-color: var(--bg-primary);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .pill-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .pill-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .filter-pill {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-sub);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-pill.active {
+      background: var(--color-primary);
+      color: #ffffff;
+      border-color: var(--color-primary);
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+    }
+
+    .stock-list {
+      padding: 8px 16px calc(16px + var(--nav-height) + var(--safe-bottom)) 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .stock-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .stock-card:active {
+      transform: scale(0.98);
+      background: var(--bg-card-hover);
+    }
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-name-group {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .card-name {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+    .card-code {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .card-sector {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--bg-primary);
+      color: var(--text-sub);
+      border: 1px solid var(--border-color);
+    }
+
+    .card-mid {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-price-group {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .card-price {
+      font-size: 20px;
+      font-weight: 800;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    }
+    .card-change {
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .card-badge {
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #ffffff;
+      min-width: 72px;
+      text-align: center;
+    }
+
+    .card-bot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border-color);
+      font-size: 12px;
+    }
+    .decision-tag {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .decision-reason {
+      color: var(--text-sub);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    /* =========================================================================
+       Tab 2: 日K线页面
+       ========================================================================= */
+    #view-kline {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .kline-header {
+      flex-shrink: 0;
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .kline-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .kline-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .kline-stock-name {
+      font-size: 17px;
+      font-weight: 800;
+    }
+    .kline-stock-code {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .kline-price-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .kline-main-price {
+      font-size: 22px;
+      font-weight: 900;
+      font-family: monospace;
+    }
+    .kline-main-chg {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .kline-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .range-btn-row {
+      display: flex;
+      gap: 4px;
+    }
+    .range-pill {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-sub);
+      cursor: pointer;
+    }
+    .range-pill.active {
+      background: var(--color-primary);
+      color: #fff;
+      border-color: var(--color-primary);
+    }
+
+    /* K线画布容器 */
+    .chart-container {
+      flex: 1;
+      width: 100%;
+      min-height: 280px;
+      position: relative;
+    }
+    #dailyChart {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* 区间统计折叠抽屉 */
+    .stat-bar {
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border-top: 1px solid var(--border-color);
+      padding: 8px 16px calc(8px + var(--nav-height) + var(--safe-bottom)) 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 10.5px;
+    }
+    .stat-val {
+      font-weight: 700;
+      font-family: monospace;
+    }
+
+    /* =========================================================================
+       Tab 3: 模拟持仓页面
+       ========================================================================= */
+    #view-portfolio {
+      padding: 14px 16px calc(24px + var(--nav-height) + var(--safe-bottom)) 16px;
+      gap: 14px;
+    }
+
+    .asset-card {
+      background: linear-gradient(135deg, #1e3a8a, #1e293b);
+      border: 1px solid #3b82f6;
+      border-radius: 16px;
+      padding: 16px 18px;
+      color: #ffffff;
+      box-shadow: 0 4px 20px rgba(30, 58, 138, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .asset-card-title {
+      font-size: 12px;
+      color: #93c5fd;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .asset-total {
+      font-size: 30px;
+      font-weight: 900;
+      font-family: monospace;
+      letter-spacing: -0.5px;
+    }
+    .asset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+    }
+    .asset-sub-val {
+      font-size: 16px;
+      font-weight: 800;
+      font-family: monospace;
+      margin-top: 2px;
+    }
+
+    .asset-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .btn-action {
+      flex: 1;
+      padding: 8px 0;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .btn-deposit {
+      background: #3b82f6;
+      color: #fff;
+    }
+    .btn-reset {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+    }
+    .btn-action:active {
+      transform: scale(0.96);
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 底部导航栏 */
+    nav.bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: calc(var(--nav-height) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      background-color: var(--bg-card);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      z-index: 100;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 100%;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nav-icon {
+      font-size: 18px;
+    }
+    .nav-label {
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .nav-item.active {
+      color: var(--color-primary);
+    }
+    .nav-item:active {
+      transform: scale(0.92);
+    }
+
+    /* 搜索弹窗 Modal */
+    .search-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding-top: calc(20px + var(--safe-top));
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+    .search-modal.active {
+      display: flex;
+    }
+    .search-card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 80vh;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .search-input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+    .search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .search-results {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .search-result-item {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .search-result-item:active {
+      background: var(--bg-card-hover);
+    }
+
+    /* 加载中动画遮罩 */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(59, 130, 246, 0.2);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部状态栏 -->
+    <header>
+      <div class="brand">
+        <span class="brand-logo">📈</span>
+        <span class="brand-title">ETF量化大师</span>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btnOpenSearch" title="搜索股票">🔍</button>
+        <button class="icon-btn" id="btnToggleTheme" title="切换深浅主题">🌓</button>
+        <button class="icon-btn" id="btnRefresh" title="刷新数据">🔄</button>
+      </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <main>
+      <!-- ======================================================= -->
+      <!-- TAB 1: 观察池页面 -->
+      <!-- ======================================================= -->
+      <div class="view-page active" id="view-watchpool">
+        <div class="filter-bar">
+          <div class="pill-scroll" id="filterPills">
+            <div class="filter-pill active" data-filter="全部">全部</div>
+            <div class="filter-pill" data-filter="买入">尾盘买入</div>
+            <div class="filter-pill" data-filter="持有">持仓观察</div>
+            <div class="filter-pill" data-filter="即将满足">即将满足</div>
+            <div class="filter-pill" data-filter="观望">观望等待</div>
+            <div class="filter-pill" data-filter="卖出">高位卖出</div>
+          </div>
+        </div>
+
+        <div class="stock-list" id="stockListContainer">
+          <!-- 动态渲染 ETF 卡片 -->
+        </div>
+      </div>
+
+      <!-- ======================================================= -->
+      <!-- TAB 2: 日K线决策图页面 (完全移除分时与5分图) -->
+      <!-- ======================================================= -->
+      <div class="view-page" id="view-kline">
+        <div class="kline-header">
+          <div class="kline-meta">
+            <div class="kline-title-row">
+              <span class="kline-stock-name" id="klineStockName">通信ETF</span>
+              <span class="kline-stock-code" id="klineStockCode">sh515880</span>
+            </div>
+            <div class="kline-price-row">
+              <span class="kline-main-price" id="klineMainPrice">0.677</span>
+              <span class="kline-main-chg" id="klineMainChg">+3.20%</span>
+            </div>
+          </div>
+
+          <div class="kline-tools">
+            <div class="range-btn-row">
+              <button class="range-pill" data-range="1m">1月</button>
+              <button class="range-pill active" data-range="3m">3月</button>
+              <button class="range-pill" data-range="6m">半年</button>
+              <button class="range-pill" data-range="1y">1年</button>
+              <button class="range-pill" data-range="all">全部</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div id="dailyChart"></div>
+          <div class="loading-overlay" id="chartLoading">
+            <div class="spinner"></div>
+          </div>
+        </div>
+
+        <!-- 底部区间统计看板 -->
+        <div class="stat-bar" id="intervalStatBar">
+          <div class="stat-item">
+            <span class="stat-label">统计区间</span>
+            <span class="stat-val" id="statRange">近3个月 (60日)</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">区间涨跌幅</span>
+            <span class="stat-val" id="statPctChg">+12.45%</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">最高 / 最低</span>
+            <span class="stat-val" id="statHiLo">0.720 / 0.590</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================= -->
+      <!-- TAB 3: 模拟持仓页面 -->
+      <!-- ======================================================= -->
+      <div class="view-page" id="view-portfolio">
+        <div class="asset-card">
+          <div class="asset-card-title">💼 模拟资金账户</div>
+          <div class="asset-total" id="pTotalCapital">¥100,000.00</div>
+          <div class="asset-grid">
+            <div>
+              <div class="stat-label" style="color:#93c5fd;">可用现金</div>
+              <div class="asset-sub-val" id="pAvailableCash">¥100,000.00</div>
+            </div>
+            <div>
+              <div class="stat-label" style="color:#93c5fd;">持仓市值</div>
+              <div class="asset-sub-val" id="pStockVal">¥0.00</div>
+            </div>
+          </div>
+          <div class="asset-actions">
+            <button class="btn-action btn-deposit" id="btnDeposit">💵 发工资 (+¥1万)</button>
+            <button class="btn-action btn-reset" id="btnResetPortfolio">🔄 重置账户</button>
+          </div>
+        </div>
+
+        <div class="section-title">📊 当前持仓标的</div>
+        <div class="stock-list" id="portfolioList" style="padding:0;">
+          <!-- 动态持仓列表 -->
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部固定导航栏 -->
+    <nav class="bottom-nav">
+      <div class="nav-item active" data-tab="watchpool">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">观察池</span>
+      </div>
+      <div class="nav-item" data-tab="kline">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">日K线</span>
+      </div>
+      <div class="nav-item" data-tab="portfolio">
+        <span class="nav-icon">💼</span>
+        <span class="nav-label">模拟持仓</span>
+      </div>
+    </nav>
+
+    <!-- 搜索浮层 Modal -->
+    <div class="search-modal" id="searchModal">
+      <div class="search-card">
+        <div class="search-input-row">
+          <span>🔍</span>
+          <input type="text" class="search-input" id="searchInput" placeholder="输入代码或拼音搜索 (如 515880 / TX)">
+          <button class="icon-btn" id="btnCloseSearch" style="width:28px; height:28px; font-size:12px;">✕</button>
+        </div>
+        <div class="search-results" id="searchResults">
+          <!-- 搜索结果列表 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 手机版前端主控制器
+    // =========================================================================
+    (function() {
+      let currentTab = 'watchpool';
+      let currentFilter = '全部';
+      let currentSymbol = 'sh515880';
+      let watchPoolData = [];
+      let currentKlines = [];
+      let chartInstance = null;
+      let currentRangePreset = '3m';
+      let isDark = true;
+
+      const dom = {
+        viewWatchpool: document.getElementById('view-watchpool'),
+        viewKline: document.getElementById('view-kline'),
+        viewPortfolio: document.getElementById('view-portfolio'),
+        stockList: document.getElementById('stockListContainer'),
+        portfolioList: document.getElementById('portfolioList'),
+        klineStockName: document.getElementById('klineStockName'),
+        klineStockCode: document.getElementById('klineStockCode'),
+        klineMainPrice: document.getElementById('klineMainPrice'),
+        klineMainChg: document.getElementById('klineMainChg'),
+        dailyChart: document.getElementById('dailyChart'),
+        chartLoading: document.getElementById('chartLoading'),
+        statRange: document.getElementById('statRange'),
+        statPctChg: document.getElementById('statPctChg'),
+        statHiLo: document.getElementById('statHiLo'),
+        pTotalCapital: document.getElementById('pTotalCapital'),
+        pAvailableCash: document.getElementById('pAvailableCash'),
+        pStockVal: document.getElementById('pStockVal'),
+        searchModal: document.getElementById('searchModal'),
+        searchInput: document.getElementById('searchInput'),
+        searchResults: document.getElementById('searchResults'),
+        navItems: document.querySelectorAll('.nav-item'),
+        filterPills: document.querySelectorAll('.filter-pill'),
+        rangePills: document.querySelectorAll('.range-pill')
+      };
+
+      // 初始化主题
+      const savedTheme = localStorage.getItem(MobileQuantEngine.STORAGE_KEY_THEME);
+      if (savedTheme === 'light') {
+        isDark = false;
+        document.body.classList.add('light-theme');
+      }
+
+      document.getElementById('btnToggleTheme').addEventListener('click', () => {
+        isDark = !isDark;
+        document.body.classList.toggle('light-theme', !isDark);
+        localStorage.setItem(MobileQuantEngine.STORAGE_KEY_THEME, isDark ? 'dark' : 'light');
+        if (currentKlines && currentKlines.length > 0) {
+          renderDailyChart(currentKlines);
+        }
+      });
+
+      // 切换底部导航 Tab
+      dom.navItems.forEach(item => {
+        item.addEventListener('click', () => {
+          const tab = item.getAttribute('data-tab');
+          switchTab(tab);
+        });
+      });
+
+      function switchTab(tab) {
+        currentTab = tab;
+        dom.navItems.forEach(i => i.classList.toggle('active', i.getAttribute('data-tab') === tab));
+        dom.viewWatchpool.classList.toggle('active', tab === 'watchpool');
+        dom.viewKline.classList.toggle('active', tab === 'kline');
+        dom.viewPortfolio.classList.toggle('active', tab === 'portfolio');
+
+        if (tab === 'kline') {
+          setTimeout(() => {
+            if (chartInstance) chartInstance.resize();
+          }, 100);
+        } else if (tab === 'portfolio') {
+          renderPortfolioView();
+        }
+      }
+
+      // 观察池分类药丸
+      dom.filterPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+          dom.filterPills.forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          currentFilter = pill.getAttribute('data-filter');
+          renderWatchPoolCards();
+        });
+      });
+
+      // 加载观察池数据
+      async function loadWatchPool() {
+        try {
+          watchPoolData = await MobileQuantEngine.getWatchPool();
+          renderWatchPoolCards();
+        } catch (e) {
+          console.error("Failed to load watch pool:", e);
+        }
+      }
+
+      function renderWatchPoolCards() {
+        const filtered = watchPoolData.filter(item => {
+          if (currentFilter === '全部') return true;
+          return item.tag_group === currentFilter;
+        });
+
+        dom.stockList.innerHTML = '';
+        if (filtered.length === 0) {
+          dom.stockList.innerHTML = `<div style="text-align:center; padding:40px; color:var(--text-muted);">暂无【${currentFilter}】分类标的</div>`;
+          return;
+        }
+
+        filtered.forEach(item => {
+          const isUp = item.pct_change >= 0;
+          const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
+          const sign = isUp ? '+' : '';
+          const card = document.createElement('div');
+          card.className = 'stock-card';
+          card.innerHTML = `
+            <div class="card-top">
+              <div class="card-name-group">
+                <span class="card-name">${item.name}</span>
+                <span class="card-code">${item.code}</span>
+              </div>
+              <span class="card-sector">${item.sector}</span>
+            </div>
+            <div class="card-mid">
+              <div class="card-price-group">
+                <span class="card-price" style="color:${chgColor};">${item.current.toFixed(3)}</span>
+                <span class="card-change" style="color:${chgColor};">${sign}${item.change.toFixed(3)}</span>
+              </div>
+              <span class="card-badge" style="background:${chgColor};">${sign}${item.pct_change.toFixed(2)}%</span>
+            </div>
+            <div class="card-bot">
+              <span class="decision-tag" style="background:${item.tag_color}22; color:${item.tag_color}; border:1px solid ${item.tag_color};">${item.tag}</span>
+              <span class="decision-reason">${item.reason_summary}</span>
+            </div>
+          `;
+
+          card.addEventListener('click', () => {
+            currentSymbol = item.symbol || item.code;
+            switchTab('kline');
+            loadStockKline(currentSymbol);
+          });
+
+          dom.stockList.appendChild(card);
+        });
+      }
+
+      // 加载个股日K线
+      async function loadStockKline(symbol) {
+        dom.chartLoading.style.display = 'flex';
+        try {
+          const res = await MobileQuantEngine.getDailyKlines(symbol, 400);
+          currentKlines = res.klines || [];
+          dom.klineStockName.textContent = res.name;
+          dom.klineStockCode.textContent = res.symbol;
+
+          const quote = await MobileQuantEngine.getRealtimeQuote(symbol);
+          const isUp = quote.pct_change >= 0;
+          const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
+          dom.klineMainPrice.textContent = quote.current.toFixed(3);
+          dom.klineMainPrice.style.color = chgColor;
+          dom.klineMainChg.textContent = `${isUp ? '+' : ''}${quote.pct_change.toFixed(2)}%`;
+          dom.klineMainChg.style.color = chgColor;
+
+          renderDailyChart(currentKlines);
+          updateIntervalStats();
+        } catch (e) {
+          console.error("loadStockKline error:", e);
+        } finally {
+          dom.chartLoading.style.display = 'none';
+        }
+      }
+
+      // 渲染高保真日K线图 (MA, VOL, MACD, KDJ, 买卖标记, 持仓成本线)
+      function renderDailyChart(klines) {
+        if (!klines || klines.length === 0) return;
+        if (!chartInstance) {
+          chartInstance = echarts.init(dom.dailyChart);
+          window.addEventListener('resize', () => chartInstance.resize());
+        }
+
+        const dates = klines.map(k => k.date);
+        const candleValues = klines.map(k => [k.open, k.close, k.low, k.high]);
+        const ma5 = klines.map(k => k.ma5);
+        const ma10 = klines.map(k => k.ma10);
+        const ma20 = klines.map(k => k.ma20);
+        const ma30 = klines.map(k => k.ma30);
+        const vols = klines.map(k => k.volume);
+        const dif = klines.map(k => k.dif);
+        const dea = klines.map(k => k.dea);
+        const macd = klines.map(k => k.macd);
+        const kVals = klines.map(k => k.k);
+        const dVals = klines.map(k => k.d);
+        const jVals = klines.map(k => k.j);
+
+        // 买卖信号 markPoints
+        const markPoints = [];
+        klines.forEach(b => {
+          if (b.signal_type) {
+            const isBuy = b.signal_type.startsWith('B');
+            markPoints.push({
+              name: b.signal_name,
+              value: b.signal_type,
+              coord: [b.date, isBuy ? b.low : b.high],
+              symbol: isBuy ? 'path://M0,10 L5,0 L10,10 Z' : 'path://M0,0 L10,0 L5,10 Z',
+              symbolSize: [12, 12],
+              symbolOffset: [0, isBuy ? 10 : -10],
+              itemStyle: { color: isBuy ? '#ef4444' : '#10b981' },
+              label: {
+                show: true,
+                position: isBuy ? 'bottom' : 'top',
+                formatter: b.signal_type,
+                fontSize: 9,
+                fontWeight: 'bold',
+                color: isBuy ? '#ef4444' : '#10b981',
+                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                borderColor: isBuy ? '#ef4444' : '#10b981',
+                borderWidth: 1,
+                padding: [1, 3],
+                borderRadius: 3
+              }
+            });
+          }
+        });
+
+        // 持仓成本线
+        const markLines = [];
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        const pos = portData.positions[currentSymbol];
+        if (pos && pos.cost_price > 0) {
+          const lastC = klines[klines.length - 1].close;
+          const pnlPct = ((lastC - pos.cost_price) / pos.cost_price * 100);
+          const pnlSign = pnlPct >= 0 ? '+' : '';
+          markLines.push({
+            yAxis: pos.cost_price,
+            lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
+            label: {
+              show: true,
+              position: 'insideEndTop', // 右对齐防碰撞
+              formatter: `💼 成本: ${pos.cost_price.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
+              fontSize: 9.5,
+              fontWeight: 'bold',
+              color: '#f59e0b',
+              backgroundColor: isDark ? 'rgba(30, 41, 59, 0.92)' : 'rgba(254, 243, 199, 0.95)',
+              borderColor: '#f59e0b',
+              borderWidth: 1,
+              padding: [2, 4],
+              borderRadius: 3
+            }
+          });
+        }
+
+        // 计算初始视口跨度 (默认近60根)
+        const total = dates.length;
+        const visibleBars = 60;
+        const startPct = Math.max(0, Math.floor((1 - visibleBars / total) * 100));
+
+        const option = {
+          animation: false,
+          grid: [
+            { left: '46', right: '16', top: '24', height: '42%' },  // 主图
+            { left: '46', right: '16', top: '51%', height: '12%' }, // 成交量
+            { left: '46', right: '16', top: '67%', height: '13%' }, // MACD
+            { left: '46', right: '16', top: '84%', height: '12%' }  // KDJ
+          ],
+          title: [
+            { text: '日K线 MA5:-- MA10:-- MA20:--', left: 48, top: 4, textStyle: { fontSize: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+            { text: 'VOL', left: 48, top: '49%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } },
+            { text: 'MACD', left: 48, top: '65%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } },
+            { text: 'KDJ', left: 48, top: '82%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } }
+          ],
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'cross', crossStyle: { color: isDark ? '#4a5568' : '#90a4ae' } },
+            backgroundColor: isDark ? 'rgba(24, 27, 36, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            borderColor: isDark ? '#33394b' : '#cfd8dc',
+            borderWidth: 1,
+            textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontSize: 11 },
+            formatter: function(params) {
+              if (!params || params.length === 0) return '';
+              const idx = params[0].dataIndex;
+              const bar = klines[idx];
+              if (!bar) return '';
+
+              const isUp = bar.close >= bar.open;
+              const chgColor = isUp ? '#ef4444' : '#10b981';
+              let sigHtml = '';
+              if (bar.signal_type) {
+                const isB = bar.signal_type.startsWith('B');
+                sigHtml = `<div style="color:${isB ? '#ef4444':'#10b981'}; font-weight:bold; margin-top:4px;">🚨 ${bar.signal_name}</div>`;
+              }
+              return `
+                <div style="font-weight:bold; margin-bottom:2px;">${bar.date}</div>
+                <div>收盘: <b style="color:${chgColor};">${bar.close.toFixed(3)}</b> (${bar.pct_change >= 0 ? '+':''}${bar.pct_change.toFixed(2)}%)</div>
+                <div>开: ${bar.open.toFixed(3)} 高: ${bar.high.toFixed(3)} 低: ${bar.low.toFixed(3)}</div>
+                <div style="color:#94a3b8; font-size:10px;">MA5: ${bar.ma5?.toFixed(3)||'--'} MACD: ${bar.macd?.toFixed(3)||'--'} KDJ: ${bar.k?.toFixed(1)||'--'}</div>
+                ${sigHtml}
+              `;
+            }
+          },
+          axisPointer: { link: [{ xAxisIndex: 'all' }] },
+          dataZoom: [
+            { type: 'inside', xAxisIndex: [0, 1, 2, 3], start: startPct, end: 100 }
+          ],
+          xAxis: [
+            { type: 'category', data: dates, boundaryGap: true, axisLabel: { show: false } },
+            { type: 'category', gridIndex: 1, data: dates, boundaryGap: true, axisLabel: { show: false } },
+            { type: 'category', gridIndex: 2, data: dates, boundaryGap: true, axisLabel: { show: false } },
+            { type: 'category', gridIndex: 3, data: dates, boundaryGap: true, axisLabel: { show: true, fontSize: 10, color: isDark ? '#94a3b8':'#64748b' } }
+          ],
+          yAxis: [
+            { scale: true, splitArea: { show: false }, axisLabel: { fontSize: 9.5, color: isDark ? '#94a3b8':'#64748b', formatter: v => v.toFixed(2) } },
+            { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { show: false } },
+            { scale: true, gridIndex: 2, splitNumber: 2, axisLabel: { show: false } },
+            { scale: true, gridIndex: 3, splitNumber: 2, axisLabel: { show: false } }
+          ],
+          series: [
+            {
+              name: '日K线',
+              type: 'candlestick',
+              data: candleValues,
+              itemStyle: {
+                color: '#ef4444',
+                color0: '#10b981',
+                borderColor: '#ef4444',
+                borderColor0: '#10b981'
+              },
+              markPoint: { data: markPoints },
+              markLine: {
+                symbol: ['none', 'none'],
+                silent: true,
+                data: markLines
+              }
+            },
+            { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#eab308' } },
+            { name: 'MA10', type: 'line', data: ma10, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#06b6d4' } },
+            { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#a855f7' } },
+            { name: 'MA30', type: 'line', data: ma30, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#10b981' } },
+            {
+              name: 'VOL',
+              type: 'bar',
+              xAxisIndex: 1,
+              yAxisIndex: 1,
+              data: vols.map((v, i) => ({
+                value: v,
+                itemStyle: { color: klines[i].close >= klines[i].open ? '#ef4444' : '#10b981' }
+              }))
+            },
+            {
+              name: 'MACD_BAR',
+              type: 'bar',
+              xAxisIndex: 2,
+              yAxisIndex: 2,
+              data: macd.map(m => ({
+                value: m,
+                itemStyle: { color: m >= 0 ? '#ef4444' : '#10b981' }
+              }))
+            },
+            { name: 'DIF', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: dif, showSymbol: false, lineStyle: { width: 1, color: '#eab308' } },
+            { name: 'DEA', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: dea, showSymbol: false, lineStyle: { width: 1, color: '#06b6d4' } },
+            { name: 'K', type: 'line', xAxisIndex: 3, yAxisIndex: 3, data: kVals, showSymbol: false, lineStyle: { width: 1, color: '#eab308' } },
+            { name: 'D', type: 'line', xAxisIndex: 3, yAxisIndex: 3, data: dVals, showSymbol: false, lineStyle: { width: 1, color: '#06b6d4' } },
+            { name: 'J', type: 'line', xAxisIndex: 3, yAxisIndex: 3, data: jVals, showSymbol: false, lineStyle: { width: 1, color: '#a855f7' } }
+          ]
+        };
+
+        chartInstance.setOption(option, true);
+      }
+
+      // 更新区间统计
+      function updateIntervalStats() {
+        if (!currentKlines || currentKlines.length === 0) return;
+        const res = MobileQuantEngine.calculateIntervalByPreset(currentKlines, currentRangePreset);
+        if (!res) return;
+
+        dom.statRange.textContent = `${res.start_date.slice(5)} ~ ${res.end_date.slice(5)} (${res.bar_count}日)`;
+        const isUp = res.pct_change >= 0;
+        dom.statPctChg.textContent = `${isUp ? '+' : ''}${res.pct_change.toFixed(2)}%`;
+        dom.statPctChg.style.color = isUp ? 'var(--color-up)' : 'var(--color-down)';
+        dom.statHiLo.textContent = `${res.max_price.toFixed(3)} / ${res.min_price.toFixed(3)}`;
+      }
+
+      // 区间选择药丸点击
+      dom.rangePills.forEach(pill => {
+        pill.addEventListener('click', () => {
+          dom.rangePills.forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          currentRangePreset = pill.getAttribute('data-range');
+
+          if (chartInstance && currentKlines.length > 0) {
+            let count = 60;
+            if (currentRangePreset === '1m') count = 20;
+            else if (currentRangePreset === '3m') count = 60;
+            else if (currentRangePreset === '6m') count = 120;
+            else if (currentRangePreset === '1y') count = 240;
+            else if (currentRangePreset === 'all') count = currentKlines.length;
+
+            const startPct = Math.max(0, Math.floor((1 - count / currentKlines.length) * 100));
+            chartInstance.dispatchAction({
+              type: 'dataZoom',
+              start: startPct,
+              end: 100
+            });
+          }
+          updateIntervalStats();
+        });
+      });
+
+      // 渲染模拟持仓页面
+      function renderPortfolioView() {
+        const data = MobileQuantEngine.PortfolioManager.getData();
+        dom.pTotalCapital.textContent = `¥${data.total_capital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+        dom.pAvailableCash.textContent = `¥${data.available_cash.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+
+        const posKeys = Object.keys(data.positions);
+        dom.portfolioList.innerHTML = '';
+        if (posKeys.length === 0) {
+          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，系统将在触发尾盘买点时自动建仓</div>';
+          dom.pStockVal.textContent = '¥0.00';
+          return;
+        }
+
+        let totalStockVal = 0;
+        posKeys.forEach(k => {
+          const p = data.positions[k];
+          const stockVal = p.hands * 100 * p.cost_price;
+          totalStockVal += stockVal;
+          const card = document.createElement('div');
+          card.className = 'stock-card';
+          card.innerHTML = `
+            <div class="card-top">
+              <span class="card-name">${p.name || k}</span>
+              <span class="card-code">${p.hands}手 (${p.hands * 100}股)</span>
+            </div>
+            <div class="card-mid">
+              <div class="card-price-group">
+                <span class="stat-label">成本价</span>
+                <span class="stat-val">${p.cost_price.toFixed(3)}</span>
+              </div>
+              <span class="card-badge" style="background:#3b82f6;">持仓中</span>
+            </div>
+          `;
+          card.addEventListener('click', () => {
+            currentSymbol = p.symbol || k;
+            switchTab('kline');
+            loadStockKline(currentSymbol);
+          });
+          dom.portfolioList.appendChild(card);
+        });
+
+        dom.pStockVal.textContent = `¥${totalStockVal.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`;
+      }
+
+      // 发工资与重置
+      document.getElementById('btnDeposit').addEventListener('click', () => {
+        MobileQuantEngine.PortfolioManager.deposit(10000);
+        renderPortfolioView();
+        alert('成功发工资追加 ¥10,000 可用现金！');
+      });
+
+      document.getElementById('btnResetPortfolio').addEventListener('click', () => {
+        if (confirm('确定要重置模拟账户为 ¥100,000 初始本金吗？')) {
+          MobileQuantEngine.PortfolioManager.reset(100000);
+          renderPortfolioView();
+        }
+      });
+
+      // 搜索功能
+      document.getElementById('btnOpenSearch').addEventListener('click', () => {
+        dom.searchModal.classList.add('active');
+        dom.searchInput.value = '';
+        dom.searchResults.innerHTML = '';
+        setTimeout(() => dom.searchInput.focus(), 150);
+      });
+
+      document.getElementById('btnCloseSearch').addEventListener('click', () => {
+        dom.searchModal.classList.remove('active');
+      });
+
+      let searchTimer = null;
+      dom.searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        const q = dom.searchInput.value.trim();
+        if (!q) {
+          dom.searchResults.innerHTML = '';
+          return;
+        }
+        searchTimer = setTimeout(async () => {
+          const results = await MobileQuantEngine.searchStock(q);
+          dom.searchResults.innerHTML = '';
+          if (results.length === 0) {
+            dom.searchResults.innerHTML = '<div style="text-align:center; padding:16px; color:var(--text-muted);">无匹配结果</div>';
+            return;
+          }
+          results.forEach(r => {
+            const row = document.createElement('div');
+            row.className = 'search-result-item';
+            row.innerHTML = `
+              <div>
+                <div style="font-weight:700;">${r.name}</div>
+                <div style="font-size:11px; color:var(--text-muted); font-family:monospace;">${r.symbol} (${r.market})</div>
+              </div>
+              <span style="font-size:12px; color:var(--color-primary); font-weight:700;">查看日K ></span>
+            `;
+            row.addEventListener('click', () => {
+              dom.searchModal.classList.remove('active');
+              currentSymbol = r.symbol;
+              switchTab('kline');
+              loadStockKline(currentSymbol);
+            });
+            dom.searchResults.appendChild(row);
+          });
+        }, 300);
+      });
+
+      // 刷新按钮
+      document.getElementById('btnRefresh').addEventListener('click', () => {
+        if (currentTab === 'watchpool') loadWatchPool();
+        else if (currentTab === 'kline') loadStockKline(currentSymbol);
+        else if (currentTab === 'portfolio') renderPortfolioView();
+      });
+
+      // 启动加载
+      loadWatchPool();
+      loadStockKline(currentSymbol);
+    })();
+  </script>
+</body>
+</html>
