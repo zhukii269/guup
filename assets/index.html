@@ -2369,6 +2369,19 @@
                 <button class="budget-preset-btn" onclick="addAvailableCash(50000)">+5万</button>
               </div>
             </div>
+
+            <!-- 分隔竖线 -->
+            <div class="paper-toolbar-divider" style="width:1px; height:20px; background:#cbd5e1;"></div>
+
+            <!-- 设定 3: 14:50 确定买卖结算时点切换 (14:50前卖出算持仓额，14:50后确认卖出划入现金) -->
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <span class="paper-toolbar-label" title="14:50确定买卖前，卖出标的资金仍算在持仓额中；14:50过后确认成交，卖出资金才划入现金池。">⏰ 结算时点:</span>
+              <div class="order-budget-presets">
+                <button class="budget-preset-btn settlement-btn active" id="btnSettleAuto" onclick="setPaperSettlementMode('auto', this)" title="自动按系统当前时间判断（交易日14:50前算持仓，14:50后划入现金）">⏰ 自动(实时)</button>
+                <button class="budget-preset-btn settlement-btn" id="btnSettleBefore" onclick="setPaperSettlementMode('before1450', this)" title="模拟14:50前盘中状态：预估卖出的军工等标的资金仍算在持仓额里，不提前划入现金">⏳ 14:50前(持仓额)</button>
+                <button class="budget-preset-btn settlement-btn" id="btnSettleAfter" onclick="setPaperSettlementMode('after1450', this)" title="模拟14:50后结算状态：确定卖出，已实现回款划入可用现金池">✅ 14:50后(入现金)</button>
+              </div>
+            </div>
           </div>
 
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -2376,6 +2389,9 @@
             <button class="btn-paper-apply-all" onclick="refreshPaperModalData()">🔄 刷新最新行情与收益</button>
           </div>
         </div>
+
+        <!-- 结算时点即时说明栏 -->
+        <div id="paperSettlementNotice" style="margin: 0 18px 8px 18px; padding: 7px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: space-between;"></div>
 
 
 
@@ -3737,7 +3753,39 @@
       return 'neutral';
     }
 
+    let paperSettlementMode = 'auto'; // 'auto' | 'before1450' | 'after1450'
+
+    function isSettlementAfter1450() {
+      if (paperSettlementMode === 'before1450') return false;
+      if (paperSettlementMode === 'after1450') return true;
+
+      // 自动模式：根据系统当前时间或行情时间判断
+      const now = new Date();
+      const day = now.getDay();
+      const timeNum = now.getHours() * 100 + now.getMinutes();
+
+      // 周末 (周六=6, 周日=0) 为休市收盘，默认按收盘已结算状态展示
+      if (day === 0 || day === 6) return true;
+
+      // 交易日：09:15 到 14:49 期间为盘中待确定买卖状态 (14:50前未结算)
+      if (timeNum >= 915 && timeNum < 1450) {
+        return false; // 14:50 前：这部分钱仍算在持仓额里！
+      }
+
+      // 14:50 之后（含 14:50~15:00 尾盘成交及 15:00 盘后、夜间）：已确定买卖，正式划入现金
+      return true;
+    }
+
+    function setPaperSettlementMode(mode, btn) {
+      paperSettlementMode = mode;
+      document.querySelectorAll('.settlement-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      renderPaperPortfolioModal();
+      updatePaperNavBadge();
+    }
+
     function computePaperPortfolioAllocations() {
+      const isSettled = isSettlementAfter1450();
       const totalPosCapital = getTotalPosCapital(); // 总持仓额 (持仓资金池)
       const currentAvailableCash = getAvailableCash(); // 可用现金 (流动资金)
       const pool = (currentWatchPool && currentWatchPool.length > 0) ? currentWatchPool : DEFAULT_SECTOR_ETFS.map(x => ({
@@ -3797,7 +3845,6 @@
         if (typeof item.buy_cost_price === 'number' && item.buy_cost_price > 0) {
           costPrice = item.buy_cost_price;
         } else if (isBuyToday) {
-          // 统一为尾盘购买：统一以当日收盘/尾盘现价作为成交价，取消早盘开盘价(open)
           costPrice = curPrice > 0 ? curPrice : (item.close > 0 ? item.close : (item.prev_close > 0 ? item.prev_close : curPrice));
         } else if (isHolding || isS3Today) {
           costPrice = item.prev_close > 0 ? (item.prev_close * (1 - (item.pct_change || 0) * 0.01 * 0.5)) : curPrice;
@@ -3825,11 +3872,15 @@
           isS3Today,
           isPending,
           isCallback,
+          isSettled,
           allocatedShares: 0,
           allocatedHands: 0,
           allocatedCost: 0,
           soldHands: 0,
           soldShares: 0,
+          plannedSoldHands: 0,
+          plannedRemainHands: 0,
+          plannedHands: 0,
           settleVal: 0,
           realizedProfit: 0,
           marketVal: 0,
@@ -3838,9 +3889,19 @@
           todayPnl: 0
         };
 
-        if (isBuyToday || isHolding || isS3Today) {
-          activeCandidates.push(stateObj);
+        // 核心规则：14:50 之后确定买卖后再结算
+        // 14:50 之前：卖出标的（包含S3计划减半与清仓卖出）仍全部算在持仓额里！买入标的尚未建仓
+        // 14:50 之后：卖出标的完成减仓/清仓，回款正式划入现金；买入标的建仓进入持仓额
+        if (isSettled) {
+          if (isBuyToday || isHolding || isS3Today) {
+            activeCandidates.push(stateObj);
+          }
+        } else {
+          if (isHolding || isS3Today || isSellToday) {
+            activeCandidates.push(stateObj);
+          }
         }
+
         itemStates.push(stateObj);
         mapBySymbol[itemCodeClean] = stateObj;
         mapBySymbol[sym.toLowerCase()] = stateObj;
@@ -3880,30 +3941,53 @@
           }
         });
 
-        // 针对S3今日减半止盈标的：卖出50%手数套现落袋，保留50%底仓继续持仓
+        // 针对S3与清仓卖出标的的结算时点处理
         activeCandidates.forEach(cand => {
           if (cand.isS3Today) {
             const origHands = cand.allocatedHands;
-            const soldHands = origHands > 1 ? Math.floor(origHands * 0.5) : 1;
-            const remainHands = Math.max(0, origHands - soldHands);
+            const planSoldHands = origHands > 1 ? Math.floor(origHands * 0.5) : 1;
+            const planRemainHands = Math.max(0, origHands - planSoldHands);
             cand.origHands = origHands;
-            cand.soldHands = soldHands;
-            cand.soldShares = soldHands * 100;
+            cand.plannedSoldHands = planSoldHands;
+            cand.plannedRemainHands = planRemainHands;
 
-            const sellPrice = cand.item.high > 0 ? cand.item.high : cand.curPrice;
-            const settleVal = cand.soldShares * sellPrice;
-            const realizedProfit = settleVal - (cand.soldShares * cand.costPrice);
-            cand.settleVal = settleVal;
-            cand.realizedProfit = realizedProfit;
+            if (isSettled) {
+              // 14:50 之后：确定卖出 50%，资金正式划入现金池
+              cand.soldHands = planSoldHands;
+              cand.soldShares = planSoldHands * 100;
+              const sellPrice = cand.item.high > 0 ? cand.item.high : cand.curPrice;
+              const settleVal = cand.soldShares * sellPrice;
+              const realizedProfit = settleVal - (cand.soldShares * cand.costPrice);
+              cand.settleVal = settleVal;
+              cand.realizedProfit = realizedProfit;
 
-            // 剩余底仓留存在持仓列表中
-            cand.allocatedHands = remainHands;
-            cand.allocatedShares = remainHands * 100;
-            cand.allocatedCost = remainHands * 100 * cand.costPrice;
+              // 剩余50%底仓留存在持仓列表中
+              cand.allocatedHands = planRemainHands;
+              cand.allocatedShares = planRemainHands * 100;
+              cand.allocatedCost = planRemainHands * 100 * cand.costPrice;
 
-            // 减半卖出资金流入可用现金，已实现收益计入平仓盈亏
-            totalSettleCash += settleVal;
-            totalClosedProfit += realizedProfit;
+              // 减半卖出资金流入可用现金，已实现收益计入平仓盈亏
+              totalSettleCash += settleVal;
+              totalClosedProfit += realizedProfit;
+            } else {
+              // 14:50 之前：尚未确定卖出，这部分的钱仍然全部算在持仓额里！
+              cand.soldHands = 0;
+              cand.soldShares = 0;
+              cand.settleVal = 0;
+              cand.realizedProfit = 0;
+              // allocatedHands 保持为完整 origHands (如6手)，100%计入持仓额！
+            }
+          } else if (cand.isSellToday) {
+            if (!isSettled) {
+              // 14:50 之前：清仓卖出标的尚未确定卖出，仍然算在持仓额里！
+              cand.origHands = cand.allocatedHands;
+              cand.plannedSoldHands = cand.allocatedHands;
+              cand.soldHands = 0;
+              cand.soldShares = 0;
+              cand.settleVal = 0;
+              cand.realizedProfit = 0;
+              // allocatedHands 保持为完整 origHands，100%计入持仓额！
+            }
           }
         });
 
@@ -3918,7 +4002,7 @@
           const sellPrice = cand.item.high > 0 ? cand.item.high : cand.curPrice;
           const todayPnl = cand.isBuyToday 
             ? ((cand.curPrice - cand.costPrice) * cand.allocatedShares) 
-            : ((cand.curPrice - prevClose) * cand.allocatedShares + (cand.isS3Today ? ((sellPrice - prevClose) * cand.soldShares) : 0));
+            : ((cand.curPrice - prevClose) * cand.allocatedShares + (cand.isS3Today && isSettled ? ((sellPrice - prevClose) * cand.soldShares) : 0));
 
           cand.marketVal = mVal;
           cand.pnl = totalStockPnl;
@@ -3931,47 +4015,65 @@
         });
       }
 
-      // 计算今日卖出标的的结算现金与回款
-      itemStates.forEach(state => {
-        if (state.isSellToday) {
-          const sellPrice = state.item.high > 0 ? state.item.high : state.curPrice;
-          
-          // 优先从实际交易记录中读取此前真实持仓手数
-          const recordedPos = PaperAccountManager.get(state.sym) || PaperAccountManager.get(state.itemCodeClean);
-          let soldHands = 0;
-          if (recordedPos && recordedPos.shares > 0) {
-            soldHands = Math.floor(recordedPos.shares / 100);
-          } else {
-            // 根据当前设定的【总持仓额】合理分配权重（约占总持仓额的 12%~18%，严禁硬编码1万元保底）
+      // 如果是 14:50 之后已确定结算，计算清仓卖出标的的结算现金与回款
+      if (isSettled) {
+        itemStates.forEach(state => {
+          if (state.isSellToday) {
+            const sellPrice = state.item.high > 0 ? state.item.high : state.curPrice;
+            const recordedPos = PaperAccountManager.get(state.sym) || PaperAccountManager.get(state.itemCodeClean);
+            let soldHands = 0;
+            if (recordedPos && recordedPos.shares > 0) {
+              soldHands = Math.floor(recordedPos.shares / 100);
+            } else {
+              const estPortion = Math.min(0.20, Math.max(0.10, state.weight / 25));
+              const singleEstBudget = Math.max(state.costPrice * 100, totalPosCapital * estPortion);
+              const calc = calculateSharesAndAmount(singleEstBudget, state.costPrice);
+              soldHands = Math.max(1, calc.hands);
+            }
+
+            state.allocatedHands = 0;
+            state.allocatedShares = 0;
+            state.soldHands = soldHands;
+            state.soldShares = soldHands * 100;
+            state.allocatedCost = 0;
+            const cost = state.soldShares * state.costPrice;
+            const settleVal = state.soldShares * sellPrice;
+            const profit = settleVal - cost;
+            state.settleVal = settleVal;
+            state.profit = profit;
+            state.pnl = profit;
+            state.pnlPct = cost > 0 ? (profit / cost * 100) : 0;
+            state.todayPnl = profit;
+
+            // 确定卖出后划入可用现金池
+            totalSettleCash += settleVal;
+            totalClosedProfit += profit;
+            totalTodayPnl += profit;
+          }
+        });
+      } else {
+        // 如果是 14:50 之前盘中，估算买入标的计划建仓手数（资金尚未划出）
+        itemStates.forEach(state => {
+          if (state.isBuyToday) {
             const estPortion = Math.min(0.20, Math.max(0.10, state.weight / 25));
             const singleEstBudget = Math.max(state.costPrice * 100, totalPosCapital * estPortion);
             const calc = calculateSharesAndAmount(singleEstBudget, state.costPrice);
-            soldHands = Math.max(1, calc.hands);
+            state.plannedHands = Math.max(1, calc.hands);
+            state.plannedShares = state.plannedHands * 100;
+            state.allocatedHands = 0;
+            state.allocatedShares = 0;
+            state.allocatedCost = 0;
+            state.marketVal = 0;
           }
+        });
+      }
 
-          state.allocatedHands = soldHands;
-          state.allocatedShares = state.allocatedHands * 100;
-          state.allocatedCost = state.allocatedShares * state.costPrice;
-          const settleVal = state.allocatedShares * sellPrice;
-          const profit = settleVal - state.allocatedCost;
-          state.settleVal = settleVal;
-          state.profit = profit;
-
-          // 今日卖出标的平仓回款：卖出股票结算资金自动流入可用现金池中
-          totalSettleCash += settleVal;
-          totalClosedProfit += profit;
-          totalTodayPnl += profit;
-        }
-      });
-
-      // 当前可用现金 = 用户初始设定/追加现金 + 今日卖出平仓结算回款
+      // 当前可用现金 = 用户初始设定/追加现金 + 今日卖出平仓结算回款 (14:50前为0，14:50后划入)
       const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
       const currentTotalAssets = totalPositionMarketVal + realAvailableCash;
       const totalCapital = totalPositionCost + currentAvailableCash; // 累计投入本金 = 持仓总成本 + 可用现金
       const totalPnl = (totalPositionMarketVal - totalPositionCost) + totalClosedProfit;
       const totalPnlPct = totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0;
-
-
 
       return {
         totalPosCapital,
@@ -3986,6 +4088,8 @@
         totalTodayPnl,
         totalPnl,
         totalPnlPct,
+        isSettled,
+        paperSettlementMode,
         itemStates,
         mapBySymbol,
         activeCandidates
@@ -5397,30 +5501,42 @@
         let todayPnlColor = secondaryTextColor;
 
         if (state.isBuyToday) {
-          buyTodayCount++;
-          const mVal = state.allocatedShares * curPrice;
-          const pnl = mVal - state.allocatedCost;
-          const pnlPct = state.allocatedCost > 0 ? (pnl / state.allocatedCost * 100) : 0;
-          const todayPnl = pnl;
+          if (allocData.isSettled) {
+            buyTodayCount++;
+            const mVal = state.allocatedShares * curPrice;
+            const pnl = mVal - state.allocatedCost;
+            const pnlPct = state.allocatedCost > 0 ? (pnl / state.allocatedCost * 100) : 0;
+            const todayPnl = pnl;
 
-          totalPositionCost += state.allocatedCost;
-          totalPositionMarketVal += mVal;
-          totalTodayPnl += todayPnl;
+            totalPositionCost += state.allocatedCost;
+            totalPositionMarketVal += mVal;
+            totalTodayPnl += todayPnl;
 
-          const weightPct = totalCapital > 0 ? (state.allocatedCost / totalCapital * 100).toFixed(1) : '0.0';
-          const scoreTag = state.score >= 4 ? '4分超强共振' : '3分共振';
-          const buyBadgeBg = isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2';
-          const buyBadgeColor = isDark ? '#fca5a5' : '#dc2626';
-          statusBadge = `<span style="background:${buyBadgeBg}; color:${buyBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🔴 尾盘买入 (${scoreTag})</span>`;
-
-          displayCostPrice = `${costPrice.toFixed(3)} (${state.allocatedHands}手)`;
-          displayMarketVal = `¥${mVal.toFixed(2)}`;
-          const sign = pnl >= 0 ? '+' : '';
-          displayPnl = `${sign}¥${pnl.toFixed(2)}`;
-          displayPnlPct = `${sign}${pnlPct.toFixed(2)}%`;
-          displayTodayPnl = `${sign}¥${todayPnl.toFixed(2)}`;
-          pnlColor = pnl >= 0 ? '#dc2626' : '#16a34a';
-          todayPnlColor = todayPnl >= 0 ? '#dc2626' : '#16a34a';
+            const scoreTag = state.score >= 4 ? '4分超强共振' : '3分共振';
+            const buyBadgeBg = isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2';
+            const buyBadgeColor = isDark ? '#fca5a5' : '#dc2626';
+            statusBadge = `<span style="background:${buyBadgeBg}; color:${buyBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🔴 尾盘买入 (已成交${state.allocatedHands}手)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)} (${state.allocatedHands}手)`;
+            displayMarketVal = `¥${mVal.toFixed(2)}`;
+            const sign = pnl >= 0 ? '+' : '';
+            displayPnl = `${sign}¥${pnl.toFixed(2)}`;
+            displayPnlPct = `${sign}${pnlPct.toFixed(2)}%`;
+            displayTodayPnl = `${sign}¥${todayPnl.toFixed(2)}`;
+            pnlColor = pnl >= 0 ? '#dc2626' : '#16a34a';
+            todayPnlColor = todayPnl >= 0 ? '#dc2626' : '#16a34a';
+          } else {
+            waitCount++;
+            const buyBadgeBg = isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2';
+            const buyBadgeColor = isDark ? '#fca5a5' : '#dc2626';
+            statusBadge = `<span style="background:${buyBadgeBg}; color:${buyBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🔴 待14:50买入 (计划买${state.plannedHands || 1}手)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)} (待尾盘建仓)`;
+            displayMarketVal = `¥0.00 (待14:50建仓)`;
+            displayPnl = '--';
+            displayPnlPct = '--';
+            displayTodayPnl = '--';
+            pnlColor = secondaryTextColor;
+            todayPnlColor = secondaryTextColor;
+          }
 
         } else if (state.isS3Today) {
           holdingCount++;
@@ -5431,7 +5547,7 @@
           const pnlPct = totalStockCost > 0 ? (totalStockPnl / totalStockCost * 100) : 0;
           const prevClose = item.prev_close > 0 ? item.prev_close : costPrice;
           const sellPrice = item.high > 0 ? item.high : curPrice;
-          const todayPnl = (curPrice - prevClose) * state.allocatedShares + (sellPrice - prevClose) * (state.soldShares || 0);
+          const todayPnl = (curPrice - prevClose) * state.allocatedShares + (allocData.isSettled ? ((sellPrice - prevClose) * (state.soldShares || 0)) : 0);
 
           totalPositionCost += state.allocatedCost;
           totalPositionMarketVal += mVal;
@@ -5439,9 +5555,17 @@
 
           const s3BadgeBg = isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7';
           const s3BadgeColor = isDark ? '#fcd34d' : '#d97706';
-          statusBadge = `<span style="background:${s3BadgeBg}; color:${s3BadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟡 减半止盈 (卖${state.soldHands}手/留${state.allocatedHands}手)</span>`;
-          displayCostPrice = `${costPrice.toFixed(3)} (留${state.allocatedHands}手)`;
-          displayMarketVal = `¥${mVal.toFixed(2)} (回款¥${(state.settleVal || 0).toFixed(2)})`;
+
+          if (allocData.isSettled) {
+            statusBadge = `<span style="background:${s3BadgeBg}; color:${s3BadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟡 减半止盈 (已卖${state.soldHands}手/留${state.allocatedHands}手)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)} (留${state.allocatedHands}手底仓)`;
+            displayMarketVal = `¥${mVal.toFixed(2)} (已回款¥${(state.settleVal || 0).toFixed(2)})`;
+          } else {
+            statusBadge = `<span style="background:${s3BadgeBg}; color:${s3BadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟡 待14:50减半 (计划卖${state.plannedSoldHands}手/留${state.plannedRemainHands}手)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)} (${state.allocatedHands}手完整持仓)`;
+            displayMarketVal = `¥${mVal.toFixed(2)} (持仓额·待14:50结算)`;
+          }
+
           const sign = totalStockPnl >= 0 ? '+' : '';
           const todaySign = todayPnl >= 0 ? '+' : '';
           displayPnl = `${sign}¥${totalStockPnl.toFixed(2)}`;
@@ -5477,23 +5601,44 @@
           todayPnlColor = todayPnl >= 0 ? '#dc2626' : '#16a34a';
 
         } else if (state.isSellToday) {
-          sellTodayCount++;
-          const sellPrice = item.high > 0 ? item.high : curPrice;
-          const settleVal = state.allocatedShares * sellPrice;
-          const profit = settleVal - state.allocatedCost;
-          const profitPct = state.allocatedCost > 0 ? (profit / state.allocatedCost * 100) : 0;
-
           const sellBadgeBg = isDark ? 'rgba(34, 197, 94, 0.2)' : '#dcfce7';
           const sellBadgeColor = isDark ? '#86efac' : '#16a34a';
-          statusBadge = `<span style="background:${sellBadgeBg}; color:${sellBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 今天卖出 (${state.allocatedHands}手)</span>`;
-          displayCostPrice = `${costPrice.toFixed(3)}`;
-          displayMarketVal = `¥${settleVal.toFixed(2)} (已结清)`;
-          const sign = profit >= 0 ? '+' : '';
-          displayPnl = `${sign}¥${profit.toFixed(2)}`;
-          displayPnlPct = `${sign}${profitPct.toFixed(2)}%`;
-          displayTodayPnl = `${sign}¥${profit.toFixed(2)}`;
-          pnlColor = profit >= 0 ? '#dc2626' : '#16a34a';
-          todayPnlColor = profit >= 0 ? '#dc2626' : '#16a34a';
+
+          if (allocData.isSettled) {
+            sellTodayCount++;
+            const sellPrice = item.high > 0 ? item.high : curPrice;
+            const settleVal = state.soldShares * sellPrice;
+            const profit = state.profit || (settleVal - (state.soldShares * costPrice));
+            const profitPct = (state.soldShares * costPrice) > 0 ? (profit / (state.soldShares * costPrice) * 100) : 0;
+
+            statusBadge = `<span style="background:${sellBadgeBg}; color:${sellBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 今天卖出 (已结清${state.soldHands}手)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)}`;
+            displayMarketVal = `¥${settleVal.toFixed(2)} (已结清划入现金)`;
+            const sign = profit >= 0 ? '+' : '';
+            displayPnl = `${sign}¥${profit.toFixed(2)}`;
+            displayPnlPct = `${sign}${profitPct.toFixed(2)}%`;
+            displayTodayPnl = `${sign}¥${profit.toFixed(2)}`;
+            pnlColor = profit >= 0 ? '#dc2626' : '#16a34a';
+            todayPnlColor = profit >= 0 ? '#dc2626' : '#16a34a';
+          } else {
+            holdingCount++;
+            const mVal = state.allocatedShares * curPrice;
+            const pnl = mVal - state.allocatedCost;
+            const pnlPct = state.allocatedCost > 0 ? (pnl / state.allocatedCost * 100) : 0;
+            const prevClose = item.prev_close > 0 ? item.prev_close : costPrice;
+            const todayPnl = (curPrice - prevClose) * state.allocatedShares;
+
+            statusBadge = `<span style="background:${sellBadgeBg}; color:${sellBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 待14:50卖出 (计划卖${state.allocatedHands}手)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)} (${state.allocatedHands}手)`;
+            displayMarketVal = `¥${mVal.toFixed(2)} (持仓额·待14:50结算)`;
+            const sign = pnl >= 0 ? '+' : '';
+            const todaySign = todayPnl >= 0 ? '+' : '';
+            displayPnl = `${sign}¥${pnl.toFixed(2)}`;
+            displayPnlPct = `${sign}${pnlPct.toFixed(2)}%`;
+            displayTodayPnl = `${todaySign}¥${todayPnl.toFixed(2)}`;
+            pnlColor = pnl >= 0 ? '#dc2626' : '#16a34a';
+            todayPnlColor = todayPnl >= 0 ? '#dc2626' : '#16a34a';
+          }
 
         } else if (state.isPending) {
           waitCount++;
@@ -5553,6 +5698,30 @@
       });
 
       tbody.innerHTML = html;
+
+      // 同步时点按钮高亮状态
+      document.querySelectorAll('.settlement-btn').forEach(b => {
+        b.classList.remove('active');
+        if (paperSettlementMode === 'auto' && b.id === 'btnSettleAuto') b.classList.add('active');
+        else if (paperSettlementMode === 'before1450' && b.id === 'btnSettleBefore') b.classList.add('active');
+        else if (paperSettlementMode === 'after1450' && b.id === 'btnSettleAfter') b.classList.add('active');
+      });
+
+      // 渲染结算时点通知条
+      const noticeEl = document.getElementById('paperSettlementNotice');
+      if (noticeEl) {
+        if (!allocData.isSettled) {
+          noticeEl.style.background = isDark ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb';
+          noticeEl.style.color = isDark ? '#fcd34d' : '#b45309';
+          noticeEl.style.border = isDark ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid #fde68a';
+          noticeEl.innerHTML = `<span>⏳ <b>【14:50前 盘中待结算模式】</b>：军工等计划卖出的标的资金目前<b>100%保留在【持仓额】</b>中；待14:50尾盘确定买卖后，卖出款才会正式划入现金池。</span><span style="opacity:0.8; font-size:11px;">可点击上方按钮快捷切换时点查看</span>`;
+        } else {
+          noticeEl.style.background = isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4';
+          noticeEl.style.color = isDark ? '#86efac' : '#15803d';
+          noticeEl.style.border = isDark ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid #bbf7d0';
+          noticeEl.innerHTML = `<span>✅ <b>【14:50后 确定结算模式】</b>：今日买卖已于14:50确认成交，S3减半回款与清仓资金已正式划入【可用现金】池，剩余底仓留在持仓额中。</span><span style="opacity:0.8; font-size:11px;">可点击上方按钮快捷切换时点查看</span>`;
+        }
+      }
 
       // TongHuaShun 5-Column Account Overview Calculations
       const currentTotalAssets = allocData.currentTotalAssets;
@@ -5618,7 +5787,11 @@
         kpiTodayPnl.style.color = totalTodayPnl >= 0 ? '#dc2626' : '#16a34a';
       }
       if (kpiHoldingCount) {
-        kpiHoldingCount.innerText = `持仓 ${holdingCount} 只 | 尾盘买入 ${buyTodayCount} 只 | 卖出 ${sellTodayCount} 只`;
+        if (!allocData.isSettled) {
+          kpiHoldingCount.innerText = `持仓 ${holdingCount} 只 (含待卖出) | 待14:50确定结算`;
+        } else {
+          kpiHoldingCount.innerText = `持仓 ${holdingCount} 只 | 尾盘买入 ${buyTodayCount} 只 | 卖出 ${sellTodayCount} 只`;
+        }
       }
 
       if (capUtilBadge) {
