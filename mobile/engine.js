@@ -656,11 +656,11 @@ const MobileQuantEngine = (function() {
         sortPriority = 95;
         reasonSummary = "触发分级止盈/止损卖点，建议平仓";
       } else if (todaySig === "S3") {
-        tag = "今天卖出";
-        tagColor = "#16a34a";
-        tagGroup = "卖出";
+        tag = "减半止盈";
+        tagColor = "#f59e0b"; // 醒目琥珀金 (减仓50%专用)
+        tagGroup = "减仓";
         sortPriority = 90;
-        reasonSummary = "盈利触及5%，止盈减仓50%";
+        reasonSummary = "盈利触及5%，止盈减半(保留50%底仓)";
       } else if (inPos) {
         if (hasS3Holding) {
           tag = "持仓(50%底仓)";

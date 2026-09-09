@@ -845,9 +845,9 @@ class StockDataProvider:
                     reason_summary = "触发分级止盈/止损卖点，建议平仓"
                     sort_priority = 95
                 elif today_sig == "S3":
-                    tag = "今天卖出"
-                    tag_color = "#16a34a"
-                    reason_summary = "盈利触及5%，止盈减仓50%"
+                    tag = "减半止盈"
+                    tag_color = "#f59e0b"  # 醒目琥珀金 (减仓50%专用)
+                    reason_summary = "盈利触及5%，止盈减半(保留50%底仓)"
                     sort_priority = 90
                 elif in_pos:
                     if has_s3_holding:
@@ -898,7 +898,9 @@ class StockDataProvider:
                     "buy_date": buy_date,
                     "sort_priority": sort_priority,
                     "is_triggered": (sort_priority >= 70),
-                    "reason_summary": reason_summary
+                    "reason_summary": reason_summary,
+                    "signal_type": today_sig,
+                    "is_s3_today": (today_sig == "S3")
                 }
                 if not hasattr(self, "_item_data_cache"):
                     self._item_data_cache = {}

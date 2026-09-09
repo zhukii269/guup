@@ -991,6 +991,7 @@
             <div class="filter-pill active" data-filter="全部">全部</div>
             <div class="filter-pill" data-filter="买入">尾盘买入</div>
             <div class="filter-pill" data-filter="持有">持仓观察</div>
+            <div class="filter-pill" data-filter="减仓">减半止盈</div>
             <div class="filter-pill" data-filter="即将满足">即将满足</div>
             <div class="filter-pill" data-filter="观望">观望等待</div>
             <div class="filter-pill" data-filter="卖出">高位卖出</div>
@@ -2026,7 +2027,7 @@
 
         // 收集量化策略跟踪标的 (排除已在自定持仓中的，防止重复展示)
         const strategyHoldings = (watchPoolData || []).filter(item => 
-          (item.tag_group === '持有' || item.tag_group === '买入') && !data.positions[item.symbol]
+          (item.tag_group === '持有' || item.tag_group === '买入' || item.tag_group === '减仓' || item.tag === '减半止盈') && !data.positions[item.symbol]
         );
         
         if (posKeys.length === 0 && strategyHoldings.length === 0) {
@@ -2087,7 +2088,9 @@
           const cost = item.cost_price > 0 ? item.cost_price : item.current;
           const pnlPct = cost > 0 ? ((item.current - cost) / cost * 100) : 0;
           const pnlSign = pnlPct >= 0 ? '+' : '';
-          const simulatedHands = 10;
+          const isS3 = (item.tag_group === '减仓' || item.tag === '减半止盈');
+          const simulatedHands = isS3 ? 5 : 10;
+          const handsLabel = isS3 ? '策略底仓5手(已减半50%)' : '策略跟踪10手';
           const stockVal = simulatedHands * 100 * item.current;
           totalStockVal += stockVal;
 
@@ -2097,7 +2100,7 @@
             <div class="card-top">
               <div class="card-name-group">
                 <span class="card-name">${item.name}</span>
-                <span class="card-code">${item.code} · 策略跟踪10手</span>
+                <span class="card-code">${item.code} · ${handsLabel}</span>
               </div>
               <span class="card-sector">${item.sector}</span>
             </div>
