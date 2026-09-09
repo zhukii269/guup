@@ -4319,7 +4319,11 @@
         }
 
         // 严格与模拟账户实际分配股数/手数完全同步
-        const exactHands = allocItem ? allocItem.allocatedHands : 0;
+        const exactHands = allocItem ? (
+          isBuyToday ? (allocItem.origHands || allocItem.allocatedHands) :
+          (allocItem.isS3Today && allocItem.soldHands > 0 ? allocItem.soldHands :
+          (allocItem.isSellToday && allocItem.soldHands > 0 ? allocItem.soldHands : allocItem.allocatedHands))
+        ) : 0;
         if (exactHands > 0 && rawSignals.length > 0) {
           const allocatedSignals = allocateSignalHandsWithTotal(rawSignals, exactHands);
 
@@ -5427,14 +5431,14 @@
       const allocData = computePaperPortfolioAllocations();
       const activeHoldingCount = allocData.activeCandidates.length;
       const totalPosCap = getTotalPosCapital();
-      const cash = getAvailableCash();
+      const cash = allocData.realAvailableCash;
 
       const badgeEl = document.getElementById('paperNavBadge');
       if (badgeEl) {
         if (activeHoldingCount > 0) {
-          const capText = totalPosCap >= 10000 ? `${(totalPosCap / 10000).toFixed(0)}万` : `${totalPosCap}元`;
-          const cashText = cash >= 10000 ? `${(cash / 10000).toFixed(0)}万` : `${cash}元`;
-          badgeEl.innerText = `${activeHoldingCount}持仓 (持仓额¥${capText} | 现金¥${cashText})`;
+          const capText = totalPosCap >= 10000 ? `${(totalPosCap / 10000).toFixed(1)}万` : `${totalPosCap}元`;
+          const cashText = cash >= 10000 ? `${(cash / 10000).toFixed(1)}万` : `${Math.round(cash)}元`;
+          badgeEl.innerText = `${activeHoldingCount}持仓 (持仓预算¥${capText} | 现金¥${cashText})`;
           badgeEl.style.background = '#dc2626';
         } else {
           badgeEl.innerText = '0持仓';
@@ -5758,8 +5762,14 @@
       if (kpiTotalAssets) kpiTotalAssets.innerText = `¥${currentTotalAssets.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       if (kpiInitialCapital) kpiInitialCapital.innerText = `投入总本金: ¥${totalCapital.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
       
-      if (kpiTotalMarketVal) kpiTotalMarketVal.innerText = `¥${totalPositionMarketVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      if (kpiPositionWeight) kpiPositionWeight.innerText = `仓位占比: ${posWeight}%`;
+      if (kpiTotalMarketVal) {
+        kpiTotalMarketVal.innerText = `¥${totalPositionMarketVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const settleInfo = totalSettleCash > 0 ? `\n(注: 今日减半/卖出已回款 ¥${totalSettleCash.toFixed(2)}，已结算划入右侧可用现金池；当前持仓市值 + 卖出回款 = ¥${(totalPositionMarketVal + totalSettleCash).toFixed(2)}，完全对应您设定的持仓额预算)` : '';
+        kpiTotalMarketVal.title = `持仓总市值: ¥${totalPositionMarketVal.toFixed(2)}\n设定持仓额(预算资金池): ¥${totalPosCapital.toLocaleString()}${settleInfo}`;
+      }
+      if (kpiPositionWeight) {
+        kpiPositionWeight.innerText = `持仓预算: ¥${totalPosCapital.toLocaleString()} | 仓位: ${posWeight}%`;
+      }
 
       if (kpiAvailableCash) {
         kpiAvailableCash.innerText = `¥${realAvailableCash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -6420,7 +6430,8 @@
 
       // MarkPoints for Buy (B) & Sell (S1-S7) Quant Signals: 严格遵循持仓周期生命周期，卖出总手数绝不超过买入手数
       const markPointData = [];
-      const totalHands = allocItem ? allocItem.allocatedHands : 0;
+      const origHands = allocItem ? (allocItem.origHands || (allocItem.allocatedHands + (allocItem.soldHands || 0))) : 0;
+      const totalHands = origHands > 0 ? origHands : (allocItem ? allocItem.allocatedHands : 0);
       let activeCycleHolding = 0;
 
       klineData.forEach(item => {
@@ -6429,7 +6440,7 @@
           let labelText = item.signal_type;
 
           if (isBuy) {
-            // 买入信号：确立建仓手数
+            // 买入信号：确立建仓手数（以初始建仓/分配总手数为基准）
             activeCycleHolding = totalHands > 0 ? totalHands : 100;
             if (activeCycleHolding > 0) {
               labelText = `${item.signal_type} (${activeCycleHolding}手)`;
@@ -6438,7 +6449,9 @@
             // 卖出信号：严格遵循卖出总手数等于买入手数
             if (item.signal_type === 'S3') {
               // S3: 脉冲冲高冲破布林上轨减半仓 (50%)
-              let s3Hands = Math.floor(activeCycleHolding * 0.5);
+              let s3Hands = (allocItem && allocItem.isS3Today && allocItem.soldHands > 0)
+                ? allocItem.soldHands
+                : Math.floor(activeCycleHolding * 0.5);
               if (s3Hands < 1 && activeCycleHolding > 1) s3Hands = 1;
               if (activeCycleHolding <= 0 && totalHands > 0) s3Hands = Math.floor(totalHands * 0.5);
               activeCycleHolding = Math.max(0, activeCycleHolding - s3Hands);
@@ -6447,7 +6460,9 @@
               }
             } else {
               // S1/S2/S4/S5/S6/S7: 破位或死叉，彻底清仓剩余所有仓位
-              let clearHands = activeCycleHolding > 0 ? activeCycleHolding : (totalHands > 0 ? Math.ceil(totalHands * 0.5) : 0);
+              let clearHands = (allocItem && allocItem.isSellToday && allocItem.soldHands > 0)
+                ? allocItem.soldHands
+                : (activeCycleHolding > 0 ? activeCycleHolding : (totalHands > 0 ? totalHands : 0));
               activeCycleHolding = 0;
               if (clearHands > 0) {
                 labelText = `${item.signal_type} (${clearHands}手)`;
