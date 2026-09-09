@@ -591,11 +591,11 @@ class StockDataProvider:
                     has_j_extreme = any(j >= 100 for j in recent_3d_js)
                     cond_j100_death = has_j_extreme and kdj_exact_death and d_filter_passed
                     
-                    # ② 核心触发：MACD红柱连续3个交易日逐根缩短 (替代原KDJ假死叉)
-                    cond_red_shrink_3d = (macd_bar > 0) and (prev_macd > 0) and (prev2_macd > 0) and (prev3_macd > 0) and (macd_bar < prev_macd) and (prev_macd < prev2_macd) and (prev2_macd < prev3_macd)
+                    # ② 核心触发：MACD红柱连续3个交易日逐根缩短 (修正归零边界：允许缩短至 0 轴归零 macd_bar >= 0)
+                    cond_red_shrink_3d = (macd_bar >= 0) and (prev_macd > 0) and (prev2_macd > 0) and (prev3_macd > 0) and (macd_bar < prev_macd) and (prev_macd < prev2_macd) and (prev2_macd < prev3_macd)
 
-                    # ③ 最终兜底：MACD正式死叉 (DIF下穿DEA，且柱子由红变绿)
-                    cond_macd_death = (prev_macd > 0) and (macd_bar <= 0) and (prev_dif >= prev_dea) and (dif < dea)
+                    # ③ 最终兜底：MACD正式死叉 (修正边界：红柱转平或翻绿，DIF与DEA粘合或下穿 dif <= dea)
+                    cond_macd_death = (prev_macd > 0) and (macd_bar <= 0) and (prev_dif >= prev_dea) and (dif <= dea)
 
                     if cond_j100_death:
                         s1_triggered = True

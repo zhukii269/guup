@@ -522,9 +522,9 @@ const MobileQuantEngine = (function() {
           // 场景 2: DIF >= 0 强势行情
           const hasJExtreme = recent3dJs.some(v => v >= 100);
           const condJ100Death = hasJExtreme && kdjExactDeath && dFilterPassed;
-          const condRedShrink3d = (macdBar > 0) && (prevMacd > 0) && (prev2Macd > 0) && (prev3Macd > 0) &&
+          const condRedShrink3d = (macdBar >= 0) && (prevMacd > 0) && (prev2Macd > 0) && (prev3Macd > 0) &&
                                   (macdBar < prevMacd) && (prevMacd < prev2Macd) && (prev2Macd < prev3Macd);
-          const condMacdDeath = (prevMacd > 0) && (macdBar <= 0) && (prevDif >= prevDea) && (dif < dea);
+          const condMacdDeath = (prevMacd > 0) && (macdBar <= 0) && (prevDif >= prevDea) && (dif <= dea);
 
           if (condJ100Death) {
             s1Triggered = true;
