@@ -2333,14 +2333,15 @@
         <!-- Toolbar Actions: Pos Budget & Available Cash -->
         <div class="paper-modal-toolbar">
           <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-            <!-- 设定 1: 总持仓额 (由行情与指标智能分配各股买入金额与股数) -->
+            <!-- 设定 1: 修改持仓额 -->
             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <span class="paper-toolbar-label" title="股票持仓总资金池。系统根据行情走势与多因子指标智能评估分配每个股买多少钱、买多少手！">📊 总持仓额:</span>
+              <span class="paper-toolbar-label" title="股票持仓总资金池。输入目标持仓额后点击确定即可生效！">📊 修改持仓额:</span>
               <div class="order-budget-input-wrapper">
                 <span style="color:#64748b; font-weight:700; font-size:12px;">¥</span>
-                <input type="number" id="inputTotalPosCapital" class="order-budget-input" value="100000" step="10000" min="5000" oninput="onTotalPosCapitalChange(this.value)" placeholder="100000" style="width:78px;">
+                <input type="text" id="inputTotalPosCapital" class="order-budget-input" value="100000" placeholder="100000" style="width:78px; text-align:right;" onkeydown="if(event.key==='Enter') applyTotalPosCapitalChange()">
                 <span style="color:#64748b; font-size:11px;">元</span>
               </div>
+              <button class="budget-preset-btn" style="background:#2563eb; color:#ffffff; border-color:#2563eb; font-weight:700; padding:2px 8px; cursor:pointer;" onclick="applyTotalPosCapitalChange()" title="确定修改总持仓额">确定</button>
               <div class="order-budget-presets">
                 <button class="budget-preset-btn pos-cap-btn" onclick="setTotalPosCapitalPreset(50000, this)">5万</button>
                 <button class="budget-preset-btn pos-cap-btn active" onclick="setTotalPosCapitalPreset(100000, this)">10万</button>
@@ -2354,19 +2355,20 @@
             <div class="paper-toolbar-divider" style="width:1px; height:20px; background:#cbd5e1;"></div>
 
 
-            <!-- 设定 2: 可用现金与发工资快捷入金 -->
+            <!-- 设定 2: 加入/提出现金 -->
             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <span class="paper-toolbar-label" title="账户流动现金。后续发工资可在此增加可用现金，绝对不会改变已有持仓股数与成本！">💵 可用现金:</span>
+              <span class="paper-toolbar-label" title="加入或提出现金。输入 800 点确定增加 800 元，输入 -800 点确定减少 800 元！">💵 加入/提出现金:</span>
               <div class="order-budget-input-wrapper">
                 <span style="color:#64748b; font-weight:700; font-size:12px;">¥</span>
-                <input type="number" id="inputAvailableCash" class="order-budget-input" value="50000" step="5000" min="0" oninput="onAvailableCashChange(this.value)" placeholder="50000" style="width:80px;">
+                <input type="text" id="inputCashDelta" class="order-budget-input" placeholder="输入金额(如800或-800)" style="width:130px; text-align:right;" onkeydown="if(event.key==='Enter') applyCashDeltaChange()">
                 <span style="color:#64748b; font-size:11px;">元</span>
               </div>
+              <button class="budget-preset-btn" style="background:#16a34a; color:#ffffff; border-color:#16a34a; font-weight:700; padding:2px 8px; cursor:pointer;" onclick="applyCashDeltaChange()" title="确定增加或提出现金">确定</button>
               <div class="order-budget-presets">
                 <button class="budget-preset-btn btn-salary" style="color:#16a34a; font-weight:bold; border-color:#86efac; background:#f0fdf4;" onclick="addAvailableCash(5000)" title="发工资入金+5000元，不影响历史已有持仓">+5000 (发工资)</button>
                 <button class="budget-preset-btn" onclick="addAvailableCash(10000)">+1万</button>
                 <button class="budget-preset-btn" onclick="addAvailableCash(20000)">+2万</button>
-                <button class="budget-preset-btn" onclick="addAvailableCash(50000)">+5万</button>
+                <button class="budget-preset-btn" onclick="addAvailableCash(-1000)" title="提出现金-1000元" style="color:#dc2626;">-1000</button>
               </div>
             </div>
 
@@ -2389,9 +2391,6 @@
             <button class="btn-paper-apply-all" onclick="refreshPaperModalData()">🔄 刷新最新行情与收益</button>
           </div>
         </div>
-
-        <!-- 结算时点即时说明栏 -->
-        <div id="paperSettlementNotice" style="margin: 0 18px 8px 18px; padding: 7px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: space-between;"></div>
 
 
 
@@ -5236,16 +5235,24 @@
     }
 
     function setTotalPosCapitalPreset(amount, btn) {
+      const targetAmount = Math.max(1000, parseFloat(amount) || 100000);
       const input = document.getElementById('inputTotalPosCapital');
-      if (input) input.value = amount;
+      if (input) input.value = targetAmount;
 
-      const btns = document.querySelectorAll('.pos-cap-btn');
-      btns.forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
+      const btns = document.querySelectorAll('.paper-modal-toolbar .pos-cap-btn');
+      btns.forEach(b => {
+        const text = b.innerText.trim();
+        const amt = (text === '5万' ? 50000 : (text === '10万' ? 100000 : (text === '20万' ? 200000 : (text === '30万' ? 300000 : (text === '50万' ? 500000 : 0)))));
+        if (b === btn || (amt === targetAmount && !btn)) {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
+      });
 
-      localStorage.setItem('stock_master_total_pos_capital', amount);
+      localStorage.setItem('stock_master_total_pos_capital', targetAmount);
       if (window.pywebview && window.pywebview.api && window.pywebview.api.save_user_config) {
-        window.pywebview.api.save_user_config({ total_pos_capital: amount });
+        window.pywebview.api.save_user_config({ total_pos_capital: targetAmount });
       }
 
       renderPaperPortfolioModal();
@@ -5265,32 +5272,41 @@
       }
     }
 
+    function applyTotalPosCapitalChange() {
+      const input = document.getElementById('inputTotalPosCapital');
+      if (!input) return;
+      let raw = input.value.trim().replace(/\s+/g, '');
+      if (!raw) {
+        showOrderToast('⚠️ 请输入目标持仓额，如 100000 或 50000', 'warning');
+        return;
+      }
+      const cur = getTotalPosCapital();
+      let target = 0;
+      if (raw.startsWith('+') || raw.startsWith('-')) {
+        const delta = parseFloat(raw);
+        if (isNaN(delta)) {
+          showOrderToast('⚠️ 请输入有效的数字金额', 'warning');
+          return;
+        }
+        target = Math.max(1000, cur + delta);
+      } else {
+        const num = parseFloat(raw);
+        if (isNaN(num) || num <= 0) {
+          showOrderToast('⚠️ 持仓额必须为大于 0 的有效金额', 'warning');
+          return;
+        }
+        target = num;
+      }
+      setTotalPosCapitalPreset(target, null);
+      showOrderToast(`📊 总持仓额已修改为 ¥${target.toLocaleString()}`);
+    }
+
     function onTotalPosCapitalChange(val) {
       const num = parseFloat(val);
       if (!isNaN(num) && num > 0) {
-        localStorage.setItem('stock_master_total_pos_capital', num);
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.save_user_config) {
-          window.pywebview.api.save_user_config({ total_pos_capital: num });
-        }
-
-        renderPaperPortfolioModal();
-        updatePaperNavBadge();
-
-        if (currentPaperModalTab === 'history') {
-          loadAndRenderPaperHistoryAnalysis();
-        }
-
-        // 实时同步刷新图表买卖手数标记
-        if (currentChartType === 'timeShare' && minuteData) {
-          renderTimeShareChart(minuteData, klineData, kline5MinData);
-        } else if (currentChartType === '5min' && kline5MinData) {
-          render5MinKlineChart({ name: currentSymbol, klines: kline5MinData });
-        } else if (currentChartType === 'kline' && klineData) {
-          renderKlineChart();
-        }
+        setTotalPosCapitalPreset(num, null);
       }
     }
-
 
     function getAvailableCash() {
       const saved = localStorage.getItem('stock_master_available_cash');
@@ -5304,8 +5320,6 @@
     function setAvailableCash(amount) {
       const num = Math.max(0, parseFloat(amount) || 0);
       localStorage.setItem('stock_master_available_cash', num);
-      const input = document.getElementById('inputAvailableCash');
-      if (input) input.value = num;
 
       if (window.pywebview && window.pywebview.api && window.pywebview.api.save_user_config) {
         window.pywebview.api.save_user_config({ available_cash: num });
@@ -5315,25 +5329,37 @@
       updatePaperNavBadge();
     }
 
-    function onAvailableCashChange(val) {
-      const num = val === '' ? 0 : parseFloat(val);
-      if (!isNaN(num) && num >= 0) {
-        localStorage.setItem('stock_master_available_cash', num);
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.save_user_config) {
-          window.pywebview.api.save_user_config({ available_cash: num });
-        }
-
-        renderPaperPortfolioModal();
-        updatePaperNavBadge();
+    function applyCashDeltaChange() {
+      const input = document.getElementById('inputCashDelta');
+      if (!input) return;
+      let raw = input.value.trim().replace(/\s+/g, '');
+      if (!raw) {
+        showOrderToast('⚠️ 请输入金额，例如 800 (加入现金) 或 -800 (提出现金)', 'warning');
+        return;
       }
+      const delta = parseFloat(raw);
+      if (isNaN(delta) || delta === 0) {
+        showOrderToast('⚠️ 请输入有效的非零金额，例如 800 或 -800', 'warning');
+        return;
+      }
+      const curCash = getAvailableCash();
+      const updated = Math.max(0, curCash + delta);
+      if (curCash + delta < 0) {
+        showOrderToast(`⚠️ 现金不足扣减！当前可用现金仅 ¥${curCash.toFixed(2)}，已调整为 ¥0.00`, 'warning');
+      } else {
+        const actionText = delta > 0 ? '加入' : '提出';
+        showOrderToast(`💰 成功${actionText}现金 ¥${Math.abs(delta).toLocaleString()}！最新可用现金: ¥${updated.toLocaleString()}`);
+      }
+      setAvailableCash(updated);
+      input.value = '';
     }
-
 
     function addAvailableCash(deltaAmount) {
       const current = getAvailableCash();
       const updated = Math.max(0, current + deltaAmount);
       setAvailableCash(updated);
-      showOrderToast(`💰 成功入金 ¥${deltaAmount.toLocaleString()}！可用现金更新为 ¥${updated.toLocaleString()} (原有持仓完全不受影响)`);
+      const actionText = deltaAmount > 0 ? '加入' : '提出';
+      showOrderToast(`💰 成功${actionText}现金 ¥${Math.abs(deltaAmount).toLocaleString()}！可用现金更新为 ¥${updated.toLocaleString()} (原有持仓完全不受影响)`);
     }
 
     function getAccountTotalCapital() {
@@ -5459,12 +5485,6 @@
         else b.classList.remove('active');
       });
 
-
-      const availCash = getAvailableCash();
-      const inputCash = document.getElementById('inputAvailableCash');
-      if (inputCash && document.activeElement !== inputCash) {
-        inputCash.value = availCash;
-      }
 
       const allocData = computePaperPortfolioAllocations();
       const totalCapital = allocData.totalCapital;
@@ -5706,22 +5726,6 @@
         else if (paperSettlementMode === 'before1450' && b.id === 'btnSettleBefore') b.classList.add('active');
         else if (paperSettlementMode === 'after1450' && b.id === 'btnSettleAfter') b.classList.add('active');
       });
-
-      // 渲染结算时点通知条
-      const noticeEl = document.getElementById('paperSettlementNotice');
-      if (noticeEl) {
-        if (!allocData.isSettled) {
-          noticeEl.style.background = isDark ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb';
-          noticeEl.style.color = isDark ? '#fcd34d' : '#b45309';
-          noticeEl.style.border = isDark ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid #fde68a';
-          noticeEl.innerHTML = `<span>⏳ <b>【14:50前 盘中待结算模式】</b>：军工等计划卖出的标的资金目前<b>100%保留在【持仓额】</b>中；待14:50尾盘确定买卖后，卖出款才会正式划入现金池。</span><span style="opacity:0.8; font-size:11px;">可点击上方按钮快捷切换时点查看</span>`;
-        } else {
-          noticeEl.style.background = isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4';
-          noticeEl.style.color = isDark ? '#86efac' : '#15803d';
-          noticeEl.style.border = isDark ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid #bbf7d0';
-          noticeEl.innerHTML = `<span>✅ <b>【14:50后 确定结算模式】</b>：今日买卖已于14:50确认成交，S3减半回款与清仓资金已正式划入【可用现金】池，剩余底仓留在持仓额中。</span><span style="opacity:0.8; font-size:11px;">可点击上方按钮快捷切换时点查看</span>`;
-        }
-      }
 
       // TongHuaShun 5-Column Account Overview Calculations
       const currentTotalAssets = allocData.currentTotalAssets;

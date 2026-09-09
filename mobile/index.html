@@ -1138,15 +1138,15 @@
     <div class="action-modal" id="modalEditCash">
       <div class="action-sheet">
         <div class="sheet-header">
-          <span class="sheet-title">💵 修改可用现金</span>
+          <span class="sheet-title">💵 加入 / 提出现金</span>
           <button class="sheet-close" id="btnCloseEditCash">✕</button>
         </div>
         <div class="sheet-body">
           <div class="input-group">
-            <label class="input-label">可用现金金额 (元)</label>
+            <label class="input-label">调整或修改现金 (输入 800 则增加，输入 -800 则扣减)</label>
             <div class="input-wrap">
               <span class="currency-prefix">¥</span>
-              <input type="number" step="1000" class="modal-input" id="inputCashAmount" placeholder="如 100000">
+              <input type="text" class="modal-input" id="inputCashAmount" placeholder="如 800 或 -800">
             </div>
           </div>
           <div class="quick-cash-row">
@@ -2056,11 +2056,6 @@
           return;
         }
 
-        const noticeBar = document.createElement('div');
-        noticeBar.style.cssText = `font-size:11.5px; font-weight:700; padding:8px 12px; border-radius:8px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; ${!isSettled ? 'background:#fffbeb; color:#b45309; border:1px solid #fde68a;' : 'background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;'}`;
-        noticeBar.innerHTML = `<span>${!isSettled ? '⏳ 14:50前盘中：卖出资金仍算在持仓额中' : '✅ 14:50后已结算：确定买卖，回款已入现金'}</span>`;
-        dom.portfolioList.appendChild(noticeBar);
-
         let totalStockVal = 0;
 
         // 1. 渲染用户自定设定的持仓
@@ -2167,8 +2162,7 @@
       // 模态弹窗 1: 修改可用现金
       // -------------------------------------------------------------
       function openModalCash() {
-        const portData = MobileQuantEngine.PortfolioManager.getData();
-        dom.inputCashAmount.value = Math.round(portData.available_cash);
+        dom.inputCashAmount.value = '';
         dom.modalEditCash.classList.add('active');
         setTimeout(() => dom.inputCashAmount.focus(), 150);
       }
@@ -2194,12 +2188,32 @@
 
       // 确认保存现金修改
       dom.btnConfirmEditCash.addEventListener('click', () => {
-        const val = parseFloat(dom.inputCashAmount.value);
-        if (isNaN(val) || val < 0) {
-          alert('请输入有效的现金金额 (>= 0)');
+        const raw = (dom.inputCashAmount.value || '').trim().replace(/\s+/g, '');
+        if (!raw) {
+          alert('请输入金额，如 800 (加入) 或 -800 (扣减)');
           return;
         }
-        MobileQuantEngine.PortfolioManager.setAvailableCash(val);
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        const curCash = portData.available_cash || 0;
+        let finalCash = 0;
+        if (raw.startsWith('+') || raw.startsWith('-')) {
+          const delta = parseFloat(raw);
+          if (isNaN(delta)) {
+            alert('请输入有效的金额');
+            return;
+          }
+          finalCash = Math.max(0, curCash + delta);
+        } else {
+          const val = parseFloat(raw);
+          if (isNaN(val)) {
+            alert('请输入有效的金额');
+            return;
+          }
+          // 如果输入的金额较小（例如 800），按照用户习惯累加到现有现金上；如果超过现金额的数额则作为目标值
+          // 根据需求：比如输入800，然后点确定，可用现金金额在现在的基础上+800，输入-800，即为减去800
+          finalCash = Math.max(0, curCash + val);
+        }
+        MobileQuantEngine.PortfolioManager.setAvailableCash(finalCash);
         closeModalCash();
         renderPortfolioView();
       });
