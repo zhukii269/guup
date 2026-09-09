@@ -3909,14 +3909,19 @@
 
       // 在【总持仓额】内，根据行情和多因子各项指标自行评估分配各股买入金额与股数
       if (activeCandidates.length > 0) {
-        activeCandidates.sort((a, b) => b.weight - a.weight);
-        const totalW = activeCandidates.reduce((acc, c) => acc + c.weight, 0);
+        // 14:50 之后，S3 标的已确认卖出 50%，在当前持仓额中有效权重为 50% 底仓
+        activeCandidates.forEach(cand => {
+          cand.effectiveWeight = (isSettled && cand.isS3Today) ? (cand.weight * 0.5) : cand.weight;
+        });
+
+        activeCandidates.sort((a, b) => b.effectiveWeight - a.effectiveWeight);
+        const totalW = activeCandidates.reduce((acc, c) => acc + c.effectiveWeight, 0);
         let remainPosCap = totalPosCapital;
         const maxSingleCap = totalPosCapital * (activeCandidates.length <= 2 ? 0.5 : 0.35);
 
-        // 第一轮：按多因子指标质量权重分配预算
+        // 第一轮：按有效权重分配持仓预算，使持仓总市值完全吃满设定的【总持仓额】
         activeCandidates.forEach(cand => {
-          const portion = totalW > 0 ? (cand.weight / totalW) : (1 / activeCandidates.length);
+          const portion = totalW > 0 ? (cand.effectiveWeight / totalW) : (1 / activeCandidates.length);
           let targetBudget = Math.min(maxSingleCap, totalPosCapital * portion);
           const hands = Math.max(1, Math.floor(targetBudget / cand.costPrice / 100));
           cand.allocatedHands = hands;
@@ -3943,38 +3948,39 @@
         // 针对S3与清仓卖出标的的结算时点处理
         activeCandidates.forEach(cand => {
           if (cand.isS3Today) {
-            const origHands = cand.allocatedHands;
-            const planSoldHands = origHands > 1 ? Math.floor(origHands * 0.5) : 1;
-            const planRemainHands = Math.max(0, origHands - planSoldHands);
-            cand.origHands = origHands;
-            cand.plannedSoldHands = planSoldHands;
-            cand.plannedRemainHands = planRemainHands;
-
             if (isSettled) {
-              // 14:50 之后：确定卖出 50%，资金正式划入现金池
-              cand.soldHands = planSoldHands;
-              cand.soldShares = planSoldHands * 100;
+              // 14:50 之后：allocatedHands 为当前确认保留的 50% 底仓手数
+              // 卖出的 50% 回款资金已确认卖出，直接算进可用现金里！
+              const remainHands = cand.allocatedHands;
+              const soldHands = remainHands;
+              const origHands = remainHands + soldHands;
+
+              cand.origHands = origHands;
+              cand.plannedSoldHands = soldHands;
+              cand.plannedRemainHands = remainHands;
+              cand.soldHands = soldHands;
+              cand.soldShares = soldHands * 100;
               const sellPrice = cand.item.high > 0 ? cand.item.high : cand.curPrice;
               const settleVal = cand.soldShares * sellPrice;
               const realizedProfit = settleVal - (cand.soldShares * cand.costPrice);
               cand.settleVal = settleVal;
               cand.realizedProfit = realizedProfit;
 
-              // 剩余50%底仓留存在持仓列表中
-              cand.allocatedHands = planRemainHands;
-              cand.allocatedShares = planRemainHands * 100;
-              cand.allocatedCost = planRemainHands * 100 * cand.costPrice;
-
-              // 减半卖出资金流入可用现金，已实现收益计入平仓盈亏
+              // 军工等减半卖出回款直接算进现金池！
               totalSettleCash += settleVal;
               totalClosedProfit += realizedProfit;
             } else {
-              // 14:50 之前：尚未确定卖出，这部分的钱仍然全部算在持仓额里！
+              // 14:50 之前：尚未确定卖出，全部算在持仓额里！
+              const origHands = cand.allocatedHands;
+              const planSoldHands = origHands > 1 ? Math.floor(origHands * 0.5) : 1;
+              const planRemainHands = Math.max(0, origHands - planSoldHands);
+              cand.origHands = origHands;
+              cand.plannedSoldHands = planSoldHands;
+              cand.plannedRemainHands = planRemainHands;
               cand.soldHands = 0;
               cand.soldShares = 0;
               cand.settleVal = 0;
               cand.realizedProfit = 0;
-              // allocatedHands 保持为完整 origHands (如6手)，100%计入持仓额！
             }
           } else if (cand.isSellToday) {
             if (!isSettled) {
@@ -3985,7 +3991,6 @@
               cand.soldShares = 0;
               cand.settleVal = 0;
               cand.realizedProfit = 0;
-              // allocatedHands 保持为完整 origHands，100%计入持仓额！
             }
           }
         });
@@ -5583,11 +5588,11 @@
           if (allocData.isSettled) {
             statusBadge = `<span style="background:${s3BadgeBg}; color:${s3BadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟡 减半止盈 (已卖${state.soldHands}手/留${state.allocatedHands}手)</span>`;
             displayCostPrice = `${costPrice.toFixed(3)} (留${state.allocatedHands}手底仓)`;
-            displayMarketVal = `¥${mVal.toFixed(2)} (已回款¥${(state.settleVal || 0).toFixed(2)})`;
+            displayMarketVal = `<div>¥${mVal.toFixed(2)}</div><div style="font-size:10.5px; color:#16a34a; font-weight:700; margin-top:1px;">减半回款¥${(state.settleVal || 0).toFixed(2)}直接入现金</div>`;
           } else {
             statusBadge = `<span style="background:${s3BadgeBg}; color:${s3BadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟡 待14:50减半 (计划卖${state.plannedSoldHands}手/留${state.plannedRemainHands}手)</span>`;
             displayCostPrice = `${costPrice.toFixed(3)} (${state.allocatedHands}手完整持仓)`;
-            displayMarketVal = `¥${mVal.toFixed(2)} (持仓额·待14:50结算)`;
+            displayMarketVal = `<div>¥${mVal.toFixed(2)}</div><div style="font-size:10.5px; color:#f59e0b; font-weight:700; margin-top:1px;">(待14:50结算)</div>`;
           }
 
           const sign = totalStockPnl >= 0 ? '+' : '';
@@ -5636,8 +5641,8 @@
             const profitPct = (state.soldShares * costPrice) > 0 ? (profit / (state.soldShares * costPrice) * 100) : 0;
 
             statusBadge = `<span style="background:${sellBadgeBg}; color:${sellBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 今天卖出 (已结清${state.soldHands}手)</span>`;
-            displayCostPrice = `${costPrice.toFixed(3)}`;
-            displayMarketVal = `¥${settleVal.toFixed(2)} (已结清划入现金)`;
+            displayCostPrice = `${costPrice.toFixed(3)} (已清仓0手)`;
+            displayMarketVal = `<div>¥0.00</div><div style="font-size:10.5px; color:#16a34a; font-weight:700; margin-top:1px;">回款¥${settleVal.toFixed(2)}直接入现金</div>`;
             const sign = profit >= 0 ? '+' : '';
             displayPnl = `${sign}¥${profit.toFixed(2)}`;
             displayPnlPct = `${sign}${profitPct.toFixed(2)}%`;
@@ -5764,7 +5769,7 @@
       
       if (kpiTotalMarketVal) {
         kpiTotalMarketVal.innerText = `¥${totalPositionMarketVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        const settleInfo = totalSettleCash > 0 ? `\n(注: 今日减半/卖出已回款 ¥${totalSettleCash.toFixed(2)}，已结算划入右侧可用现金池；当前持仓市值 + 卖出回款 = ¥${(totalPositionMarketVal + totalSettleCash).toFixed(2)}，完全对应您设定的持仓额预算)` : '';
+        const settleInfo = totalSettleCash > 0 ? `\n(注: 今日减半/卖出已回款 ¥${totalSettleCash.toFixed(2)}，已直接结算划入右侧可用现金池)` : '';
         kpiTotalMarketVal.title = `持仓总市值: ¥${totalPositionMarketVal.toFixed(2)}\n设定持仓额(预算资金池): ¥${totalPosCapital.toLocaleString()}${settleInfo}`;
       }
       if (kpiPositionWeight) {
