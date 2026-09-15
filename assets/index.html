@@ -3841,8 +3841,9 @@
         const isPending = !isCallback && !isBuyToday && !isSellToday && !isHolding && !isS3Today && tagText.includes('即将满足');
 
         let costPrice = curPrice;
-        if (typeof item.buy_cost_price === 'number' && item.buy_cost_price > 0) {
-          costPrice = item.buy_cost_price;
+        const bp = (typeof item.buy_cost_price === 'number' && item.buy_cost_price > 0) ? item.buy_cost_price : (item.buy_price || item.cost_price || item.costPrice);
+        if (typeof bp === 'number' && bp > 0) {
+          costPrice = bp;
         } else if (isBuyToday) {
           costPrice = curPrice > 0 ? curPrice : (item.close > 0 ? item.close : (item.prev_close > 0 ? item.prev_close : curPrice));
         } else if (isHolding || isS3Today) {
@@ -3909,9 +3910,9 @@
 
       // 在【总持仓额】内，根据行情和多因子各项指标自行评估分配各股买入金额与股数
       if (activeCandidates.length > 0) {
-        // 14:50 之后，S3 标的已确认卖出 50%，在当前持仓额中有效权重为 50% 底仓
+        // 14:50 之后 S3 今日减半，或此前已减半处于 50% 底仓状态的标的，有效权重均为 50% 底仓
         activeCandidates.forEach(cand => {
-          cand.effectiveWeight = (isSettled && cand.isS3Today) ? (cand.weight * 0.5) : cand.weight;
+          cand.effectiveWeight = ((isSettled && cand.isS3Today) || cand.item?.has_s3_holding) ? (cand.weight * 0.5) : cand.weight;
         });
 
         activeCandidates.sort((a, b) => b.effectiveWeight - a.effectiveWeight);
@@ -4033,6 +4034,9 @@
               const singleEstBudget = Math.max(state.costPrice * 100, totalPosCapital * estPortion);
               const calc = calculateSharesAndAmount(singleEstBudget, state.costPrice);
               soldHands = Math.max(1, calc.hands);
+              if (state.item && state.item.has_s3_holding) {
+                soldHands = Math.max(1, Math.floor(soldHands * 0.5));
+              }
             }
 
             state.allocatedHands = 0;
@@ -4404,7 +4408,7 @@
         }
       ];
 
-      if (allocItem && (allocItem.isBuyToday || allocItem.isHolding) && allocItem.costPrice > 0 && allocItem.allocatedHands > 0) {
+      if (allocItem && (allocItem.isBuyToday || allocItem.isHolding || allocItem.isS3Today) && allocItem.costPrice > 0 && allocItem.allocatedHands > 0) {
         const pnlPct = ((latestMin.price - allocItem.costPrice) / allocItem.costPrice * 100);
         const pnlSign = pnlPct >= 0 ? '+' : '';
         timeShareMarkLines.push({
@@ -5618,8 +5622,15 @@
           const weightPct = totalCapital > 0 ? (state.allocatedCost / totalCapital * 100).toFixed(1) : '0.0';
           const holdBadgeBg = isDark ? 'rgba(59, 130, 246, 0.2)' : '#eff6ff';
           const holdBadgeColor = isDark ? '#93c5fd' : '#2563eb';
-          statusBadge = `<span style="background:${holdBadgeBg}; color:${holdBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">💼 持仓中 (占比${weightPct}%)</span>`;
-          displayCostPrice = `${costPrice.toFixed(3)} (${state.allocatedHands}手)`;
+          if (item.has_s3_holding) {
+            const s3BadgeBg = isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7';
+            const s3BadgeColor = isDark ? '#fcd34d' : '#d97706';
+            statusBadge = `<span style="background:${s3BadgeBg}; color:${s3BadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟡 50%底仓持仓中 (已减半锁定利润)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)} (留${state.allocatedHands}手底仓)`;
+          } else {
+            statusBadge = `<span style="background:${holdBadgeBg}; color:${holdBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">💼 持仓中 (占比${weightPct}%)</span>`;
+            displayCostPrice = `${costPrice.toFixed(3)} (${state.allocatedHands}手)`;
+          }
           displayMarketVal = `¥${mVal.toFixed(2)}`;
           const sign = pnl >= 0 ? '+' : '';
           const todaySign = todayPnl >= 0 ? '+' : '';
@@ -5640,7 +5651,8 @@
             const profit = state.profit || (settleVal - (state.soldShares * costPrice));
             const profitPct = (state.soldShares * costPrice) > 0 ? (profit / (state.soldShares * costPrice) * 100) : 0;
 
-            statusBadge = `<span style="background:${sellBadgeBg}; color:${sellBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 今天卖出 (已结清${state.soldHands}手)</span>`;
+            const sellHandsNote = item.has_s3_holding ? `已结清剩余${state.soldHands}手底仓` : `已结清${state.soldHands}手`;
+            statusBadge = `<span style="background:${sellBadgeBg}; color:${sellBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 今天卖出 (${sellHandsNote})</span>`;
             displayCostPrice = `${costPrice.toFixed(3)} (已清仓0手)`;
             displayMarketVal = `<div>¥0.00</div><div style="font-size:10.5px; color:#16a34a; font-weight:700; margin-top:1px;">回款¥${settleVal.toFixed(2)}直接入现金</div>`;
             const sign = profit >= 0 ? '+' : '';
@@ -6773,7 +6785,7 @@
                   { xAxis: klineData[Math.max(rangeStatStartIdx, rangeStatEndIdx)].date, name: '终止: ' + klineData[Math.max(rangeStatStartIdx, rangeStatEndIdx)].date }
                 );
               }
-              if (allocItem && (allocItem.isBuyToday || allocItem.isHolding) && allocItem.costPrice > 0 && allocItem.allocatedHands > 0) {
+              if (allocItem && (allocItem.isBuyToday || allocItem.isHolding || allocItem.isS3Today) && allocItem.costPrice > 0 && allocItem.allocatedHands > 0) {
                 const lastClose = latestBar ? latestBar.close : allocItem.costPrice;
                 const pnlPct = ((lastClose - allocItem.costPrice) / allocItem.costPrice * 100);
                 const pnlSign = pnlPct >= 0 ? '+' : '';

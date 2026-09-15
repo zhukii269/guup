@@ -820,13 +820,13 @@ class StockDataProvider:
                         break
                     elif sig in ["S1", "S2", "S4", "S7"]:
                         in_pos = False
+                        has_s3_holding = False
                         break
                     elif sig == "S3":
                         in_pos = True
                         has_s3_holding = True
-                        buy_cost_price = k.get("close", bar["close"])
-                        buy_date = k.get("date", "")
-                        break
+                        # S3 只是卖出半仓，持仓成本必须继续向前追溯至真正的建仓买点 B，绝不能重置成本与收益率！
+                        continue
 
                 sort_priority = 10
 
@@ -900,7 +900,8 @@ class StockDataProvider:
                     "is_triggered": (sort_priority >= 70),
                     "reason_summary": reason_summary,
                     "signal_type": today_sig,
-                    "is_s3_today": (today_sig == "S3")
+                    "is_s3_today": (today_sig == "S3"),
+                    "has_s3_holding": has_s3_holding
                 }
                 if not hasattr(self, "_item_data_cache"):
                     self._item_data_cache = {}
