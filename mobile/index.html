@@ -1139,17 +1139,19 @@
               <div class="asset-sub-val" id="pStockVal">¥0.00</div>
             </div>
             <div>
-              <div class="stat-label" style="color:#fcd34d;">持仓预算(总额)</div>
+              <div class="stat-label" style="color:#fcd34d;">持仓预算(自动计算)</div>
               <div class="asset-sub-val" id="pTotalPosCapital" style="color:#fef08a;">¥100,000.00</div>
             </div>
           </div>
           <div class="asset-actions">
-            <button class="btn-action btn-edit-cash" id="btnEditCash">💵 加入/提出现金</button>
-            <button class="btn-action btn-edit-holdings" id="btnEditHoldings">📊 修改持仓额</button>
+            <button class="btn-action btn-edit-cash" id="btnEditCash" style="width:100%; font-size:13.5px; padding:10px 0;">💵 加入 / 提出现金</button>
           </div>
         </div>
 
-        <div class="section-title">📊 当前持仓标的</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; margin-bottom:4px;">
+          <div class="section-title">📊 当前持仓标的</div>
+          <button id="btnOpenCustomHoldings" style="background:none; border:none; color:var(--color-primary); font-size:12px; cursor:pointer; font-weight:700;">➕ 自选标的自定持仓</button>
+        </div>
         <div class="stock-list" id="portfolioList" style="padding:0;">
           <!-- 动态持仓列表 -->
         </div>
@@ -1195,20 +1197,32 @@
         </div>
         <div class="sheet-body">
           <div class="input-group">
-            <label class="input-label">调整或修改现金 (输入 800 则增加，输入 -800 则扣减)</label>
-            <div class="input-wrap">
-              <span class="currency-prefix">¥</span>
-              <input type="text" class="modal-input" id="inputCashAmount" placeholder="如 800 (加入) 或 -800 (扣减)">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label class="input-label" style="margin-bottom:0;">调整或设定现金</label>
+              <span id="cashCurValHint" style="font-size:11.5px; color:var(--text-sub);">当前现金: ¥100,000</span>
             </div>
+            <div class="input-wrap" style="margin-top:6px;">
+              <span class="currency-prefix">¥</span>
+              <input type="text" class="modal-input" id="inputCashAmount" placeholder="如 800(加入)、-800(扣减) 或 =5036(设定)">
+            </div>
+            <div id="cashPreviewText" style="font-size:11.5px; color:var(--color-primary); margin-top:5px; font-weight:700; min-height:16px;"></div>
           </div>
-          <div class="quick-cash-row">
-            <button class="quick-pill cash-pill" data-val="800">+800</button>
+          <div style="font-size:11.5px; color:var(--text-sub); margin-top:8px; font-weight:700;">快捷增减现金:</div>
+          <div class="quick-cash-row" style="margin-top:4px;">
+            <button class="quick-pill cash-pill" data-val="+800">+800</button>
             <button class="quick-pill cash-pill" data-val="-800">-800</button>
-            <button class="quick-pill cash-pill" data-val="5000">+5000</button>
-            <button class="quick-pill cash-pill" data-val="10000">+1万</button>
-            <button class="quick-pill cash-pill" data-val="50000">+5万</button>
+            <button class="quick-pill cash-pill" data-val="+5000">+5000</button>
+            <button class="quick-pill cash-pill" data-val="+10000">+1万</button>
+            <button class="quick-pill cash-pill" data-val="+50000">+5万</button>
           </div>
-          <div class="sheet-actions">
+          <div style="font-size:11.5px; color:var(--text-sub); margin-top:10px; font-weight:700;">直接设定现金总额 (持仓预算自动同步):</div>
+          <div class="quick-cash-row" style="margin-top:4px;">
+            <button class="quick-pill cash-set-pill" data-set="5036">5036</button>
+            <button class="quick-pill cash-set-pill" data-set="50000">5万</button>
+            <button class="quick-pill cash-set-pill" data-set="100000">10万</button>
+            <button class="quick-pill cash-set-pill" data-set="200000">20万</button>
+          </div>
+          <div class="sheet-actions" style="margin-top:14px;">
             <button class="sheet-btn btn-secondary" id="btnCancelEditCash">取消</button>
             <button class="sheet-btn btn-primary" id="btnConfirmEditCash">保存修改</button>
           </div>
@@ -1216,33 +1230,14 @@
       </div>
     </div>
 
-    <!-- 管理与修改持仓 Modal -->
+    <!-- 自选标的自定持仓 Modal -->
     <div class="action-modal" id="modalEditHoldings">
       <div class="action-sheet">
         <div class="sheet-header">
-          <span class="sheet-title">📊 修改持仓额与管理持仓</span>
+          <span class="sheet-title">📋 自选标的自定持仓管理</span>
           <button class="sheet-close" id="btnCloseEditHoldings">✕</button>
         </div>
         <div class="sheet-body">
-          <!-- 模块 1: 修改总持仓额 (资金池预算) -->
-          <div class="holding-form-box" style="margin-bottom:14px; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.3); border-radius:12px; padding:12px;">
-            <div class="form-title" style="color:#60a5fa; font-size:13.5px; font-weight:800;">🎯 修改总持仓额 (持仓资金池预算)</div>
-            <div class="input-wrap" style="margin-top:8px;">
-              <span class="currency-prefix">¥</span>
-              <input type="number" step="1" class="modal-input" id="inputTotalPosCapital" placeholder="输入持仓额，如 5036 或 100000">
-            </div>
-            <div class="quick-cash-row" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
-              <button class="quick-pill pos-pill" data-val="5036">5036</button>
-              <button class="quick-pill pos-pill" data-val="50000">5万</button>
-              <button class="quick-pill pos-pill" data-val="100000">10万</button>
-              <button class="quick-pill pos-pill" data-val="200000">20万</button>
-              <button class="quick-pill pos-pill" data-val="300000">30万</button>
-              <button class="quick-pill pos-pill" data-val="500000">50万</button>
-            </div>
-            <button class="sheet-btn btn-primary" id="btnSaveTotalPosCap" style="margin-top:10px; width:100%;">确认修改总持仓额</button>
-          </div>
-
-          <!-- 模块 2: 自选标的自定持仓 (可选高级功能) -->
           <div class="holding-form-box">
             <div class="form-title" id="holdingFormTitle">➕ 自选标的自定持仓 (可选)</div>
             <div class="form-item">
@@ -1322,17 +1317,17 @@
         pStockVal: document.getElementById('pStockVal'),
         pTotalPosCapital: document.getElementById('pTotalPosCapital'),
         btnEditCash: document.getElementById('btnEditCash'),
-        btnEditHoldings: document.getElementById('btnEditHoldings'),
+        btnOpenCustomHoldings: document.getElementById('btnOpenCustomHoldings'),
         modalEditCash: document.getElementById('modalEditCash'),
         btnCloseEditCash: document.getElementById('btnCloseEditCash'),
         btnCancelEditCash: document.getElementById('btnCancelEditCash'),
         btnConfirmEditCash: document.getElementById('btnConfirmEditCash'),
         inputCashAmount: document.getElementById('inputCashAmount'),
+        cashCurValHint: document.getElementById('cashCurValHint'),
+        cashPreviewText: document.getElementById('cashPreviewText'),
         modalEditHoldings: document.getElementById('modalEditHoldings'),
         btnCloseEditHoldings: document.getElementById('btnCloseEditHoldings'),
         btnDoneEditHoldings: document.getElementById('btnDoneEditHoldings'),
-        inputTotalPosCapital: document.getElementById('inputTotalPosCapital'),
-        btnSaveTotalPosCap: document.getElementById('btnSaveTotalPosCap'),
         holdingFormTitle: document.getElementById('holdingFormTitle'),
         selectHoldingSymbol: document.getElementById('selectHoldingSymbol'),
         inputHoldingHands: document.getElementById('inputHoldingHands'),
@@ -2151,7 +2146,7 @@
         }
 
         if (displayCards.length === 0) {
-          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，点击上方【修改持仓额】可设定持仓预算资金</div>';
+          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，点击上方【加入/提出现金】可自动计算持仓预算并分配买入</div>';
           return;
         }
 
@@ -2249,10 +2244,66 @@
       }
 
       // -------------------------------------------------------------
-      // 模态弹窗 1: 修改可用现金
+      // 模态弹窗 1: 修改可用现金 (持仓预算自动计算)
       // -------------------------------------------------------------
+      function updateCashPreview() {
+        if (!dom.cashPreviewText) return;
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        const curCash = portData.available_cash || 0;
+        const raw = (dom.inputCashAmount.value || '').trim().replace(/\s+/g, '');
+        if (!raw) {
+          dom.cashPreviewText.textContent = '';
+          return;
+        }
+
+        if (raw.startsWith('=')) {
+          const val = parseFloat(raw.slice(1));
+          if (!isNaN(val) && val >= 0) {
+            dom.cashPreviewText.textContent = `🎯 设定为: ¥${val.toLocaleString()} (持仓预算同步生效)`;
+            dom.cashPreviewText.style.color = '#2563eb';
+          } else {
+            dom.cashPreviewText.textContent = '⚠️ 请输入有效金额';
+            dom.cashPreviewText.style.color = '#dc2626';
+          }
+        } else if (raw.startsWith('+')) {
+          const delta = parseFloat(raw.slice(1));
+          if (!isNaN(delta) && delta > 0) {
+            dom.cashPreviewText.textContent = `➕ 增加现金 +¥${delta.toLocaleString()} → 最新: ¥${(curCash + delta).toLocaleString()}`;
+            dom.cashPreviewText.style.color = '#16a34a';
+          } else {
+            dom.cashPreviewText.textContent = '⚠️ 请输入有效金额';
+            dom.cashPreviewText.style.color = '#dc2626';
+          }
+        } else if (raw.startsWith('-')) {
+          const delta = parseFloat(raw.slice(1));
+          if (!isNaN(delta) && delta > 0) {
+            const nextVal = Math.max(0, curCash - delta);
+            dom.cashPreviewText.textContent = `➖ 扣减现金 -¥${delta.toLocaleString()} → 最新: ¥${nextVal.toLocaleString()}`;
+            dom.cashPreviewText.style.color = '#dc2626';
+          } else {
+            dom.cashPreviewText.textContent = '⚠️ 请输入有效金额';
+            dom.cashPreviewText.style.color = '#dc2626';
+          }
+        } else {
+          const val = parseFloat(raw);
+          if (!isNaN(val) && val > 0) {
+            // 用户未输符号：根据用户习惯，默认累加现金（如输入800则+800）
+            dom.cashPreviewText.textContent = `➕ 增加现金 +¥${val.toLocaleString()} → 最新: ¥${(curCash + val).toLocaleString()} (直接设为请输入=${val})`;
+            dom.cashPreviewText.style.color = '#16a34a';
+          } else {
+            dom.cashPreviewText.textContent = '';
+          }
+        }
+      }
+
       function openModalCash() {
+        const portData = MobileQuantEngine.PortfolioManager.getData();
+        const curCash = portData.available_cash || 0;
+        if (dom.cashCurValHint) {
+          dom.cashCurValHint.textContent = `当前现金: ¥${curCash.toLocaleString()}`;
+        }
         dom.inputCashAmount.value = '';
+        if (dom.cashPreviewText) dom.cashPreviewText.textContent = '';
         dom.modalEditCash.classList.add('active');
         setTimeout(() => dom.inputCashAmount.focus(), 150);
       }
@@ -2268,40 +2319,80 @@
         if (e.target === dom.modalEditCash) closeModalCash();
       });
 
-      // 快捷现金药丸按钮
+      dom.inputCashAmount.addEventListener('input', updateCashPreview);
+
+      // 快捷增减药丸按钮
       document.querySelectorAll('#modalEditCash .cash-pill').forEach(pill => {
         pill.addEventListener('click', () => {
           const val = pill.getAttribute('data-val');
-          if (val) dom.inputCashAmount.value = val;
+          if (val) {
+            dom.inputCashAmount.value = val;
+            updateCashPreview();
+          }
         });
       });
 
-      // 确认保存现金修改 (如输入800则+800，输入-800则-800)
+      // 直接设定药丸按钮 (如 5036, 5万等)
+      document.querySelectorAll('#modalEditCash .cash-set-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          const setVal = pill.getAttribute('data-set');
+          if (setVal) {
+            dom.inputCashAmount.value = `=${setVal}`;
+            updateCashPreview();
+          }
+        });
+      });
+
+      // 确认保存现金修改 (输入800则+800，输入-800则-800，输入=5036或点击设为5036则直接设为该值)
       dom.btnConfirmEditCash.addEventListener('click', () => {
         const raw = (dom.inputCashAmount.value || '').trim().replace(/\s+/g, '');
         if (!raw) {
-          alert('请输入金额，如 800 (加入) 或 -800 (扣减)');
-          return;
-        }
-        const delta = parseFloat(raw);
-        if (isNaN(delta)) {
-          alert('请输入有效的金额');
+          alert('请输入金额，如 800 (加入) 或 -800 (扣减)，或点击下方快捷按钮直接设定');
           return;
         }
         const portData = MobileQuantEngine.PortfolioManager.getData();
         const curCash = portData.available_cash || 0;
-        const finalCash = Math.max(0, curCash + delta);
+        let finalCash = curCash;
+
+        if (raw.startsWith('=')) {
+          const target = parseFloat(raw.slice(1));
+          if (isNaN(target) || target < 0) {
+            alert('请输入有效的设定金额');
+            return;
+          }
+          finalCash = target;
+        } else if (raw.startsWith('+')) {
+          const delta = parseFloat(raw.slice(1));
+          if (isNaN(delta)) {
+            alert('请输入有效的金额');
+            return;
+          }
+          finalCash = curCash + delta;
+        } else if (raw.startsWith('-')) {
+          const delta = parseFloat(raw.slice(1));
+          if (isNaN(delta)) {
+            alert('请输入有效的金额');
+            return;
+          }
+          finalCash = Math.max(0, curCash - delta);
+        } else {
+          const delta = parseFloat(raw);
+          if (isNaN(delta)) {
+            alert('请输入有效的金额');
+            return;
+          }
+          finalCash = Math.max(0, curCash + delta);
+        }
+
         MobileQuantEngine.PortfolioManager.setAvailableCash(finalCash);
         closeModalCash();
         renderPortfolioView();
       });
 
       // -------------------------------------------------------------
-      // 模态弹窗 2: 管理与修改持仓
+      // 模态弹窗 2: 管理自选标的自定持仓
       // -------------------------------------------------------------
       function openModalHoldings() {
-        const curPosCap = MobileQuantEngine.PortfolioManager.getTotalPosCapital();
-        if (dom.inputTotalPosCapital) dom.inputTotalPosCapital.value = curPosCap;
         populateHoldingSymbolOptions();
         renderModalHoldingsList();
         dom.modalEditHoldings.classList.add('active');
@@ -2315,34 +2406,14 @@
         }
       }
 
-      dom.btnEditHoldings.addEventListener('click', openModalHoldings);
+      if (dom.btnOpenCustomHoldings) {
+        dom.btnOpenCustomHoldings.addEventListener('click', openModalHoldings);
+      }
       dom.btnCloseEditHoldings.addEventListener('click', closeModalHoldings);
       dom.btnDoneEditHoldings.addEventListener('click', closeModalHoldings);
       dom.modalEditHoldings.addEventListener('click', (e) => {
         if (e.target === dom.modalEditHoldings) closeModalHoldings();
       });
-
-      // 快捷总持仓额药丸按钮
-      document.querySelectorAll('#modalEditHoldings .pos-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-          const val = pill.getAttribute('data-val');
-          if (val && dom.inputTotalPosCapital) dom.inputTotalPosCapital.value = val;
-        });
-      });
-
-      // 保存总持仓额 (资金池预算)
-      if (dom.btnSaveTotalPosCap) {
-        dom.btnSaveTotalPosCap.addEventListener('click', () => {
-          const val = parseFloat(dom.inputTotalPosCapital.value);
-          if (isNaN(val) || val <= 0) {
-            alert('请输入合法的总持仓额 (大于0)');
-            return;
-          }
-          MobileQuantEngine.PortfolioManager.setTotalPosCapital(val);
-          renderPortfolioView();
-          closeModalHoldings();
-        });
-      }
 
       // 填充标的选择下拉框
       function populateHoldingSymbolOptions() {

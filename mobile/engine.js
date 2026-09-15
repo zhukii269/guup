@@ -881,17 +881,20 @@ const MobileQuantEngine = (function() {
       } catch (e) {}
     },
     getTotalPosCapital: function() {
-      return this.getData().total_pos_capital || 100000;
+      // 持仓预算不再由用户手动修改，而是根据用户输入的可用现金买入自动计算！
+      const data = this.getData();
+      const curCash = data.available_cash || 0;
+      let existingCost = 0;
+      const customPositions = data.positions || {};
+      Object.keys(customPositions).forEach(sym => {
+        const p = customPositions[sym];
+        existingCost += (p.hands || 0) * 100 * (p.cost_price || 1.0);
+      });
+      return Math.max(100, curCash + existingCost);
     },
     setTotalPosCapital: function(amount) {
-      const val = Math.max(1, parseFloat(amount) || 100000);
-      try {
-        localStorage.setItem(STORAGE_KEY_TOTAL_POS_CAPITAL, val);
-      } catch (e) {}
-      const data = this.getData();
-      data.total_pos_capital = val;
-      this.saveData(data);
-      return val;
+      // 兼容接口，若传入则同步更新为现金
+      return this.setAvailableCash(amount);
     },
     deposit: function(amount = 10000) {
       const data = this.getData();
@@ -909,9 +912,6 @@ const MobileQuantEngine = (function() {
         trades: []
       };
       this.saveData(data);
-      try {
-        localStorage.setItem(STORAGE_KEY_TOTAL_POS_CAPITAL, total);
-      } catch (e) {}
       return data;
     },
     setAvailableCash: function(amount) {
@@ -954,7 +954,8 @@ const MobileQuantEngine = (function() {
     computePaperPortfolioAllocations: function(poolData) {
       const isSettled = isMobileSettlementAfter1450();
       const portData = this.getData();
-      const totalPosCapital = portData.total_pos_capital || 100000;
+      // 持仓预算完全由输入的可用现金买入自动计算
+      const totalPosCapital = this.getTotalPosCapital();
       const currentAvailableCash = portData.available_cash || 0;
       const pool = (poolData && poolData.length > 0) ? poolData : [];
 

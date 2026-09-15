@@ -2333,22 +2333,11 @@
         <!-- Toolbar Actions: Pos Budget & Available Cash -->
         <div class="paper-modal-toolbar">
           <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-            <!-- 设定 1: 修改持仓额 -->
+            <!-- 设定 1: 持仓预算展示(根据可用现金买入自动计算) -->
             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <span class="paper-toolbar-label" title="股票持仓总资金池。输入目标持仓额后点击确定即可生效！">📊 修改持仓额:</span>
-              <div class="order-budget-input-wrapper">
-                <span style="color:#64748b; font-weight:700; font-size:12px;">¥</span>
-                <input type="text" id="inputTotalPosCapital" class="order-budget-input" value="100000" placeholder="100000" style="width:78px; text-align:right;" onkeydown="if(event.key==='Enter') applyTotalPosCapitalChange()">
-                <span style="color:#64748b; font-size:11px;">元</span>
-              </div>
-              <button class="budget-preset-btn" style="background:#2563eb; color:#ffffff; border-color:#2563eb; font-weight:700; padding:2px 8px; cursor:pointer;" onclick="applyTotalPosCapitalChange()" title="确定修改总持仓额">确定</button>
-              <div class="order-budget-presets">
-                <button class="budget-preset-btn pos-cap-btn" onclick="setTotalPosCapitalPreset(50000, this)">5万</button>
-                <button class="budget-preset-btn pos-cap-btn active" onclick="setTotalPosCapitalPreset(100000, this)">10万</button>
-                <button class="budget-preset-btn pos-cap-btn" onclick="setTotalPosCapitalPreset(200000, this)">20万</button>
-                <button class="budget-preset-btn pos-cap-btn" onclick="setTotalPosCapitalPreset(300000, this)">30万</button>
-                <button class="budget-preset-btn pos-cap-btn" onclick="setTotalPosCapitalPreset(500000, this)">50万</button>
-              </div>
+              <span class="paper-toolbar-label" title="持仓预算无需手动输入，系统根据输入的可用现金买入自动计算！">📊 持仓预算:</span>
+              <span id="displayTotalPosCapital" style="font-size:13px; font-weight:800; color:#2563eb; padding:2px 8px; background:#eff6ff; border-radius:4px; border:1px solid #bfdbfe;">¥100,000</span>
+              <span style="font-size:11px; color:#64748b;">(根据现金自动计算)</span>
             </div>
 
             <!-- 分隔竖线 -->
@@ -2357,18 +2346,20 @@
 
             <!-- 设定 2: 加入/提出现金 -->
             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <span class="paper-toolbar-label" title="加入或提出现金。输入 800 点确定增加 800 元，输入 -800 点确定减少 800 元！">💵 加入/提出现金:</span>
+              <span class="paper-toolbar-label" title="加入或提出现金。输入 800 点确定增加 800 元，输入 -800 点确定减少 800 元，或输入 =5036 直接设定现金！">💵 加入/提出现金:</span>
               <div class="order-budget-input-wrapper">
                 <span style="color:#64748b; font-weight:700; font-size:12px;">¥</span>
-                <input type="text" id="inputCashDelta" class="order-budget-input" placeholder="输入金额(如800或-800)" style="width:130px; text-align:right;" onkeydown="if(event.key==='Enter') applyCashDeltaChange()">
+                <input type="text" id="inputCashDelta" class="order-budget-input" placeholder="输入金额(如800或-800或=5036)" style="width:170px; text-align:right;" onkeydown="if(event.key==='Enter') applyCashDeltaChange()">
                 <span style="color:#64748b; font-size:11px;">元</span>
               </div>
               <button class="budget-preset-btn" style="background:#16a34a; color:#ffffff; border-color:#16a34a; font-weight:700; padding:2px 8px; cursor:pointer;" onclick="applyCashDeltaChange()" title="确定增加或提出现金">确定</button>
               <div class="order-budget-presets">
-                <button class="budget-preset-btn btn-salary" style="color:#16a34a; font-weight:bold; border-color:#86efac; background:#f0fdf4;" onclick="addAvailableCash(5000)" title="发工资入金+5000元，不影响历史已有持仓">+5000 (发工资)</button>
+                <button class="budget-preset-btn" onclick="addAvailableCash(800)" style="color:#16a34a; font-weight:bold;">+800</button>
+                <button class="budget-preset-btn" onclick="addAvailableCash(-800)" style="color:#dc2626; font-weight:bold;">-800</button>
+                <button class="budget-preset-btn btn-salary" style="color:#16a34a; font-weight:bold; border-color:#86efac; background:#f0fdf4;" onclick="addAvailableCash(5000)" title="发工资入金+5000元">+5000 (发工资)</button>
                 <button class="budget-preset-btn" onclick="addAvailableCash(10000)">+1万</button>
-                <button class="budget-preset-btn" onclick="addAvailableCash(20000)">+2万</button>
-                <button class="budget-preset-btn" onclick="addAvailableCash(-1000)" title="提出现金-1000元" style="color:#dc2626;">-1000</button>
+                <button class="budget-preset-btn" onclick="setAvailableCashDirect(5036)" style="color:#2563eb; font-weight:bold;" title="直接设定可用现金为5036元">设为5036</button>
+                <button class="budget-preset-btn" onclick="setAvailableCashDirect(50000)" style="color:#2563eb;" title="直接设定可用现金为5万元">设为5万</button>
               </div>
             </div>
 
@@ -5239,85 +5230,31 @@
     };
 
     function getTotalPosCapital() {
-      const saved = localStorage.getItem('stock_master_total_pos_capital');
-      if (saved) {
-        const val = parseFloat(saved);
-        if (!isNaN(val) && val > 0) return val;
-      }
-      return 100000; // 默认总持仓额10万元
+      // 持仓预算根据用户输入的可用现金买入自动计算，不再需要手动修改！
+      const curCash = getAvailableCash();
+      return Math.max(100, curCash);
+    }
+
+    function setAvailableCashDirect(targetAmount) {
+      const num = Math.max(0, parseFloat(targetAmount) || 0);
+      setAvailableCash(num);
+      showOrderToast(`💰 成功设定可用现金为 ¥${num.toLocaleString()}！持仓预算已自动同步更新`);
     }
 
     function setTotalPosCapitalPreset(amount, btn) {
-      const targetAmount = Math.max(1000, parseFloat(amount) || 100000);
-      const input = document.getElementById('inputTotalPosCapital');
-      if (input) input.value = targetAmount;
-
-      const btns = document.querySelectorAll('.paper-modal-toolbar .pos-cap-btn');
-      btns.forEach(b => {
-        const text = b.innerText.trim();
-        const amt = (text === '5万' ? 50000 : (text === '10万' ? 100000 : (text === '20万' ? 200000 : (text === '30万' ? 300000 : (text === '50万' ? 500000 : 0)))));
-        if (b === btn || (amt === targetAmount && !btn)) {
-          b.classList.add('active');
-        } else {
-          b.classList.remove('active');
-        }
-      });
-
-      localStorage.setItem('stock_master_total_pos_capital', targetAmount);
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_user_config) {
-        window.pywebview.api.save_user_config({ total_pos_capital: targetAmount });
-      }
-
-      renderPaperPortfolioModal();
-      updatePaperNavBadge();
-
-      if (currentPaperModalTab === 'history') {
-        loadAndRenderPaperHistoryAnalysis();
-      }
-
-      // 实时同步刷新图表买卖手数标记
-      if (currentChartType === 'timeShare' && minuteData) {
-        renderTimeShareChart(minuteData, klineData, kline5MinData);
-      } else if (currentChartType === '5min' && kline5MinData) {
-        render5MinKlineChart({ name: currentSymbol, klines: kline5MinData });
-      } else if (currentChartType === 'kline' && klineData) {
-        renderKlineChart();
-      }
+      // 兼容历史调用，重定向为直接设定现金
+      setAvailableCashDirect(amount);
     }
 
     function applyTotalPosCapitalChange() {
-      const input = document.getElementById('inputTotalPosCapital');
-      if (!input) return;
-      let raw = input.value.trim().replace(/\s+/g, '');
-      if (!raw) {
-        showOrderToast('⚠️ 请输入目标持仓额，如 100000 或 50000', 'warning');
-        return;
-      }
-      const cur = getTotalPosCapital();
-      let target = 0;
-      if (raw.startsWith('+') || raw.startsWith('-')) {
-        const delta = parseFloat(raw);
-        if (isNaN(delta)) {
-          showOrderToast('⚠️ 请输入有效的数字金额', 'warning');
-          return;
-        }
-        target = Math.max(1000, cur + delta);
-      } else {
-        const num = parseFloat(raw);
-        if (isNaN(num) || num <= 0) {
-          showOrderToast('⚠️ 持仓额必须为大于 0 的有效金额', 'warning');
-          return;
-        }
-        target = num;
-      }
-      setTotalPosCapitalPreset(target, null);
-      showOrderToast(`📊 总持仓额已修改为 ¥${target.toLocaleString()}`);
+      // 兼容接口
+      applyCashDeltaChange();
     }
 
     function onTotalPosCapitalChange(val) {
       const num = parseFloat(val);
       if (!isNaN(num) && num > 0) {
-        setTotalPosCapitalPreset(num, null);
+        setAvailableCashDirect(num);
       }
     }
 
@@ -5340,6 +5277,19 @@
 
       renderPaperPortfolioModal();
       updatePaperNavBadge();
+
+      if (currentPaperModalTab === 'history') {
+        loadAndRenderPaperHistoryAnalysis();
+      }
+
+      // 实时同步刷新图表买卖手数标记
+      if (currentChartType === 'timeShare' && minuteData) {
+        renderTimeShareChart(minuteData, klineData, kline5MinData);
+      } else if (currentChartType === '5min' && kline5MinData) {
+        render5MinKlineChart({ name: currentSymbol, klines: kline5MinData });
+      } else if (currentChartType === 'kline' && klineData) {
+        renderKlineChart();
+      }
     }
 
     function applyCashDeltaChange() {
@@ -5347,10 +5297,29 @@
       if (!input) return;
       let raw = input.value.trim().replace(/\s+/g, '');
       if (!raw) {
-        showOrderToast('⚠️ 请输入金额，例如 800 (加入现金) 或 -800 (提出现金)', 'warning');
+        showOrderToast('⚠️ 请输入金额，例如 800 (加入现金)、-800 (提出现金) 或 =5036 (直接设定现金)', 'warning');
         return;
       }
-      const delta = parseFloat(raw);
+      if (raw.startsWith('=')) {
+        const target = parseFloat(raw.slice(1));
+        if (isNaN(target) || target < 0) {
+          showOrderToast('⚠️ 请输入有效的设定金额，如 =5036', 'warning');
+          return;
+        }
+        setAvailableCashDirect(target);
+        input.value = '';
+        return;
+      }
+
+      let delta = 0;
+      if (raw.startsWith('+')) {
+        delta = parseFloat(raw.slice(1));
+      } else if (raw.startsWith('-')) {
+        delta = -parseFloat(raw.slice(1));
+      } else {
+        delta = parseFloat(raw);
+      }
+
       if (isNaN(delta) || delta === 0) {
         showOrderToast('⚠️ 请输入有效的非零金额，例如 800 或 -800', 'warning');
         return;
@@ -5361,7 +5330,7 @@
         showOrderToast(`⚠️ 现金不足扣减！当前可用现金仅 ¥${curCash.toFixed(2)}，已调整为 ¥0.00`, 'warning');
       } else {
         const actionText = delta > 0 ? '加入' : '提出';
-        showOrderToast(`💰 成功${actionText}现金 ¥${Math.abs(delta).toLocaleString()}！最新可用现金: ¥${updated.toLocaleString()}`);
+        showOrderToast(`💰 成功${actionText}现金 ¥${Math.abs(delta).toLocaleString()}！最新可用现金: ¥${updated.toLocaleString()} (持仓预算自动同步)`);
       }
       setAvailableCash(updated);
       input.value = '';
@@ -5372,7 +5341,7 @@
       const updated = Math.max(0, current + deltaAmount);
       setAvailableCash(updated);
       const actionText = deltaAmount > 0 ? '加入' : '提出';
-      showOrderToast(`💰 成功${actionText}现金 ¥${Math.abs(deltaAmount).toLocaleString()}！可用现金更新为 ¥${updated.toLocaleString()} (原有持仓完全不受影响)`);
+      showOrderToast(`💰 成功${actionText}现金 ¥${Math.abs(deltaAmount).toLocaleString()}！可用现金更新为 ¥${updated.toLocaleString()} (持仓预算自动同步)`);
     }
 
     function getAccountTotalCapital() {
@@ -5485,18 +5454,10 @@
       if (!tbody) return;
 
       const totalPosCapital = getTotalPosCapital();
-      const inputPosCap = document.getElementById('inputTotalPosCapital');
-      if (inputPosCap && document.activeElement !== inputPosCap) {
-        inputPosCap.value = totalPosCapital;
+      const displayPosCap = document.getElementById('displayTotalPosCapital');
+      if (displayPosCap) {
+        displayPosCap.innerText = `¥${totalPosCapital.toLocaleString()}`;
       }
-
-      const btnsPosCap = document.querySelectorAll('.paper-modal-toolbar .pos-cap-btn');
-      btnsPosCap.forEach(b => {
-        const text = b.innerText.trim();
-        const amt = (text === '5万' ? 50000 : (text === '10万' ? 100000 : (text === '20万' ? 200000 : (text === '30万' ? 300000 : (text === '50万' ? 500000 : 0)))));
-        if (amt === totalPosCapital) b.classList.add('active');
-        else b.classList.remove('active');
-      });
 
 
       const allocData = computePaperPortfolioAllocations();
@@ -5782,10 +5743,10 @@
       if (kpiTotalMarketVal) {
         kpiTotalMarketVal.innerText = `¥${totalPositionMarketVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const settleInfo = totalSettleCash > 0 ? `\n(注: 今日减半/卖出已回款 ¥${totalSettleCash.toFixed(2)}，已直接结算划入右侧可用现金池)` : '';
-        kpiTotalMarketVal.title = `持仓总市值: ¥${totalPositionMarketVal.toFixed(2)}\n设定持仓额(预算资金池): ¥${totalPosCapital.toLocaleString()}${settleInfo}`;
+        kpiTotalMarketVal.title = `持仓总市值: ¥${totalPositionMarketVal.toFixed(2)}\n持仓预算(根据现金自动计算): ¥${totalPosCapital.toLocaleString()}${settleInfo}`;
       }
       if (kpiPositionWeight) {
-        kpiPositionWeight.innerText = `持仓预算: ¥${totalPosCapital.toLocaleString()} | 仓位: ${posWeight}%`;
+        kpiPositionWeight.innerText = `持仓预算: ¥${totalPosCapital.toLocaleString()} (自动计算) | 仓位: ${posWeight}%`;
       }
 
       if (kpiAvailableCash) {
