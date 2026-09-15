@@ -627,13 +627,13 @@ const MobileQuantEngine = (function() {
           break;
         } else if (sig === "S1" || sig === "S2" || sig === "S4" || sig === "S7") {
           inPos = false;
+          hasS3Holding = false;
           break;
         } else if (sig === "S3") {
           inPos = true;
           hasS3Holding = true;
-          buyCostPrice = klines[j].close;
-          buyDate = klines[j].date;
-          break;
+          // S3 只是卖出半仓，持仓成本必须继续向前追溯至真正的建仓买点 B，绝不能重置成本与收益率！
+          continue;
         }
       }
 
@@ -707,7 +707,11 @@ const MobileQuantEngine = (function() {
         sort_priority: sortPriority,
         reason_summary: reasonSummary,
         cost_price: inPos ? buyCostPrice : 0,
+        buy_cost_price: inPos ? buyCostPrice : 0,
         buy_date: buyDate,
+        has_s3_holding: hasS3Holding,
+        is_s3_today: (todaySig === "S3"),
+        signal_type: todaySig,
         latest_bar: bar
       };
     });
@@ -843,11 +847,14 @@ const MobileQuantEngine = (function() {
     return calculateInterval(klines, sub[0].date, sub[sub.length - 1].date);
   }
 
+  const STORAGE_KEY_TOTAL_POS_CAPITAL = "stock_master_total_pos_capital";
+
   // 模拟持仓数据与资金管理器 (Paper Portfolio Manager)
   const PortfolioManager = {
     getData: function() {
       let data = {
         total_capital: 100000,
+        total_pos_capital: 100000,
         available_cash: 100000,
         positions: {}, // symbol -> { symbol, name, hands, cost_price, buy_date }
         trades: []
@@ -856,12 +863,35 @@ const MobileQuantEngine = (function() {
         const saved = localStorage.getItem(STORAGE_KEY_PORTFOLIO);
         if (saved) data = Object.assign(data, JSON.parse(saved));
       } catch (e) {}
+
+      try {
+        const savedPosCap = localStorage.getItem(STORAGE_KEY_TOTAL_POS_CAPITAL);
+        if (savedPosCap) {
+          const num = parseFloat(savedPosCap);
+          if (!isNaN(num) && num > 0) data.total_pos_capital = num;
+        }
+      } catch (e) {}
+
+      if (!data.total_pos_capital) data.total_pos_capital = 100000;
       return data;
     },
     saveData: function(data) {
       try {
         localStorage.setItem(STORAGE_KEY_PORTFOLIO, JSON.stringify(data));
       } catch (e) {}
+    },
+    getTotalPosCapital: function() {
+      return this.getData().total_pos_capital || 100000;
+    },
+    setTotalPosCapital: function(amount) {
+      const val = Math.max(1, parseFloat(amount) || 100000);
+      try {
+        localStorage.setItem(STORAGE_KEY_TOTAL_POS_CAPITAL, val);
+      } catch (e) {}
+      const data = this.getData();
+      data.total_pos_capital = val;
+      this.saveData(data);
+      return val;
     },
     deposit: function(amount = 10000) {
       const data = this.getData();
@@ -873,16 +903,27 @@ const MobileQuantEngine = (function() {
     reset: function(total = 100000) {
       const data = {
         total_capital: total,
+        total_pos_capital: total,
         available_cash: total,
         positions: {},
         trades: []
       };
       this.saveData(data);
+      try {
+        localStorage.setItem(STORAGE_KEY_TOTAL_POS_CAPITAL, total);
+      } catch (e) {}
       return data;
     },
     setAvailableCash: function(amount) {
       const data = this.getData();
       data.available_cash = Math.max(0, parseFloat(amount) || 0);
+      this.saveData(data);
+      return data;
+    },
+    addAvailableCash: function(delta) {
+      const data = this.getData();
+      const cur = data.available_cash || 0;
+      data.available_cash = Math.max(0, cur + (parseFloat(delta) || 0));
       this.saveData(data);
       return data;
     },
@@ -909,8 +950,344 @@ const MobileQuantEngine = (function() {
         this.saveData(data);
       }
       return data;
+    },
+    computePaperPortfolioAllocations: function(poolData) {
+      const isSettled = isMobileSettlementAfter1450();
+      const portData = this.getData();
+      const totalPosCapital = portData.total_pos_capital || 100000;
+      const currentAvailableCash = portData.available_cash || 0;
+      const pool = (poolData && poolData.length > 0) ? poolData : [];
+
+      let totalPositionMarketVal = 0;
+      let totalPositionCost = 0;
+      let totalSettleCash = 0;
+      let totalClosedProfit = 0;
+      let totalTodayPnl = 0;
+
+      const activeCandidates = [];
+      const itemStates = [];
+      const mapBySymbol = {};
+
+      pool.forEach(item => {
+        const sym = item.symbol || item.code || '';
+        const itemCodeClean = sym.replace(/^(sh|sz)/i, '').toLowerCase();
+        let curPrice = (typeof item.current === 'number' && item.current > 0) ? item.current : (item.close || 1.0);
+
+        const tagText = (item.tag || item.reason_summary || '').trim();
+        const isCallback = tagText.includes('回调') || tagText.includes('空仓');
+        const isBuyToday = !isCallback && (tagText.includes('尾盘买入') || tagText.includes('今天买入') || tagText.includes('今日买点'));
+        const isS3Today = !isCallback && (
+          item.signal_type === 'S3' ||
+          item.is_s3_today ||
+          tagText.includes('减半') ||
+          tagText.includes('减仓50%') ||
+          (item.reason_summary && item.reason_summary.includes('减仓50%'))
+        );
+        const isSellToday = !isCallback && !isS3Today && (tagText.includes('今天卖出') || tagText.includes('今日卖点'));
+        const isHolding = !isCallback && !isBuyToday && !isSellToday && !isS3Today && tagText.includes('持仓');
+        const isPending = !isCallback && !isBuyToday && !isSellToday && !isHolding && !isS3Today && tagText.includes('即将满足');
+
+        let costPrice = curPrice;
+        const bp = (typeof item.buy_cost_price === 'number' && item.buy_cost_price > 0) ? item.buy_cost_price : (item.cost_price || item.buy_price);
+        if (typeof bp === 'number' && bp > 0) {
+          costPrice = bp;
+        } else if (isBuyToday) {
+          costPrice = curPrice;
+        } else if (isHolding || isS3Today) {
+          costPrice = item.prev_close > 0 ? (item.prev_close * (1 - (item.pct_change || 0) * 0.01 * 0.5)) : curPrice;
+        } else if (isSellToday) {
+          costPrice = item.prev_close > 0 ? (item.prev_close * 0.985) : (curPrice * 0.985);
+        }
+
+        const score = typeof item.score === 'number' ? item.score : 3;
+        const trendMult = (item.dif || 0) > 0 ? 1.3 : 1.0;
+        const confMult = score >= 4 ? 1.5 : (score === 3 ? 1.0 : 0.7);
+        const weight = Math.max(0.5, score * trendMult * confMult);
+
+        const stateObj = {
+          item,
+          sym,
+          itemCodeClean,
+          name: item.name || sym,
+          code: item.code || sym,
+          sector: item.sector || 'ETF',
+          tag: item.tag || '',
+          tag_color: item.tag_color || '#3b82f6',
+          reason_summary: item.reason_summary || '',
+          curPrice,
+          costPrice,
+          score,
+          weight,
+          isBuyToday,
+          isHolding,
+          isSellToday,
+          isS3Today,
+          isPending,
+          isCallback,
+          isSettled,
+          allocatedShares: 0,
+          allocatedHands: 0,
+          allocatedCost: 0,
+          soldHands: 0,
+          soldShares: 0,
+          plannedSoldHands: 0,
+          plannedRemainHands: 0,
+          plannedHands: 0,
+          settleVal: 0,
+          realizedProfit: 0,
+          marketVal: 0,
+          pnl: 0,
+          pnlPct: 0,
+          todayPnl: 0
+        };
+
+        if (isSettled) {
+          if (isBuyToday || isHolding || isS3Today) {
+            activeCandidates.push(stateObj);
+          }
+        } else {
+          if (isHolding || isS3Today || isSellToday) {
+            activeCandidates.push(stateObj);
+          }
+        }
+
+        itemStates.push(stateObj);
+        mapBySymbol[itemCodeClean] = stateObj;
+        mapBySymbol[sym.toLowerCase()] = stateObj;
+        mapBySymbol[sym] = stateObj;
+      });
+
+      if (activeCandidates.length > 0) {
+        activeCandidates.forEach(cand => {
+          cand.effectiveWeight = ((isSettled && cand.isS3Today) || cand.item?.has_s3_holding) ? (cand.weight * 0.5) : cand.weight;
+        });
+
+        activeCandidates.sort((a, b) => b.effectiveWeight - a.effectiveWeight);
+        const totalW = activeCandidates.reduce((acc, c) => acc + c.effectiveWeight, 0);
+        let remainPosCap = totalPosCapital;
+        const maxSingleCap = totalPosCapital * (activeCandidates.length <= 2 ? 0.5 : 0.35);
+
+        // 第一轮：按有效权重分配持仓预算
+        activeCandidates.forEach(cand => {
+          const portion = totalW > 0 ? (cand.effectiveWeight / totalW) : (1 / activeCandidates.length);
+          let targetBudget = Math.min(maxSingleCap, totalPosCapital * portion);
+          const hands = Math.max(1, Math.floor(targetBudget / cand.costPrice / 100));
+          cand.allocatedHands = hands;
+          cand.allocatedShares = hands * 100;
+          cand.allocatedCost = cand.allocatedShares * cand.costPrice;
+          remainPosCap -= cand.allocatedCost;
+        });
+
+        // 第二轮：余钱扫尾
+        activeCandidates.forEach(cand => {
+          const room = maxSingleCap - cand.allocatedCost;
+          if (remainPosCap >= (cand.costPrice * 100) && room >= (cand.costPrice * 100)) {
+            const extraHands = Math.floor(Math.min(remainPosCap, room) / cand.costPrice / 100);
+            if (extraHands > 0) {
+              cand.allocatedHands += extraHands;
+              cand.allocatedShares += extraHands * 100;
+              const extraCost = extraHands * 100 * cand.costPrice;
+              cand.allocatedCost += extraCost;
+              remainPosCap -= extraCost;
+            }
+          }
+        });
+
+        // 处理 S3 与卖出
+        activeCandidates.forEach(cand => {
+          if (cand.isS3Today) {
+            if (isSettled) {
+              const remainHands = cand.allocatedHands;
+              const soldHands = remainHands;
+              const origHands = remainHands + soldHands;
+              cand.origHands = origHands;
+              cand.plannedSoldHands = soldHands;
+              cand.plannedRemainHands = remainHands;
+              cand.soldHands = soldHands;
+              cand.soldShares = soldHands * 100;
+              const sellPrice = (cand.item.high > 0) ? cand.item.high : cand.curPrice;
+              const settleVal = cand.soldShares * sellPrice;
+              const realizedProfit = settleVal - (cand.soldShares * cand.costPrice);
+              cand.settleVal = settleVal;
+              cand.realizedProfit = realizedProfit;
+
+              totalSettleCash += settleVal;
+              totalClosedProfit += realizedProfit;
+            } else {
+              const origHands = cand.allocatedHands;
+              const planSoldHands = origHands > 1 ? Math.floor(origHands * 0.5) : 1;
+              const planRemainHands = Math.max(0, origHands - planSoldHands);
+              cand.origHands = origHands;
+              cand.plannedSoldHands = planSoldHands;
+              cand.plannedRemainHands = planRemainHands;
+              cand.soldHands = 0;
+              cand.soldShares = 0;
+              cand.settleVal = 0;
+              cand.realizedProfit = 0;
+            }
+          } else if (cand.isSellToday) {
+            if (!isSettled) {
+              cand.origHands = cand.allocatedHands;
+              cand.plannedSoldHands = cand.allocatedHands;
+              cand.soldHands = 0;
+              cand.soldShares = 0;
+              cand.settleVal = 0;
+              cand.realizedProfit = 0;
+            }
+          }
+        });
+
+        // 统计市值与盈亏
+        activeCandidates.forEach(cand => {
+          const mVal = cand.allocatedShares * cand.curPrice;
+          const holdPnl = mVal - cand.allocatedCost;
+          const totalStockPnl = holdPnl + (cand.realizedProfit || 0);
+          const totalStockCost = cand.allocatedCost + ((cand.soldShares || 0) * cand.costPrice);
+          const pnlPct = totalStockCost > 0 ? (totalStockPnl / totalStockCost * 100) : 0;
+          const prevClose = cand.item.prev_close > 0 ? cand.item.prev_close : cand.costPrice;
+          const sellPrice = cand.item.high > 0 ? cand.item.high : cand.curPrice;
+          const todayPnl = cand.isBuyToday
+            ? ((cand.curPrice - cand.costPrice) * cand.allocatedShares)
+            : ((cand.curPrice - prevClose) * cand.allocatedShares + (cand.isS3Today && isSettled ? ((sellPrice - prevClose) * cand.soldShares) : 0));
+
+          cand.marketVal = mVal;
+          cand.pnl = totalStockPnl;
+          cand.pnlPct = pnlPct;
+          cand.todayPnl = todayPnl;
+
+          totalPositionMarketVal += mVal;
+          totalPositionCost += cand.allocatedCost;
+          totalTodayPnl += todayPnl;
+        });
+      }
+
+      // 14:50 之后卖出清仓回款
+      if (isSettled) {
+        itemStates.forEach(state => {
+          if (state.isSellToday) {
+            const sellPrice = (state.item.high > 0) ? state.item.high : state.curPrice;
+            const estPortion = Math.min(0.20, Math.max(0.10, state.weight / 25));
+            const singleEstBudget = Math.max(state.costPrice * 100, totalPosCapital * estPortion);
+            const calc = calculateSharesAndAmount(singleEstBudget, state.costPrice);
+            let soldHands = Math.max(1, calc.hands);
+            if (state.item && state.item.has_s3_holding) {
+              soldHands = Math.max(1, Math.floor(soldHands * 0.5));
+            }
+
+            state.allocatedHands = 0;
+            state.allocatedShares = 0;
+            state.soldHands = soldHands;
+            state.soldShares = soldHands * 100;
+            state.allocatedCost = 0;
+            const cost = state.soldShares * state.costPrice;
+            const settleVal = state.soldShares * sellPrice;
+            const profit = settleVal - cost;
+            state.settleVal = settleVal;
+            state.profit = profit;
+            state.pnl = profit;
+            state.pnlPct = cost > 0 ? (profit / cost * 100) : 0;
+            state.todayPnl = profit;
+
+            totalSettleCash += settleVal;
+            totalClosedProfit += profit;
+            totalTodayPnl += profit;
+          }
+        });
+      } else {
+        itemStates.forEach(state => {
+          if (state.isBuyToday) {
+            const estPortion = Math.min(0.20, Math.max(0.10, state.weight / 25));
+            const singleEstBudget = Math.max(state.costPrice * 100, totalPosCapital * estPortion);
+            const calc = calculateSharesAndAmount(singleEstBudget, state.costPrice);
+            state.plannedHands = Math.max(1, calc.hands);
+            state.plannedShares = state.plannedHands * 100;
+            state.allocatedHands = 0;
+            state.allocatedShares = 0;
+            state.allocatedCost = 0;
+            state.marketVal = 0;
+          }
+        });
+      }
+
+      // 用户自定持仓处理
+      const customPositions = portData.positions || {};
+      Object.keys(customPositions).forEach(sym => {
+        const p = customPositions[sym];
+        const clean = sym.replace(/^(sh|sz)/i, '').toLowerCase();
+        let poolItem = pool.find(w => (w.symbol || '').toLowerCase() === sym.toLowerCase() || (w.code || '').toLowerCase() === clean);
+        const curPrice = poolItem ? poolItem.current : (p.cost_price || 1.0);
+        const mVal = p.hands * 100 * curPrice;
+        const cost = p.hands * 100 * (p.cost_price || curPrice);
+        const pnl = mVal - cost;
+        const pnlPct = cost > 0 ? (pnl / cost * 100) : 0;
+
+        const existing = activeCandidates.find(c => c.sym.toLowerCase() === sym.toLowerCase() || c.itemCodeClean === clean);
+        if (!existing) {
+          const customObj = {
+            sym,
+            itemCodeClean: clean,
+            name: p.name || sym,
+            code: p.code || clean,
+            sector: '自定持仓',
+            tag: '自定持仓',
+            tag_color: '#3b82f6',
+            reason_summary: '手动设定的持仓标的',
+            curPrice,
+            costPrice: p.cost_price,
+            allocatedHands: p.hands,
+            allocatedShares: p.hands * 100,
+            allocatedCost: cost,
+            marketVal: mVal,
+            pnl,
+            pnlPct,
+            isCustom: true
+          };
+          activeCandidates.push(customObj);
+          totalPositionMarketVal += mVal;
+          totalPositionCost += cost;
+        }
+      });
+
+      const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
+      const currentTotalAssets = realAvailableCash + totalPositionMarketVal;
+
+      return {
+        isSettled,
+        totalPosCapital,
+        realAvailableCash,
+        currentTotalAssets,
+        totalPositionMarketVal,
+        totalPositionCost,
+        totalSettleCash,
+        totalClosedProfit,
+        totalTodayPnl,
+        activeCandidates,
+        itemStates,
+        mapBySymbol
+      };
     }
   };
+
+  // 14:50结算时间窗口判定
+  function isMobileSettlementAfter1450() {
+    const now = new Date();
+    const day = now.getDay();
+    const timeNum = now.getHours() * 100 + now.getMinutes();
+    if (day === 0 || day === 6) return true;
+    if (timeNum >= 915 && timeNum < 1450) return false;
+    return true;
+  }
+
+  function calculateSharesAndAmount(budget, price) {
+    if (!price || price <= 0 || !budget || budget <= 0) {
+      return { shares: 0, hands: 0, actual: 0 };
+    }
+    const rawShares = budget / price;
+    const hands = Math.floor(rawShares / 100);
+    const shares = hands * 100;
+    const actual = shares * price;
+    return { shares, hands, actual };
+  }
 
   return {
     normalizeSymbol,
@@ -920,6 +1297,10 @@ const MobileQuantEngine = (function() {
     searchStock,
     calculateInterval,
     calculateIntervalByPreset,
+    isMobileSettlementAfter1450,
+    computePaperPortfolioAllocations: function(poolData) {
+      return PortfolioManager.computePaperPortfolioAllocations(poolData);
+    },
     PortfolioManager,
     DEFAULT_SECTOR_ETFS,
     STORAGE_KEY_WATCHLIST,
