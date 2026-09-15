@@ -4038,16 +4038,18 @@
             const cost = state.soldShares * state.costPrice;
             const settleVal = state.soldShares * sellPrice;
             const profit = settleVal - cost;
+            const prevClose = (state.item && state.item.prev_close > 0) ? state.item.prev_close : (state.item ? (state.item.close || state.costPrice) : state.costPrice);
+            const todaySoldPnl = (sellPrice - prevClose) * state.soldShares;
             state.settleVal = settleVal;
             state.profit = profit;
             state.pnl = profit;
             state.pnlPct = cost > 0 ? (profit / cost * 100) : 0;
-            state.todayPnl = profit;
+            state.todayPnl = todaySoldPnl;
 
             // 确定卖出后划入可用现金池
             totalSettleCash += settleVal;
             totalClosedProfit += profit;
-            totalTodayPnl += profit;
+            totalTodayPnl += todaySoldPnl;
           }
         });
       } else {
@@ -5475,7 +5477,7 @@
       let buyTodayCount = 0;
       let sellTodayCount = 0;
       let waitCount = 0;
-      let totalTodayPnl = allocData.totalTodayPnl;
+      let totalTodayPnl = 0;
 
       let html = '';
       const isDark = document.body.classList.contains('dark-theme');
@@ -5619,12 +5621,17 @@
             statusBadge = `<span style="background:${sellBadgeBg}; color:${sellBadgeColor}; padding:3px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 今天卖出 (${sellHandsNote})</span>`;
             displayCostPrice = `${costPrice.toFixed(3)} (已清仓0手)`;
             displayMarketVal = `<div>¥0.00</div><div style="font-size:10.5px; color:#16a34a; font-weight:700; margin-top:1px;">回款¥${settleVal.toFixed(2)}直接入现金</div>`;
+            const prevClose = item.prev_close > 0 ? item.prev_close : costPrice;
+            const todayPnl = (sellPrice - prevClose) * state.soldShares;
+            totalTodayPnl += todayPnl;
+
             const sign = profit >= 0 ? '+' : '';
+            const todaySign = todayPnl >= 0 ? '+' : '';
             displayPnl = `${sign}¥${profit.toFixed(2)}`;
             displayPnlPct = `${sign}${profitPct.toFixed(2)}%`;
-            displayTodayPnl = `${sign}¥${profit.toFixed(2)}`;
+            displayTodayPnl = `${todaySign}¥${todayPnl.toFixed(2)}`;
             pnlColor = profit >= 0 ? '#dc2626' : '#16a34a';
-            todayPnlColor = profit >= 0 ? '#dc2626' : '#16a34a';
+            todayPnlColor = todayPnl >= 0 ? '#dc2626' : '#16a34a';
           } else {
             holdingCount++;
             const mVal = state.allocatedShares * curPrice;

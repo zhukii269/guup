@@ -525,6 +525,20 @@
       background: rgba(0, 0, 0, 0.03);
       border-color: rgba(0, 0, 0, 0.06);
     }
+    .card-pnl-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 8px 0;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+    body.light-theme .card-pnl-grid {
+      background: rgba(0, 0, 0, 0.03);
+      border-color: rgba(0, 0, 0, 0.06);
+    }
     .amount-left {
       display: flex;
       flex-direction: column;
@@ -1139,9 +1153,13 @@
               <div class="asset-sub-val" id="pStockVal">¥0.00</div>
             </div>
             <div>
-              <div class="stat-label" style="color:#fcd34d;">今日盈亏</div>
-              <div class="asset-sub-val" id="pTodayPnl" style="color:#fef08a;">+¥0.00</div>
+              <div class="stat-label" style="color:#fcd34d;">持仓盈亏</div>
+              <div class="asset-sub-val" id="pTotalPnl" style="color:#fef08a;">+¥0.00</div>
             </div>
+          </div>
+          <div class="asset-sub-bar" style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:#cbd5e1; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.15);">
+            <span>持仓收益率: <strong id="pTotalPnlPct" style="color:#fef08a; font-family:monospace;">+0.00%</strong></span>
+            <span>今日总盈亏: <strong id="pTodayPnl" style="color:#fef08a; font-family:monospace;">+¥0.00</strong></span>
           </div>
           <div class="asset-actions">
             <button class="btn-action btn-edit-cash" id="btnEditCash" style="width:100%; font-size:13.5px; padding:10px 0;">💵 加入 / 提出现金</button>
@@ -1315,6 +1333,8 @@
         pTotalCapital: document.getElementById('pTotalCapital'),
         pAvailableCash: document.getElementById('pAvailableCash'),
         pStockVal: document.getElementById('pStockVal'),
+        pTotalPnl: document.getElementById('pTotalPnl'),
+        pTotalPnlPct: document.getElementById('pTotalPnlPct'),
         pTodayPnl: document.getElementById('pTodayPnl'),
         btnEditCash: document.getElementById('btnEditCash'),
         btnOpenCustomHoldings: document.getElementById('btnOpenCustomHoldings'),
@@ -2128,10 +2148,27 @@
         dom.pTotalCapital.textContent = `¥${currentTotalAssets.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         dom.pAvailableCash.textContent = `¥${realAvailableCash.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         dom.pStockVal.textContent = `¥${totalPositionMarketVal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        // 持仓盈亏与收益率 (与电脑版 KPI 4 累计总盈亏 100% 对齐)
+        if (dom.pTotalPnl) {
+          const pnlVal = allocData.totalPnl || 0;
+          const sign = pnlVal >= 0 ? '+' : '';
+          dom.pTotalPnl.textContent = `${sign}¥${pnlVal.toFixed(2)}`;
+          dom.pTotalPnl.style.color = pnlVal >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+        }
+        if (dom.pTotalPnlPct) {
+          const pnlPctVal = allocData.totalPnlPct || 0;
+          const sign = pnlPctVal >= 0 ? '+' : '';
+          dom.pTotalPnlPct.textContent = `${sign}${pnlPctVal.toFixed(2)}%`;
+          dom.pTotalPnlPct.style.color = pnlPctVal >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+        }
+
+        // 今日总盈亏 (与电脑版 KPI 5 今日总盈亏 100% 对齐)
         if (dom.pTodayPnl) {
-          const todaySign = allocData.totalTodayPnl >= 0 ? '+' : '';
-          dom.pTodayPnl.textContent = `${todaySign}¥${allocData.totalTodayPnl.toFixed(2)}`;
-          dom.pTodayPnl.style.color = allocData.totalTodayPnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
+          const todayVal = allocData.totalTodayPnl || 0;
+          const todaySign = todayVal >= 0 ? '+' : '';
+          dom.pTodayPnl.textContent = `${todaySign}¥${todayVal.toFixed(2)}`;
+          dom.pTodayPnl.style.color = todayVal >= 0 ? 'var(--color-up)' : 'var(--color-down)';
         }
 
         // 收集需要展示的持仓标的卡片：
@@ -2153,13 +2190,25 @@
         }
 
         displayCards.forEach(item => {
-          const isUp = (item.curPrice >= item.costPrice);
-          const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
+          // 今日对比昨收的涨跌计算 (确保今日盈亏与今日涨跌100%对齐)
+          const prevClose = item.prevClose || (item.item && item.item.prev_close > 0 ? item.item.prev_close : (item.item && item.item.current ? (item.item.current - (item.item.change || 0)) : item.costPrice));
+          const todayPriceChg = item.curPrice - prevClose;
+          const todayPct = (typeof item.todayPct === 'number') ? item.todayPct : (prevClose > 0 ? (todayPriceChg / prevClose * 100) : (item.item ? (item.item.pct_change || 0) : 0));
+          const todayIsUp = todayPriceChg >= 0;
+          const todayColor = todayIsUp ? 'var(--color-up)' : 'var(--color-down)';
+          const todaySign = todayIsUp ? '+' : '';
+
+          // 持仓盈亏 (累计浮盈/收益率)
           const pnlPct = item.pnlPct || 0;
           const pnlSign = pnlPct >= 0 ? '+' : '';
           const pnlColor = pnlPct >= 0 ? 'var(--color-up)' : 'var(--color-down)';
           const pnlMoney = item.pnl || 0;
           const pnlMoneySign = pnlMoney >= 0 ? '+' : '';
+
+          // 今日盈亏 (当日变动金额)
+          const todayPnl = item.todayPnl || 0;
+          const todayPnlSign = todayPnl >= 0 ? '+' : '';
+          const todayPnlColor = todayPnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
           // 状态徽章与文案
           let badgeHtml = '';
@@ -2221,15 +2270,36 @@
               </div>
             </div>
 
-            <div class="card-mid">
+            <div class="card-mid" style="margin-top:6px; display:flex; justify-content:space-between; align-items:baseline;">
               <div class="card-price-group">
-                <span class="card-price" style="color:${chgColor};">${item.curPrice.toFixed(3)}</span>
-                <span style="font-size:11px; color:var(--text-muted); margin-left:6px;">成本:${item.costPrice.toFixed(3)}</span>
+                <span class="card-price" style="color:${todayColor}; font-weight:800;">${item.curPrice.toFixed(3)}</span>
+                <span style="font-size:12px; font-weight:700; color:${todayColor}; margin-left:4px;">(${todaySign}${todayPct.toFixed(2)}%)</span>
+                <span style="font-size:11px; color:var(--text-muted); margin-left:8px;">成本:${item.costPrice.toFixed(3)}</span>
               </div>
-              <span class="card-badge" style="background:${pnlColor};">
-                ${pnlSign}${pnlPct.toFixed(2)}% (${pnlMoneySign}¥${Math.abs(pnlMoney).toFixed(2)})
-              </span>
             </div>
+
+            <!-- 与电脑版完全对齐的双列盈亏对比栏：持仓盈亏 VS 今日盈亏 -->
+            <div class="card-pnl-grid">
+              <div style="display:flex; flex-direction:column;">
+                <span style="font-size:11px; color:var(--text-sub); font-weight:700;">持仓盈亏</span>
+                <span style="font-size:14px; font-weight:900; font-family:monospace; color:${pnlColor}; margin-top:2px;">
+                  ${pnlMoneySign}¥${pnlMoney.toFixed(2)}
+                </span>
+                <span style="font-size:11px; font-weight:700; color:${pnlColor}; margin-top:1px;">
+                  收益率: ${pnlSign}${pnlPct.toFixed(2)}%
+                </span>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:flex-end;">
+                <span style="font-size:11px; color:var(--text-sub); font-weight:700;">今日盈亏</span>
+                <span style="font-size:14px; font-weight:900; font-family:monospace; color:${todayPnlColor}; margin-top:2px;">
+                  ${todayPnlSign}¥${todayPnl.toFixed(2)}
+                </span>
+                <span style="font-size:11px; font-weight:700; color:${todayColor}; margin-top:1px;">
+                  今日: ${todaySign}${todayPct.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+
             <div class="card-bot">
               <span class="decision-tag" style="background:${item.tag_color}22; color:${item.tag_color}; border:1px solid ${item.tag_color};">${item.tag}</span>
               <span class="decision-reason">${item.reason_summary}</span>

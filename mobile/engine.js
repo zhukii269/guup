@@ -593,14 +593,24 @@ const MobileQuantEngine = (function() {
       const quote = await getRealtimeQuote(code);
 
       if (klines.length === 0) {
+        const cur = (quote && quote.current > 0) ? quote.current : 1.0;
+        const prev = (quote && quote.prev_close > 0) ? quote.prev_close : cur;
+        const chg = (quote && typeof quote.change === 'number') ? quote.change : (cur - prev);
+        const pct = (quote && typeof quote.pct_change === 'number') ? quote.pct_change : (prev > 0 ? (cur - prev) / prev * 100 : 0);
         return {
           sector: item.sector || "ETF",
-          name: item.desc || item.name || quote.name || code,
+          name: item.desc || item.name || (quote && quote.name) || code,
           code: code,
           symbol: code,
-          current: quote.current,
-          change: quote.change,
-          pct_change: quote.pct_change,
+          current: cur,
+          close: cur,
+          price: cur,
+          prev_close: prev,
+          open: (quote && quote.open) || cur,
+          high: (quote && quote.high) || cur,
+          low: (quote && quote.low) || cur,
+          change: Math.round(chg * 1000) / 1000,
+          pct_change: Math.round(pct * 100) / 100,
           tag: "继续观望",
           tag_color: "#64748b",
           tag_group: "观望",
@@ -693,14 +703,28 @@ const MobileQuantEngine = (function() {
         }
       }
 
+      const prevCloseVal = (quote && quote.prev_close > 0) ? quote.prev_close : (klines.length > 1 ? klines[klines.length - 2].close : bar.close);
+      const curPriceVal = (quote && quote.current > 0) ? quote.current : bar.close;
+      const highVal = (quote && quote.high > 0) ? quote.high : (bar.high || curPriceVal);
+      const lowVal = (quote && quote.low > 0) ? quote.low : (bar.low || curPriceVal);
+      const openVal = (quote && quote.open > 0) ? quote.open : (bar.open || curPriceVal);
+      const chgVal = (quote && typeof quote.change === 'number') ? quote.change : (bar.change || (curPriceVal - prevCloseVal));
+      const pctChgVal = (quote && typeof quote.pct_change === 'number') ? quote.pct_change : (bar.pct_change || (prevCloseVal > 0 ? (curPriceVal - prevCloseVal) / prevCloseVal * 100 : 0));
+
       return {
         sector: item.sector || "ETF板块",
-        name: item.desc || item.name || data.name || quote.name || code,
+        name: item.desc || item.name || data.name || (quote && quote.name) || code,
         code: code,
         symbol: code,
-        current: quote.current || bar.close,
-        change: quote.change,
-        pct_change: quote.pct_change || bar.pct_change,
+        current: curPriceVal,
+        close: curPriceVal,
+        price: curPriceVal,
+        prev_close: prevCloseVal,
+        open: openVal,
+        high: highVal,
+        low: lowVal,
+        change: Math.round(chgVal * 1000) / 1000,
+        pct_change: Math.round(pctChgVal * 100) / 100,
         tag: tag,
         tag_color: tagColor,
         tag_group: tagGroup,
@@ -973,6 +997,7 @@ const MobileQuantEngine = (function() {
         const sym = item.symbol || item.code || '';
         const itemCodeClean = sym.replace(/^(sh|sz)/i, '').toLowerCase();
         let curPrice = (typeof item.current === 'number' && item.current > 0) ? item.current : (item.close || 1.0);
+        let prevClose = (typeof item.prev_close === 'number' && item.prev_close > 0) ? item.prev_close : (typeof item.close === 'number' && item.close > 0 ? item.close : curPrice);
 
         const tagText = (item.tag || item.reason_summary || '').trim();
         const isCallback = tagText.includes('回调') || tagText.includes('空仓');
@@ -995,9 +1020,9 @@ const MobileQuantEngine = (function() {
         } else if (isBuyToday) {
           costPrice = curPrice;
         } else if (isHolding || isS3Today) {
-          costPrice = item.prev_close > 0 ? (item.prev_close * (1 - (item.pct_change || 0) * 0.01 * 0.5)) : curPrice;
+          costPrice = prevClose > 0 ? (prevClose * (1 - (item.pct_change || 0) * 0.01 * 0.5)) : curPrice;
         } else if (isSellToday) {
-          costPrice = item.prev_close > 0 ? (item.prev_close * 0.985) : (curPrice * 0.985);
+          costPrice = prevClose > 0 ? (prevClose * 0.985) : (curPrice * 0.985);
         }
 
         const score = typeof item.score === 'number' ? item.score : 3;
@@ -1016,6 +1041,7 @@ const MobileQuantEngine = (function() {
           tag_color: item.tag_color || '#3b82f6',
           reason_summary: item.reason_summary || '',
           curPrice,
+          prevClose,
           costPrice,
           score,
           weight,
@@ -1145,16 +1171,21 @@ const MobileQuantEngine = (function() {
           const totalStockPnl = holdPnl + (cand.realizedProfit || 0);
           const totalStockCost = cand.allocatedCost + ((cand.soldShares || 0) * cand.costPrice);
           const pnlPct = totalStockCost > 0 ? (totalStockPnl / totalStockCost * 100) : 0;
-          const prevClose = cand.item.prev_close > 0 ? cand.item.prev_close : cand.costPrice;
-          const sellPrice = cand.item.high > 0 ? cand.item.high : cand.curPrice;
+          const prevClose = (cand.prevClose && cand.prevClose > 0)
+            ? cand.prevClose
+            : (cand.item && cand.item.prev_close > 0 ? cand.item.prev_close : (cand.item && cand.item.current ? (cand.item.current - (cand.item.change || 0)) : cand.costPrice));
+          const sellPrice = (cand.item && cand.item.high > 0) ? cand.item.high : cand.curPrice;
           const todayPnl = cand.isBuyToday
             ? ((cand.curPrice - cand.costPrice) * cand.allocatedShares)
-            : ((cand.curPrice - prevClose) * cand.allocatedShares + (cand.isS3Today && isSettled ? ((sellPrice - prevClose) * cand.soldShares) : 0));
+            : ((cand.curPrice - prevClose) * cand.allocatedShares + (cand.isS3Today && isSettled ? ((sellPrice - prevClose) * (cand.soldShares || 0)) : 0));
+          const todayPct = prevClose > 0 ? ((cand.curPrice - prevClose) / prevClose * 100) : (cand.item ? (cand.item.pct_change || 0) : 0);
 
           cand.marketVal = mVal;
           cand.pnl = totalStockPnl;
           cand.pnlPct = pnlPct;
           cand.todayPnl = todayPnl;
+          cand.todayPct = todayPct;
+          cand.prevClose = prevClose;
 
           totalPositionMarketVal += mVal;
           totalPositionCost += cand.allocatedCost;
@@ -1183,15 +1214,23 @@ const MobileQuantEngine = (function() {
             const cost = state.soldShares * state.costPrice;
             const settleVal = state.soldShares * sellPrice;
             const profit = settleVal - cost;
+            const prevClose = (state.prevClose && state.prevClose > 0)
+              ? state.prevClose
+              : (state.item && state.item.prev_close > 0 ? state.item.prev_close : (state.curPrice));
+            const todaySoldPnl = (sellPrice - prevClose) * state.soldShares;
+            const todayPct = prevClose > 0 ? ((sellPrice - prevClose) / prevClose * 100) : (state.item ? (state.item.pct_change || 0) : 0);
+
             state.settleVal = settleVal;
             state.profit = profit;
             state.pnl = profit;
             state.pnlPct = cost > 0 ? (profit / cost * 100) : 0;
-            state.todayPnl = profit;
+            state.todayPnl = todaySoldPnl;
+            state.todayPct = todayPct;
+            state.prevClose = prevClose;
 
             totalSettleCash += settleVal;
             totalClosedProfit += profit;
-            totalTodayPnl += profit;
+            totalTodayPnl += todaySoldPnl;
           }
         });
       } else {
@@ -1217,10 +1256,13 @@ const MobileQuantEngine = (function() {
         const clean = sym.replace(/^(sh|sz)/i, '').toLowerCase();
         let poolItem = pool.find(w => (w.symbol || '').toLowerCase() === sym.toLowerCase() || (w.code || '').toLowerCase() === clean);
         const curPrice = poolItem ? poolItem.current : (p.cost_price || 1.0);
+        const prevClose = poolItem ? (poolItem.prev_close || curPrice) : curPrice;
         const mVal = p.hands * 100 * curPrice;
         const cost = p.hands * 100 * (p.cost_price || curPrice);
         const pnl = mVal - cost;
         const pnlPct = cost > 0 ? (pnl / cost * 100) : 0;
+        const todayPnl = (curPrice - prevClose) * p.hands * 100;
+        const todayPct = prevClose > 0 ? ((curPrice - prevClose) / prevClose * 100) : 0;
 
         const existing = activeCandidates.find(c => c.sym.toLowerCase() === sym.toLowerCase() || c.itemCodeClean === clean);
         if (!existing) {
@@ -1234,6 +1276,7 @@ const MobileQuantEngine = (function() {
             tag_color: '#3b82f6',
             reason_summary: '手动设定的持仓标的',
             curPrice,
+            prevClose,
             costPrice: p.cost_price,
             allocatedHands: p.hands,
             allocatedShares: p.hands * 100,
@@ -1241,21 +1284,28 @@ const MobileQuantEngine = (function() {
             marketVal: mVal,
             pnl,
             pnlPct,
+            todayPnl,
+            todayPct,
             isCustom: true
           };
           activeCandidates.push(customObj);
           totalPositionMarketVal += mVal;
           totalPositionCost += cost;
+          totalTodayPnl += todayPnl;
         }
       });
 
       const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
       const currentTotalAssets = realAvailableCash + totalPositionMarketVal;
       const effectiveTotalCapital = realAvailableCash + totalPositionCost;
+      const totalPnl = (totalPositionMarketVal - totalPositionCost) + totalClosedProfit;
+      const totalPnlPct = totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0;
 
       return {
         isSettled,
         totalPosCapital: effectiveTotalCapital,
+        totalCapital: effectiveTotalCapital,
+        availableCash: currentAvailableCash,
         realAvailableCash,
         currentTotalAssets,
         totalPositionMarketVal,
@@ -1263,6 +1313,8 @@ const MobileQuantEngine = (function() {
         totalSettleCash,
         totalClosedProfit,
         totalTodayPnl,
+        totalPnl,
+        totalPnlPct,
         activeCandidates,
         itemStates,
         mapBySymbol
