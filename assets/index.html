@@ -2333,11 +2333,11 @@
         <!-- Toolbar Actions: Pos Budget & Available Cash -->
         <div class="paper-modal-toolbar">
           <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-            <!-- 设定 1: 持仓预算展示(根据可用现金买入自动计算) -->
+            <!-- 设定 1: 账户资金状态 -->
             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-              <span class="paper-toolbar-label" title="持仓预算无需手动输入，系统根据输入的可用现金买入自动计算！">📊 持仓预算:</span>
-              <span id="displayTotalPosCapital" style="font-size:13px; font-weight:800; color:#2563eb; padding:2px 8px; background:#eff6ff; border-radius:4px; border:1px solid #bfdbfe;">¥100,000</span>
-              <span style="font-size:11px; color:#64748b;">(根据现金自动计算)</span>
+              <span class="paper-toolbar-label">💼 账户总资金:</span>
+              <span id="displayTotalPosCapital" style="font-size:13px; font-weight:800; color:#2563eb; padding:2px 8px; background:#eff6ff; border-radius:4px; border:1px solid #bfdbfe;">¥0.00</span>
+              <span id="displayPosHoldingNote" style="font-size:11px; color:#64748b;">(自动同步)</span>
             </div>
 
             <!-- 分隔竖线 -->
@@ -4070,7 +4070,8 @@
       // 当前可用现金 = 用户初始设定/追加现金 + 今日卖出平仓结算回款 (14:50前为0，14:50后划入)
       const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
       const currentTotalAssets = totalPositionMarketVal + realAvailableCash;
-      const totalCapital = totalPositionCost + currentAvailableCash; // 累计投入本金 = 持仓总成本 + 可用现金
+      const totalCapital = totalPositionCost + realAvailableCash; // 累计总资金 = 持仓总成本 + 实时可用现金
+      const totalPosCapital = totalCapital; // 总资金池与可用现金及持仓100%严密一致
       const totalPnl = (totalPositionMarketVal - totalPositionCost) + totalClosedProfit;
       const totalPnlPct = totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0;
 
@@ -5453,14 +5454,16 @@
       const tbody = document.getElementById('paperTableBody');
       if (!tbody) return;
 
-      const totalPosCapital = getTotalPosCapital();
+      const allocData = computePaperPortfolioAllocations();
+      const totalPosCapital = allocData.totalPosCapital;
       const displayPosCap = document.getElementById('displayTotalPosCapital');
       if (displayPosCap) {
-        displayPosCap.innerText = `¥${totalPosCapital.toLocaleString()}`;
+        displayPosCap.innerText = `¥${allocData.currentTotalAssets.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       }
-
-
-      const allocData = computePaperPortfolioAllocations();
+      const displayPosNote = document.getElementById('displayPosHoldingNote');
+      if (displayPosNote) {
+        displayPosNote.innerText = allocData.activeCandidates.length > 0 ? `(${allocData.activeCandidates.length}只持仓中)` : `(当前空仓·全为现金)`;
+      }
       const totalCapital = allocData.totalCapital;
       const itemStates = allocData.itemStates;
 
@@ -5743,10 +5746,10 @@
       if (kpiTotalMarketVal) {
         kpiTotalMarketVal.innerText = `¥${totalPositionMarketVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const settleInfo = totalSettleCash > 0 ? `\n(注: 今日减半/卖出已回款 ¥${totalSettleCash.toFixed(2)}，已直接结算划入右侧可用现金池)` : '';
-        kpiTotalMarketVal.title = `持仓总市值: ¥${totalPositionMarketVal.toFixed(2)}\n持仓预算(根据现金自动计算): ¥${totalPosCapital.toLocaleString()}${settleInfo}`;
+        kpiTotalMarketVal.title = `持仓总市值: ¥${totalPositionMarketVal.toFixed(2)}\n可用现金: ¥${realAvailableCash.toFixed(2)}${settleInfo}`;
       }
       if (kpiPositionWeight) {
-        kpiPositionWeight.innerText = `持仓预算: ¥${totalPosCapital.toLocaleString()} (自动计算) | 仓位: ${posWeight}%`;
+        kpiPositionWeight.innerText = `仓位占比: ${posWeight}% (${holdingCount > 0 ? '持仓中' : '当前空仓'})`;
       }
 
       if (kpiAvailableCash) {

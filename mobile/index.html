@@ -1139,8 +1139,8 @@
               <div class="asset-sub-val" id="pStockVal">¥0.00</div>
             </div>
             <div>
-              <div class="stat-label" style="color:#fcd34d;">持仓预算(自动计算)</div>
-              <div class="asset-sub-val" id="pTotalPosCapital" style="color:#fef08a;">¥100,000.00</div>
+              <div class="stat-label" style="color:#fcd34d;">今日盈亏</div>
+              <div class="asset-sub-val" id="pTodayPnl" style="color:#fef08a;">+¥0.00</div>
             </div>
           </div>
           <div class="asset-actions">
@@ -1315,7 +1315,7 @@
         pTotalCapital: document.getElementById('pTotalCapital'),
         pAvailableCash: document.getElementById('pAvailableCash'),
         pStockVal: document.getElementById('pStockVal'),
-        pTotalPosCapital: document.getElementById('pTotalPosCapital'),
+        pTodayPnl: document.getElementById('pTodayPnl'),
         btnEditCash: document.getElementById('btnEditCash'),
         btnOpenCustomHoldings: document.getElementById('btnOpenCustomHoldings'),
         modalEditCash: document.getElementById('modalEditCash'),
@@ -2128,8 +2128,10 @@
         dom.pTotalCapital.textContent = `¥${currentTotalAssets.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         dom.pAvailableCash.textContent = `¥${realAvailableCash.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         dom.pStockVal.textContent = `¥${totalPositionMarketVal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        if (dom.pTotalPosCapital) {
-          dom.pTotalPosCapital.textContent = `¥${totalPosCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (dom.pTodayPnl) {
+          const todaySign = allocData.totalTodayPnl >= 0 ? '+' : '';
+          dom.pTodayPnl.textContent = `${todaySign}¥${allocData.totalTodayPnl.toFixed(2)}`;
+          dom.pTodayPnl.style.color = allocData.totalTodayPnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
         }
 
         // 收集需要展示的持仓标的卡片：

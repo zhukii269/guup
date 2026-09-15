@@ -1251,10 +1251,11 @@ const MobileQuantEngine = (function() {
 
       const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
       const currentTotalAssets = realAvailableCash + totalPositionMarketVal;
+      const effectiveTotalCapital = realAvailableCash + totalPositionCost;
 
       return {
         isSettled,
-        totalPosCapital,
+        totalPosCapital: effectiveTotalCapital,
         realAvailableCash,
         currentTotalAssets,
         totalPositionMarketVal,
