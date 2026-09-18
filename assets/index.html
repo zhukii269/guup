@@ -2679,30 +2679,35 @@
     async function loadWatchPool() {
       const container = document.getElementById('watchPoolList');
       
-      // 1. 优先读取并瞬时渲染本地行情缓存，杜绝任何启动卡顿或白屏等待
+      // 1. 优先读取并瞬时渲染本地行情缓存；若无缓存则即刻载入22只主流板块卡片占位，杜绝任何卡顿或长时间等待
       if (!currentWatchPool || currentWatchPool.length === 0) {
         try {
           const cached = localStorage.getItem('stock_master_watch_pool_cache');
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              // 若缓存条数少于当前期望自选池条数，仍展示但标记等待刷新
               currentWatchPool = parsed;
-              renderWatchPool(currentWatchPool);
-              updatePaperNavBadge();
             }
           }
         } catch(e) {}
-      }
 
-      // 如果既没有当前数据也没有缓存，显示优雅的扫描中提示
-      if (container && (!currentWatchPool || currentWatchPool.length === 0)) {
-        container.innerHTML = `
-          <div style="text-align:center; padding:30px 12px; font-size:12px; color:#94a3b8;">
-            <div style="font-size:18px; margin-bottom:8px;">⏳</div>
-            <div>正在扫描板块观察池行情...</div>
-          </div>
-        `;
+        if (!currentWatchPool || currentWatchPool.length === 0) {
+          currentWatchPool = DEFAULT_SECTOR_ETFS.map(x => ({
+            sector: x.sector,
+            code: x.code,
+            symbol: x.code,
+            name: x.desc || x.sector,
+            close: 1.0,
+            current: 1.0,
+            prev_close: 1.0,
+            pct_change: 0.0,
+            tag: '观察中',
+            tag_color: '#94a3b8',
+            reason_summary: '正在连接行情网络扫描...'
+          }));
+        }
+        renderWatchPool(currentWatchPool);
+        updatePaperNavBadge();
       }
 
       if (window.pywebview && window.pywebview.api) {
@@ -2726,9 +2731,6 @@
           }
         } catch (e) {
           console.error("Failed to load watch pool:", e);
-          if (container && (!currentWatchPool || currentWatchPool.length === 0)) {
-            container.innerHTML = `<div style="text-align:center; padding:24px 12px; font-size:12px; color:#ef4444;">加载观察池失败，请稍后重试</div>`;
-          }
         }
       }
     }
@@ -2764,13 +2766,13 @@
     let pywebviewInitDone = false;
 
     function initPyWebViewReady() {
-      function doInit() {
+      async function doInit() {
         if (pywebviewInitDone) return;
         pywebviewInitDone = true;
 
-        syncAppConfig();
-        loadStockData(currentSymbol);
-        loadWatchPool();
+        try { await syncAppConfig(); } catch(e) { console.error("syncAppConfig error:", e); }
+        try { await loadStockData(currentSymbol); } catch(e) { console.error("loadStockData error:", e); }
+        try { await loadWatchPool(); } catch(e) { console.error("loadWatchPool error:", e); }
       }
 
       if (window.pywebview && window.pywebview.api) {
@@ -3787,7 +3789,7 @@
 
     const PaperAccountManager = {
       STORAGE_KEY: 'stock_master_paper_portfolio_v2',
-      SEED_VERSION_KEY: 'stock_master_paper_seed_v4',
+      SEED_VERSION_KEY: 'stock_master_paper_seed_v5',
 
       getAll() {
         try {
@@ -3795,16 +3797,23 @@
           let all = raw ? JSON.parse(raw) : null;
           const seedVer = localStorage.getItem(this.SEED_VERSION_KEY);
 
-          // 若首次使用或历史数据中老持仓被错误压缩（如芯片<10手、半导体设备<15手），执行种子数据恢复
-          if (!all || Object.keys(all).length === 0 || seedVer !== 'v4_locked_holdings') {
-            if (!all) all = {};
+          // 自动重置并净化老持仓账本：仅严格保留5只基准持仓（创新药、人工智能、芯片、半导体设备、电子）
+          if (!all || Object.keys(all).length === 0 || seedVer !== 'v5_clean_locked_holdings') {
+            const cleanAll = {};
             Object.keys(DEFAULT_HOLDINGS_SEED).forEach(k => {
-              if (!all[k] || (all[k].status === 'HOLDING' && all[k].hands < DEFAULT_HOLDINGS_SEED[k].hands)) {
-                all[k] = JSON.parse(JSON.stringify(DEFAULT_HOLDINGS_SEED[k]));
-              }
+              cleanAll[k] = JSON.parse(JSON.stringify(DEFAULT_HOLDINGS_SEED[k]));
             });
+            // 若包含合法的新增买入记录，安全迁移
+            if (all && typeof all === 'object') {
+              Object.keys(all).forEach(k => {
+                if (!cleanAll[k] && all[k] && all[k].status === 'HOLDING' && all[k].buy_date > '2026-09-15' && all[k].history && all[k].history.length > 0 && all[k].hands !== 15) {
+                  cleanAll[k] = all[k];
+                }
+              });
+            }
+            all = cleanAll;
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(all));
-            localStorage.setItem(this.SEED_VERSION_KEY, 'v4_locked_holdings');
+            localStorage.setItem(this.SEED_VERSION_KEY, 'v5_clean_locked_holdings');
           }
           return all || {};
         } catch (e) {
@@ -3899,8 +3908,8 @@
         sector: x.sector,
         close: 1.0,
         current: 1.0,
-        tag: '持仓中',
-        status_desc: '持仓中',
+        tag: '观察中',
+        status_desc: '观察中',
         pct_change: 0.0,
         signal_type: ''
       }));
@@ -3945,12 +3954,12 @@
         // 只有明确带有【今天卖出】或【今日卖点】且非S3减半才为全部清仓卖出
         const isSellToday = !isCallback && !isS3Today && (tagText.includes('今天卖出') || tagText.includes('今日卖点'));
 
-        // 检查是否为账本中已持有的标的
-        const recordedPos = storedPositions[itemCodeClean];
-        const hasExistingHolding = recordedPos && recordedPos.status === 'HOLDING' && recordedPos.hands > 0;
+        // 检查是否为账本中已持有的标的：必须在账本中有真实正数手数
+        const recordedPos = storedPositions[itemCodeClean] || storedPositions[sym.toLowerCase()];
+        const hasExistingHolding = Boolean(recordedPos && recordedPos.status === 'HOLDING' && recordedPos.hands > 0);
 
-        // 严格定义持仓：满足 tagText 包含持仓，或账本中已持有，且今日非新买入、非清仓
-        const isHolding = !isCallback && !isBuyToday && !isSellToday && !isS3Today && (tagText.includes('持仓') || hasExistingHolding);
+        // 严格定义持仓：必须且只能是本地账本中真实持有的标的！行情池里的“观望持仓/多头持仓”技术指标绝对不等于用户持有！
+        const isHolding = hasExistingHolding && !isCallback && !isBuyToday && !isSellToday && !isS3Today;
         // 即将满足：处于观察待机状态，未真正开仓
         const isPending = !isCallback && !isBuyToday && !isSellToday && !isHolding && !isS3Today && tagText.includes('即将满足');
 
@@ -4078,15 +4087,12 @@
       // 阶段一：处理并锁定已有老持仓（Holding Lock），其手数与成本绝不随新买入稀释
       let oldHoldingCost = 0;
       itemStates.forEach(state => {
-        const isOldHoldingCandidate = state.isHolding || state.isS3Today || (state.hasExistingHolding && !state.isSellToday && !state.isBuyToday);
+        // 老持仓候选：必须是账本中真实持有的标的
+        const isOldHoldingCandidate = state.hasExistingHolding && (state.isHolding || state.isS3Today || (!state.isSellToday && !state.isBuyToday));
         if (isOldHoldingCandidate) {
-          // 获取基准锁定手数与成本价
-          let lockedHands = 0;
-          if (state.recordedPos && state.recordedPos.hands > 0) {
-            lockedHands = state.recordedPos.hands;
-          } else {
-            lockedHands = Math.max(1, Math.round(1500 / (state.costPrice * 100)));
-          }
+          // 获取基准锁定手数与成本价，严格取自账本
+          const lockedHands = (state.recordedPos && state.recordedPos.hands > 0) ? state.recordedPos.hands : 0;
+          if (lockedHands <= 0) return;
 
           if (state.isS3Today) {
             // S3 减半处理
@@ -4133,14 +4139,10 @@
           state.isLockedHolding = true;
           oldHoldingCost += state.allocatedCost;
           activeCandidates.push(state);
-        } else if (state.isSellToday) {
-          // 清仓卖出标的处理
-          let origHands = 0;
-          if (state.recordedPos && state.recordedPos.hands > 0) {
-            origHands = state.recordedPos.hands;
-          } else {
-            origHands = Math.max(1, Math.round(1500 / (state.costPrice * 100)));
-          }
+        } else if (state.isSellToday && state.hasExistingHolding) {
+          // 清仓卖出标的处理：必须是账本中真实持有的标的
+          const origHands = (state.recordedPos && state.recordedPos.hands > 0) ? state.recordedPos.hands : 0;
+          if (origHands <= 0) return;
 
           const sellPrice = state.item.high > 0 ? state.item.high : state.curPrice;
           if (isSettled) {
@@ -6551,7 +6553,13 @@
     }
 
     function renderKlineChart() {
-      if (!chartInstance || klineData.length === 0) return;
+      const container = document.getElementById('klineChart');
+      if (!container) return;
+      if (!chartInstance) {
+        chartInstance = echarts.init(container);
+        window.addEventListener('resize', () => { if (chartInstance) chartInstance.resize(); });
+      }
+      if (!klineData || klineData.length === 0) return;
 
       const isDark = document.body.classList.contains('dark-theme');
       const dates = klineData.map(item => item.date);
@@ -7087,10 +7095,18 @@
         ]
       };
 
-      chartInstance.setOption(option, true);
-      activeRenderedChartType = 'kline';
-      isChartSwitching = false;
-      restoreHeaderToLatest();
+      try {
+        chartInstance.resize();
+        chartInstance.setOption(option, true);
+        activeRenderedChartType = 'kline';
+        isChartSwitching = false;
+        restoreHeaderToLatest();
+        setTimeout(() => {
+          if (chartInstance) chartInstance.resize();
+        }, 50);
+      } catch (e) {
+        console.error("renderKlineChart setOption error:", e);
+      }
     }
 
     function setupSearch() {

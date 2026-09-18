@@ -897,9 +897,8 @@ const MobileQuantEngine = (function() {
       } catch (e) {}
 
       // 移动端老持仓种子数据恢复与锁定校验 (确保 5 只老持仓手数与成本绝不丢失)
-      const seedVer = localStorage.getItem('stock_master_mobile_seed_v4');
-      if (!data.positions || Object.keys(data.positions).length === 0 || seedVer !== 'v4_locked_holdings') {
-        if (!data.positions) data.positions = {};
+      const seedVer = localStorage.getItem('stock_master_mobile_seed_v5');
+      if (!data.positions || Object.keys(data.positions).length === 0 || seedVer !== 'v5_clean_locked_holdings') {
         const seeds = {
           '159992': { symbol: '159992', code: '159992', name: '创新药', hands: 17, cost_price: 0.830, buy_date: '2026-09-15' },
           '159819': { symbol: '159819', code: '159819', name: '人工智能', hands: 10, cost_price: 1.723, buy_date: '2026-09-15' },
@@ -907,12 +906,19 @@ const MobileQuantEngine = (function() {
           '159516': { symbol: '159516', code: '159516', name: '半导体设备', hands: 23, cost_price: 0.706, buy_date: '2026-09-15' },
           '159997': { symbol: '159997', code: '159997', name: '电子', hands: 8, cost_price: 2.067, buy_date: '2026-09-15' }
         };
+        const cleanPositions = {};
         Object.keys(seeds).forEach(k => {
-          if (!data.positions[k] || data.positions[k].hands < seeds[k].hands) {
-            data.positions[k] = Object.assign({}, seeds[k]);
-          }
+          cleanPositions[k] = Object.assign({}, seeds[k]);
         });
-        localStorage.setItem('stock_master_mobile_seed_v4', 'v4_locked_holdings');
+        if (data.positions && typeof data.positions === 'object') {
+          Object.keys(data.positions).forEach(k => {
+            if (!cleanPositions[k] && data.positions[k] && data.positions[k].hands > 0 && data.positions[k].buy_date > '2026-09-15' && data.positions[k].hands !== 15) {
+              cleanPositions[k] = data.positions[k];
+            }
+          });
+        }
+        data.positions = cleanPositions;
+        localStorage.setItem('stock_master_mobile_seed_v5', 'v5_clean_locked_holdings');
         this.saveData(data);
       }
 
@@ -1026,9 +1032,9 @@ const MobileQuantEngine = (function() {
         const isSellToday = !isCallback && !isS3Today && (tagText.includes('今天卖出') || tagText.includes('今日卖点'));
 
         const recordedPos = recordedPositions[itemCodeClean] || recordedPositions[sym.toLowerCase()];
-        const hasExistingHolding = recordedPos && recordedPos.hands > 0;
+        const hasExistingHolding = Boolean(recordedPos && recordedPos.hands > 0);
 
-        const isHolding = !isCallback && !isBuyToday && !isSellToday && !isS3Today && (tagText.includes('持仓') || hasExistingHolding);
+        const isHolding = hasExistingHolding && !isCallback && !isBuyToday && !isSellToday && !isS3Today;
         const isPending = !isCallback && !isBuyToday && !isSellToday && !isHolding && !isS3Today && tagText.includes('即将满足');
 
         let costPrice = curPrice;
@@ -1168,14 +1174,10 @@ const MobileQuantEngine = (function() {
       // 阶段一：老持仓手数与成本 100% 固化锁定
       let oldHoldingCost = 0;
       itemStates.forEach(state => {
-        const isOldHoldingCandidate = state.isHolding || state.isS3Today || (state.hasExistingHolding && !state.isSellToday && !state.isBuyToday);
+        const isOldHoldingCandidate = state.hasExistingHolding && (state.isHolding || state.isS3Today || (!state.isSellToday && !state.isBuyToday));
         if (isOldHoldingCandidate) {
-          let lockedHands = 0;
-          if (state.recordedPos && state.recordedPos.hands > 0) {
-            lockedHands = state.recordedPos.hands;
-          } else {
-            lockedHands = Math.max(1, Math.round(1500 / (state.costPrice * 100)));
-          }
+          const lockedHands = (state.recordedPos && state.recordedPos.hands > 0) ? state.recordedPos.hands : 0;
+          if (lockedHands <= 0) return;
 
           if (state.isS3Today) {
             if (isSettled) {
@@ -1218,13 +1220,9 @@ const MobileQuantEngine = (function() {
           state.isLockedHolding = true;
           oldHoldingCost += state.allocatedCost;
           activeCandidates.push(state);
-        } else if (state.isSellToday) {
-          let origHands = 0;
-          if (state.recordedPos && state.recordedPos.hands > 0) {
-            origHands = state.recordedPos.hands;
-          } else {
-            origHands = Math.max(1, Math.round(1500 / (state.costPrice * 100)));
-          }
+        } else if (state.isSellToday && state.hasExistingHolding) {
+          const origHands = (state.recordedPos && state.recordedPos.hands > 0) ? state.recordedPos.hands : 0;
+          if (origHands <= 0) return;
 
           const sellPrice = (state.item && state.item.high > 0) ? state.item.high : state.curPrice;
           if (isSettled) {
