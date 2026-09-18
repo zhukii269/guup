@@ -908,13 +908,7 @@ const MobileQuantEngine = (function() {
       // 持仓预算不再由用户手动修改，而是根据用户输入的可用现金买入自动计算！
       const data = this.getData();
       const curCash = data.available_cash || 0;
-      let existingCost = 0;
-      const customPositions = data.positions || {};
-      Object.keys(customPositions).forEach(sym => {
-        const p = customPositions[sym];
-        existingCost += (p.hands || 0) * 100 * (p.cost_price || 1.0);
-      });
-      return Math.max(100, curCash + existingCost);
+      return Math.max(100, curCash);
     },
     setTotalPosCapital: function(amount) {
       // 兼容接口，若传入则同步更新为现金
@@ -1251,6 +1245,7 @@ const MobileQuantEngine = (function() {
 
       // 用户自定持仓处理
       const customPositions = portData.positions || {};
+      let customPositionsCost = 0;
       Object.keys(customPositions).forEach(sym => {
         const p = customPositions[sym];
         const clean = sym.replace(/^(sh|sz)/i, '').toLowerCase();
@@ -1291,15 +1286,19 @@ const MobileQuantEngine = (function() {
           activeCandidates.push(customObj);
           totalPositionMarketVal += mVal;
           totalPositionCost += cost;
+          customPositionsCost += cost;
           totalTodayPnl += todayPnl;
         }
       });
 
-      const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
+      // 实时可用现金 = 账户总资金 - 模拟买入持仓支出 + 今日卖出结算回款 (买入成交扣体现金，卖出回款划入现金)
+      // 账户总资产严格保持平衡：持仓总市值 + 实时可用现金，买入绝不凭空膨胀
+      const poolPositionCost = Math.max(0, totalPositionCost - customPositionsCost);
+      const realAvailableCash = Math.max(0, currentAvailableCash - poolPositionCost + totalSettleCash);
       const currentTotalAssets = realAvailableCash + totalPositionMarketVal;
-      const effectiveTotalCapital = realAvailableCash + totalPositionCost;
+      const effectiveTotalCapital = Math.max(currentAvailableCash + customPositionsCost, totalPositionCost + realAvailableCash - totalClosedProfit);
       const totalPnl = (totalPositionMarketVal - totalPositionCost) + totalClosedProfit;
-      const totalPnlPct = totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0;
+      const totalPnlPct = effectiveTotalCapital > 0 ? (totalPnl / effectiveTotalCapital * 100) : (totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0);
 
       return {
         isSettled,

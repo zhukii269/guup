@@ -4069,12 +4069,13 @@
         });
       }
 
-      // 当前可用现金 = 用户初始设定/追加现金 + 今日卖出平仓结算回款 (14:50前为0，14:50后划入)
-      const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
+      // 实时可用现金 = 账户总资金 - 当前持仓总成本 + 今日卖出结算回款 (14:50后买入成交扣体现金，卖出回款划入现金)
+      // 账户总资产严格保持平衡：持仓总市值 + 实时可用现金，买入绝不凭空膨胀
+      const realAvailableCash = Math.max(0, currentAvailableCash - totalPositionCost + totalSettleCash);
       const currentTotalAssets = totalPositionMarketVal + realAvailableCash;
-      const totalCapital = totalPositionCost + realAvailableCash; // 累计总资金 = 持仓总成本 + 实时可用现金
+      const totalCapital = Math.max(currentAvailableCash, totalPositionCost + realAvailableCash - totalClosedProfit);
       const totalPnl = (totalPositionMarketVal - totalPositionCost) + totalClosedProfit;
-      const totalPnlPct = totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0;
+      const totalPnlPct = totalCapital > 0 ? (totalPnl / totalCapital * 100) : (totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0);
 
       return {
         totalPosCapital: totalCapital,
@@ -5760,11 +5761,11 @@
 
       if (kpiAvailableCash) {
         kpiAvailableCash.innerText = `¥${realAvailableCash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        if (totalSettleCash > 0) {
-          kpiAvailableCash.title = `可用现金 = 初始现金(¥${currentAvailableCash.toLocaleString()}) + 今日卖出平仓回款(¥${totalSettleCash.toFixed(2)})`;
-        } else {
-          kpiAvailableCash.title = `可用现金: ¥${realAvailableCash.toFixed(2)}`;
-        }
+        let titleParts = [`初始资金: ¥${currentAvailableCash.toLocaleString()}`];
+        if (totalPositionCost > 0) titleParts.push(`买入支出: -¥${totalPositionCost.toFixed(2)}`);
+        if (totalSettleCash > 0) titleParts.push(`卖出回款: +¥${totalSettleCash.toFixed(2)}`);
+        titleParts.push(`实时剩余现金: ¥${realAvailableCash.toFixed(2)}`);
+        kpiAvailableCash.title = titleParts.join(' | ');
       }
       if (kpiCashWeight) {
         if (totalSettleCash > 0) {
