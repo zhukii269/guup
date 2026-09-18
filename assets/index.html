@@ -4073,12 +4073,11 @@
       const realAvailableCash = Math.max(0, currentAvailableCash + totalSettleCash);
       const currentTotalAssets = totalPositionMarketVal + realAvailableCash;
       const totalCapital = totalPositionCost + realAvailableCash; // 累计总资金 = 持仓总成本 + 实时可用现金
-      const totalPosCapital = totalCapital; // 总资金池与可用现金及持仓100%严密一致
       const totalPnl = (totalPositionMarketVal - totalPositionCost) + totalClosedProfit;
       const totalPnlPct = totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0;
 
       return {
-        totalPosCapital,
+        totalPosCapital: totalCapital,
         totalCapital,
         availableCash: currentAvailableCash,
         realAvailableCash,
