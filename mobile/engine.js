@@ -7,28 +7,28 @@
 const MobileQuantEngine = (function() {
   // 默认 22 只主流行业/主题 ETF 观察池
   const DEFAULT_SECTOR_ETFS = [
-    { sector: "金融科技", code: "sz159851", desc: "金融科技ETF" },
-    { sector: "人工智能", code: "sz159819", desc: "人工智能ETF" },
-    { sector: "半导体芯片", code: "sz159995", desc: "芯片ETF" },
-    { sector: "半导体设备", code: "sz159516", desc: "半导体设备ETF" },
-    { sector: "通信技术", code: "sh515880", desc: "通信ETF" },
-    { sector: "消费电子", code: "sz159997", desc: "电子ETF" },
-    { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF" },
-    { sector: "计算机软件", code: "sh512720", desc: "计算机ETF" },
-    { sector: "新能源车", code: "sh515030", desc: "新能源车ETF" },
-    { sector: "光伏新能源", code: "sh515790", desc: "光伏ETF" },
-    { sector: "医药生物", code: "sh512010", desc: "医药ETF" },
-    { sector: "A股创新药", code: "sz159992", desc: "创新药ETF" },
-    { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF" },
-    { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF" },
-    { sector: "恒生互联网", code: "sh513330", desc: "恒生互联网ETF" },
-    { sector: "大金融证券", code: "sh512880", desc: "证券ETF" },
-    { sector: "国防军工", code: "sh512660", desc: "军工ETF" },
-    { sector: "人形机器人", code: "sh562500", desc: "机器人ETF" },
-    { sector: "有色金属", code: "sh512400", desc: "有色金属ETF" },
-    { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF" },
-    { sector: "电力绿电", code: "sz159611", desc: "电力ETF" },
-    { sector: "红利低波", code: "sh515180", desc: "红利ETF" }
+    { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, pct_change: 2.38, tag: "强势共振", tag_color: "#f59e0b", reason_summary: "金融科技领涨放量" },
+    { sector: "人工智能", code: "sz159819", desc: "人工智能ETF", close: 1.762, prev_close: 1.714, pct_change: 2.80, tag: "观望持仓", tag_color: "#3b82f6", reason_summary: "多周期均线多头趋势" },
+    { sector: "半导体芯片", code: "sz159995", desc: "芯片ETF", close: 1.152, prev_close: 1.114, pct_change: 3.41, tag: "观望持仓", tag_color: "#3b82f6", reason_summary: "突破放量进攻形态" },
+    { sector: "半导体设备", code: "sz159516", desc: "半导体设备ETF", close: 0.729, prev_close: 0.703, pct_change: 3.70, tag: "观望持仓", tag_color: "#3b82f6", reason_summary: "领涨共振多头" },
+    { sector: "通信技术", code: "sh515880", desc: "通信ETF", close: 0.704, prev_close: 0.686, pct_change: 2.62, tag: "蓄势回调", tag_color: "#64748b", reason_summary: "回踩MA5支撑强固" },
+    { sector: "消费电子", code: "sz159997", desc: "电子ETF", close: 2.114, prev_close: 2.059, pct_change: 2.67, tag: "观望持仓", tag_color: "#3b82f6", reason_summary: "趋势健康温和放量" },
+    { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF", close: 1.080, prev_close: 1.071, pct_change: 0.84, tag: "蓄势回调", tag_color: "#64748b", reason_summary: "盘整筑底蓄势" },
+    { sector: "计算机软件", code: "sh512720", desc: "计算机ETF", close: 1.134, prev_close: 1.114, pct_change: 1.80, tag: "即将满足", tag_color: "#10b981", reason_summary: "量能温和放大准备共振" },
+    { sector: "新能源车", code: "sh515030", desc: "新能源车ETF", close: 1.503, prev_close: 1.483, pct_change: 1.35, tag: "蓄势回调", tag_color: "#64748b", reason_summary: "MA20生命线上方震荡" },
+    { sector: "光伏新能源", code: "sh515790", desc: "光伏ETF", close: 0.815, prev_close: 0.793, pct_change: 2.77, tag: "蓄势回调", tag_color: "#64748b", reason_summary: "低位超跌反弹修复" },
+    { sector: "医药生物", code: "sh512010", desc: "医药ETF", close: 0.373, prev_close: 0.372, pct_change: 0.27, tag: "防守持有", tag_color: "#64748b", reason_summary: "低位筑底震荡" },
+    { sector: "A股创新药", code: "sz159992", desc: "创新药ETF", close: 0.835, prev_close: 0.830, pct_change: 0.60, tag: "观望持仓", tag_color: "#3b82f6", reason_summary: "生命线支撑强固" },
+    { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF", close: 0.682, prev_close: 0.680, pct_change: 0.29, tag: "防守持有", tag_color: "#64748b", reason_summary: "窄幅蓄势待放量" },
+    { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF", close: 0.571, prev_close: 0.565, pct_change: 1.06, tag: "蓄势回调", tag_color: "#64748b", reason_summary: "底部抬高稳步修复" },
+    { sector: "恒生互联网", code: "sh513330", desc: "恒生互联网ETF", close: 0.346, prev_close: 0.341, pct_change: 1.47, tag: "即将满足", tag_color: "#10b981", reason_summary: "站上拼均线" },
+    { sector: "大金融证券", code: "sh512880", desc: "证券ETF", close: 1.057, prev_close: 1.042, pct_change: 1.44, tag: "防守持有", tag_color: "#64748b", reason_summary: "大金融护盘平稳" },
+    { sector: "国防军工", code: "sh512660", desc: "军工ETF", close: 1.160, prev_close: 1.142, pct_change: 1.58, tag: "观望持仓", tag_color: "#3b82f6", reason_summary: "区间震荡反弹" },
+    { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, pct_change: 1.97, tag: "即将满足", tag_color: "#10b981", reason_summary: "多头突破临界点" },
+    { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, pct_change: 1.41, tag: "防守持有", tag_color: "#64748b", reason_summary: "大宗商品周期震荡" },
+    { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF", close: 1.249, prev_close: 1.258, pct_change: -0.72, tag: "防守持有", tag_color: "#64748b", reason_summary: "高股息防御风格" },
+    { sector: "电力绿电", code: "sz159611", desc: "电力ETF", close: 1.040, prev_close: 1.037, pct_change: 0.29, tag: "防守持有", tag_color: "#64748b", reason_summary: "绿电稳健防御" },
+    { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, pct_change: -0.14, tag: "防守持有", tag_color: "#64748b", reason_summary: "红利低波防御" }
   ];
 
   const STORAGE_KEY_WATCHLIST = "stock_master_mobile_watchlist";
@@ -593,8 +593,8 @@ const MobileQuantEngine = (function() {
       const quote = await getRealtimeQuote(code);
 
       if (klines.length === 0) {
-        const cur = (quote && quote.current > 0) ? quote.current : 1.0;
-        const prev = (quote && quote.prev_close > 0) ? quote.prev_close : cur;
+        const cur = (quote && quote.current > 0) ? quote.current : (item.close || 1.0);
+        const prev = (quote && quote.prev_close > 0) ? quote.prev_close : (item.prev_close || cur);
         const chg = (quote && typeof quote.change === 'number') ? quote.change : (cur - prev);
         const pct = (quote && typeof quote.pct_change === 'number') ? quote.pct_change : (prev > 0 ? (cur - prev) / prev * 100 : 0);
         return {

@@ -40,6 +40,9 @@ class StockApi:
     def get_history_pnl_analysis(self, custom_list=None, total_capital=100000):
         return self.dp.get_history_pnl_analysis(custom_list, total_capital)
 
+    def get_batch_realtime_quotes(self, symbols=None):
+        return self.dp.get_batch_realtime_quotes(symbols)
+
 def get_asset_path(filename):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, "assets", filename)
