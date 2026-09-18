@@ -879,7 +879,7 @@ const MobileQuantEngine = (function() {
       let data = {
         total_capital: 100000,
         total_pos_capital: 100000,
-        available_cash: 100000,
+        available_cash: 50000,
         positions: {}, // symbol -> { symbol, name, hands, cost_price, buy_date }
         trades: []
       };
@@ -895,6 +895,26 @@ const MobileQuantEngine = (function() {
           if (!isNaN(num) && num > 0) data.total_pos_capital = num;
         }
       } catch (e) {}
+
+      // 移动端老持仓种子数据恢复与锁定校验 (确保 5 只老持仓手数与成本绝不丢失)
+      const seedVer = localStorage.getItem('stock_master_mobile_seed_v4');
+      if (!data.positions || Object.keys(data.positions).length === 0 || seedVer !== 'v4_locked_holdings') {
+        if (!data.positions) data.positions = {};
+        const seeds = {
+          '159992': { symbol: '159992', code: '159992', name: '创新药', hands: 17, cost_price: 0.830, buy_date: '2026-09-15' },
+          '159819': { symbol: '159819', code: '159819', name: '人工智能', hands: 10, cost_price: 1.723, buy_date: '2026-09-15' },
+          '159995': { symbol: '159995', code: '159995', name: '芯片', hands: 15, cost_price: 1.124, buy_date: '2026-09-15' },
+          '159516': { symbol: '159516', code: '159516', name: '半导体设备', hands: 23, cost_price: 0.706, buy_date: '2026-09-15' },
+          '159997': { symbol: '159997', code: '159997', name: '电子', hands: 8, cost_price: 2.067, buy_date: '2026-09-15' }
+        };
+        Object.keys(seeds).forEach(k => {
+          if (!data.positions[k] || data.positions[k].hands < seeds[k].hands) {
+            data.positions[k] = Object.assign({}, seeds[k]);
+          }
+        });
+        localStorage.setItem('stock_master_mobile_seed_v4', 'v4_locked_holdings');
+        this.saveData(data);
+      }
 
       if (!data.total_pos_capital) data.total_pos_capital = 100000;
       return data;
@@ -972,8 +992,6 @@ const MobileQuantEngine = (function() {
     computePaperPortfolioAllocations: function(poolData) {
       const isSettled = isMobileSettlementAfter1450();
       const portData = this.getData();
-      // 持仓预算完全由输入的可用现金买入自动计算
-      const totalPosCapital = this.getTotalPosCapital();
       const currentAvailableCash = portData.available_cash || 0;
       const pool = (poolData && poolData.length > 0) ? poolData : [];
 
@@ -986,6 +1004,8 @@ const MobileQuantEngine = (function() {
       const activeCandidates = [];
       const itemStates = [];
       const mapBySymbol = {};
+
+      const recordedPositions = portData.positions || {};
 
       pool.forEach(item => {
         const sym = item.symbol || item.code || '';
@@ -1004,19 +1024,27 @@ const MobileQuantEngine = (function() {
           (item.reason_summary && item.reason_summary.includes('减仓50%'))
         );
         const isSellToday = !isCallback && !isS3Today && (tagText.includes('今天卖出') || tagText.includes('今日卖点'));
-        const isHolding = !isCallback && !isBuyToday && !isSellToday && !isS3Today && tagText.includes('持仓');
+
+        const recordedPos = recordedPositions[itemCodeClean] || recordedPositions[sym.toLowerCase()];
+        const hasExistingHolding = recordedPos && recordedPos.hands > 0;
+
+        const isHolding = !isCallback && !isBuyToday && !isSellToday && !isS3Today && (tagText.includes('持仓') || hasExistingHolding);
         const isPending = !isCallback && !isBuyToday && !isSellToday && !isHolding && !isS3Today && tagText.includes('即将满足');
 
         let costPrice = curPrice;
-        const bp = (typeof item.buy_cost_price === 'number' && item.buy_cost_price > 0) ? item.buy_cost_price : (item.cost_price || item.buy_price);
-        if (typeof bp === 'number' && bp > 0) {
-          costPrice = bp;
-        } else if (isBuyToday) {
-          costPrice = curPrice;
-        } else if (isHolding || isS3Today) {
-          costPrice = prevClose > 0 ? (prevClose * (1 - (item.pct_change || 0) * 0.01 * 0.5)) : curPrice;
-        } else if (isSellToday) {
-          costPrice = prevClose > 0 ? (prevClose * 0.985) : (curPrice * 0.985);
+        if (hasExistingHolding && recordedPos.cost_price > 0) {
+          costPrice = recordedPos.cost_price;
+        } else {
+          const bp = (typeof item.buy_cost_price === 'number' && item.buy_cost_price > 0) ? item.buy_cost_price : (item.cost_price || item.buy_price);
+          if (typeof bp === 'number' && bp > 0) {
+            costPrice = bp;
+          } else if (isBuyToday) {
+            costPrice = curPrice;
+          } else if (isHolding || isS3Today) {
+            costPrice = prevClose > 0 ? (prevClose * (1 - (item.pct_change || 0) * 0.01 * 0.5)) : curPrice;
+          } else if (isSellToday) {
+            costPrice = prevClose > 0 ? (prevClose * 0.985) : (curPrice * 0.985);
+          }
         }
 
         const score = typeof item.score === 'number' ? item.score : 3;
@@ -1046,6 +1074,9 @@ const MobileQuantEngine = (function() {
           isPending,
           isCallback,
           isSettled,
+          hasExistingHolding,
+          recordedPos,
+          isLockedHolding: false,
           allocatedShares: 0,
           allocatedHands: 0,
           allocatedCost: 0,
@@ -1059,18 +1090,9 @@ const MobileQuantEngine = (function() {
           marketVal: 0,
           pnl: 0,
           pnlPct: 0,
-          todayPnl: 0
+          todayPnl: 0,
+          insufficientCash: false
         };
-
-        if (isSettled) {
-          if (isBuyToday || isHolding || isS3Today) {
-            activeCandidates.push(stateObj);
-          }
-        } else {
-          if (isHolding || isS3Today || isSellToday) {
-            activeCandidates.push(stateObj);
-          }
-        }
 
         itemStates.push(stateObj);
         mapBySymbol[itemCodeClean] = stateObj;
@@ -1078,225 +1100,282 @@ const MobileQuantEngine = (function() {
         mapBySymbol[sym] = stateObj;
       });
 
-      if (activeCandidates.length > 0) {
-        activeCandidates.forEach(cand => {
-          cand.effectiveWeight = ((isSettled && cand.isS3Today) || cand.item?.has_s3_holding) ? (cand.weight * 0.5) : cand.weight;
-        });
+      // 补充检查：若用户持仓库中已有标的未出现在行情池 pool 中，主动纳入统计
+      Object.keys(recordedPositions).forEach(k => {
+        const p = recordedPositions[k];
+        if (p && p.hands > 0 && !mapBySymbol[k]) {
+          const symCode = (p.code || p.symbol || k).toLowerCase();
+          const cleanCode = symCode.replace(/^(sh|sz)/i, '');
+          const curPrice = p.cost_price || 1.0;
+          const stateObj = {
+            item: {
+              code: cleanCode,
+              symbol: symCode,
+              name: p.name || cleanCode,
+              sector: '持仓标的',
+              close: curPrice,
+              current: curPrice,
+              prev_close: curPrice,
+              tag: '持仓中',
+              status_desc: '持仓中',
+              pct_change: 0.0
+            },
+            sym: symCode,
+            itemCodeClean: cleanCode,
+            name: p.name || cleanCode,
+            code: cleanCode,
+            sector: '持仓标的',
+            tag: '持仓中',
+            tag_color: '#3b82f6',
+            reason_summary: '固化持仓标的',
+            curPrice: curPrice,
+            prevClose: curPrice,
+            costPrice: p.cost_price || curPrice,
+            score: 3,
+            weight: 3,
+            isBuyToday: false,
+            isHolding: true,
+            isSellToday: false,
+            isS3Today: false,
+            isPending: false,
+            isCallback: false,
+            isSettled,
+            hasExistingHolding: true,
+            recordedPos: p,
+            isLockedHolding: true,
+            allocatedShares: p.hands * 100,
+            allocatedHands: p.hands,
+            allocatedCost: p.hands * 100 * (p.cost_price || curPrice),
+            soldHands: 0,
+            soldShares: 0,
+            plannedSoldHands: 0,
+            plannedRemainHands: 0,
+            plannedHands: 0,
+            settleVal: 0,
+            realizedProfit: 0,
+            marketVal: 0,
+            pnl: 0,
+            pnlPct: 0,
+            todayPnl: 0,
+            insufficientCash: false
+          };
+          itemStates.push(stateObj);
+          mapBySymbol[cleanCode] = stateObj;
+          mapBySymbol[symCode] = stateObj;
+        }
+      });
 
-        activeCandidates.sort((a, b) => b.effectiveWeight - a.effectiveWeight);
-        const totalW = activeCandidates.reduce((acc, c) => acc + c.effectiveWeight, 0);
-        let remainPosCap = totalPosCapital;
-        const maxSingleCap = totalPosCapital * (activeCandidates.length <= 2 ? 0.5 : 0.35);
-
-        // 第一轮：按有效权重分配持仓预算
-        activeCandidates.forEach(cand => {
-          const portion = totalW > 0 ? (cand.effectiveWeight / totalW) : (1 / activeCandidates.length);
-          let targetBudget = Math.min(maxSingleCap, totalPosCapital * portion);
-          const hands = Math.max(1, Math.floor(targetBudget / cand.costPrice / 100));
-          cand.allocatedHands = hands;
-          cand.allocatedShares = hands * 100;
-          cand.allocatedCost = cand.allocatedShares * cand.costPrice;
-          remainPosCap -= cand.allocatedCost;
-        });
-
-        // 第二轮：余钱扫尾
-        activeCandidates.forEach(cand => {
-          const room = maxSingleCap - cand.allocatedCost;
-          if (remainPosCap >= (cand.costPrice * 100) && room >= (cand.costPrice * 100)) {
-            const extraHands = Math.floor(Math.min(remainPosCap, room) / cand.costPrice / 100);
-            if (extraHands > 0) {
-              cand.allocatedHands += extraHands;
-              cand.allocatedShares += extraHands * 100;
-              const extraCost = extraHands * 100 * cand.costPrice;
-              cand.allocatedCost += extraCost;
-              remainPosCap -= extraCost;
-            }
+      // 阶段一：老持仓手数与成本 100% 固化锁定
+      let oldHoldingCost = 0;
+      itemStates.forEach(state => {
+        const isOldHoldingCandidate = state.isHolding || state.isS3Today || (state.hasExistingHolding && !state.isSellToday && !state.isBuyToday);
+        if (isOldHoldingCandidate) {
+          let lockedHands = 0;
+          if (state.recordedPos && state.recordedPos.hands > 0) {
+            lockedHands = state.recordedPos.hands;
+          } else {
+            lockedHands = Math.max(1, Math.round(1500 / (state.costPrice * 100)));
           }
-        });
 
-        // 处理 S3 与卖出
-        activeCandidates.forEach(cand => {
-          if (cand.isS3Today) {
+          if (state.isS3Today) {
             if (isSettled) {
-              const remainHands = cand.allocatedHands;
-              const soldHands = remainHands;
-              const origHands = remainHands + soldHands;
-              cand.origHands = origHands;
-              cand.plannedSoldHands = soldHands;
-              cand.plannedRemainHands = remainHands;
-              cand.soldHands = soldHands;
-              cand.soldShares = soldHands * 100;
-              const sellPrice = (cand.item.high > 0) ? cand.item.high : cand.curPrice;
-              const settleVal = cand.soldShares * sellPrice;
-              const realizedProfit = settleVal - (cand.soldShares * cand.costPrice);
-              cand.settleVal = settleVal;
-              cand.realizedProfit = realizedProfit;
+              const soldHands = Math.max(1, Math.floor(lockedHands * 0.5));
+              const remainHands = Math.max(0, lockedHands - soldHands);
+              state.allocatedHands = remainHands;
+              state.allocatedShares = remainHands * 100;
+              state.allocatedCost = state.allocatedShares * state.costPrice;
+              state.origHands = lockedHands;
+              state.plannedSoldHands = soldHands;
+              state.plannedRemainHands = remainHands;
+              state.soldHands = soldHands;
+              state.soldShares = soldHands * 100;
+
+              const sellPrice = (state.item && state.item.high > 0) ? state.item.high : state.curPrice;
+              const settleVal = state.soldShares * sellPrice;
+              const realizedProfit = settleVal - (state.soldShares * state.costPrice);
+              state.settleVal = settleVal;
+              state.realizedProfit = realizedProfit;
 
               totalSettleCash += settleVal;
               totalClosedProfit += realizedProfit;
             } else {
-              const origHands = cand.allocatedHands;
-              const planSoldHands = origHands > 1 ? Math.floor(origHands * 0.5) : 1;
-              const planRemainHands = Math.max(0, origHands - planSoldHands);
-              cand.origHands = origHands;
-              cand.plannedSoldHands = planSoldHands;
-              cand.plannedRemainHands = planRemainHands;
-              cand.soldHands = 0;
-              cand.soldShares = 0;
-              cand.settleVal = 0;
-              cand.realizedProfit = 0;
+              const planSold = Math.max(1, Math.floor(lockedHands * 0.5));
+              state.allocatedHands = lockedHands;
+              state.allocatedShares = lockedHands * 100;
+              state.allocatedCost = state.allocatedShares * state.costPrice;
+              state.origHands = lockedHands;
+              state.plannedSoldHands = planSold;
+              state.plannedRemainHands = Math.max(0, lockedHands - planSold);
+              state.soldHands = 0;
+              state.soldShares = 0;
             }
-          } else if (cand.isSellToday) {
-            if (!isSettled) {
-              cand.origHands = cand.allocatedHands;
-              cand.plannedSoldHands = cand.allocatedHands;
-              cand.soldHands = 0;
-              cand.soldShares = 0;
-              cand.settleVal = 0;
-              cand.realizedProfit = 0;
-            }
+          } else {
+            state.allocatedHands = lockedHands;
+            state.allocatedShares = lockedHands * 100;
+            state.allocatedCost = state.allocatedShares * state.costPrice;
           }
-        });
 
-        // 统计市值与盈亏
-        activeCandidates.forEach(cand => {
-          const mVal = cand.allocatedShares * cand.curPrice;
-          const holdPnl = mVal - cand.allocatedCost;
-          const totalStockPnl = holdPnl + (cand.realizedProfit || 0);
-          const totalStockCost = cand.allocatedCost + ((cand.soldShares || 0) * cand.costPrice);
-          const pnlPct = totalStockCost > 0 ? (totalStockPnl / totalStockCost * 100) : 0;
-          const prevClose = (cand.prevClose && cand.prevClose > 0)
-            ? cand.prevClose
-            : (cand.item && cand.item.prev_close > 0 ? cand.item.prev_close : (cand.item && cand.item.current ? (cand.item.current - (cand.item.change || 0)) : cand.costPrice));
-          const sellPrice = (cand.item && cand.item.high > 0) ? cand.item.high : cand.curPrice;
-          const todayPnl = cand.isBuyToday
-            ? ((cand.curPrice - cand.costPrice) * cand.allocatedShares)
-            : ((cand.curPrice - prevClose) * cand.allocatedShares + (cand.isS3Today && isSettled ? ((sellPrice - prevClose) * (cand.soldShares || 0)) : 0));
-          const todayPct = prevClose > 0 ? ((cand.curPrice - prevClose) / prevClose * 100) : (cand.item ? (cand.item.pct_change || 0) : 0);
+          state.isLockedHolding = true;
+          oldHoldingCost += state.allocatedCost;
+          activeCandidates.push(state);
+        } else if (state.isSellToday) {
+          let origHands = 0;
+          if (state.recordedPos && state.recordedPos.hands > 0) {
+            origHands = state.recordedPos.hands;
+          } else {
+            origHands = Math.max(1, Math.round(1500 / (state.costPrice * 100)));
+          }
 
-          cand.marketVal = mVal;
-          cand.pnl = totalStockPnl;
-          cand.pnlPct = pnlPct;
-          cand.todayPnl = todayPnl;
-          cand.todayPct = todayPct;
-          cand.prevClose = prevClose;
-
-          totalPositionMarketVal += mVal;
-          totalPositionCost += cand.allocatedCost;
-          totalTodayPnl += todayPnl;
-        });
-      }
-
-      // 14:50 之后卖出清仓回款
-      if (isSettled) {
-        itemStates.forEach(state => {
-          if (state.isSellToday) {
-            const sellPrice = (state.item.high > 0) ? state.item.high : state.curPrice;
-            const estPortion = Math.min(0.20, Math.max(0.10, state.weight / 25));
-            const singleEstBudget = Math.max(state.costPrice * 100, totalPosCapital * estPortion);
-            const calc = calculateSharesAndAmount(singleEstBudget, state.costPrice);
-            let soldHands = Math.max(1, calc.hands);
-            if (state.item && state.item.has_s3_holding) {
-              soldHands = Math.max(1, Math.floor(soldHands * 0.5));
-            }
-
+          const sellPrice = (state.item && state.item.high > 0) ? state.item.high : state.curPrice;
+          if (isSettled) {
             state.allocatedHands = 0;
             state.allocatedShares = 0;
-            state.soldHands = soldHands;
-            state.soldShares = soldHands * 100;
             state.allocatedCost = 0;
+            state.soldHands = origHands;
+            state.soldShares = origHands * 100;
             const cost = state.soldShares * state.costPrice;
             const settleVal = state.soldShares * sellPrice;
             const profit = settleVal - cost;
+            state.settleVal = settleVal;
+            state.realizedProfit = profit;
+            state.profit = profit;
+
+            totalSettleCash += settleVal;
+            totalClosedProfit += profit;
+          } else {
+            state.allocatedHands = origHands;
+            state.allocatedShares = origHands * 100;
+            state.allocatedCost = state.allocatedShares * state.costPrice;
+            state.origHands = origHands;
+            state.plannedSoldHands = origHands;
+            state.soldHands = 0;
+            state.soldShares = 0;
+            oldHoldingCost += state.allocatedCost;
+            activeCandidates.push(state);
+          }
+        }
+      });
+
+      // 阶段二：新买入标的仅消耗【剩余可用现金】
+      const availableCashForNewBuys = Math.max(0, currentAvailableCash - oldHoldingCost + totalSettleCash);
+      const buyCandidates = itemStates.filter(s => s.isBuyToday);
+
+      if (buyCandidates.length > 0) {
+        if (isSettled) {
+          const totalBuyWeight = buyCandidates.reduce((acc, c) => acc + c.weight, 0);
+          let remainCashForBuys = availableCashForNewBuys;
+
+          buyCandidates.forEach(cand => {
+            const portion = totalBuyWeight > 0 ? (cand.weight / totalBuyWeight) : (1 / buyCandidates.length);
+            const targetBudget = availableCashForNewBuys * portion;
+            const hands = Math.floor(targetBudget / cand.costPrice / 100);
+            if (hands >= 1 && remainCashForBuys >= (hands * 100 * cand.costPrice)) {
+              cand.allocatedHands = hands;
+              cand.allocatedShares = hands * 100;
+              cand.allocatedCost = cand.allocatedShares * cand.costPrice;
+              remainCashForBuys -= cand.allocatedCost;
+            } else {
+              cand.allocatedHands = 0;
+              cand.allocatedShares = 0;
+              cand.allocatedCost = 0;
+              cand.insufficientCash = true;
+              cand.plannedHands = Math.max(1, Math.round(targetBudget / cand.costPrice / 100));
+            }
+          });
+
+          buyCandidates.sort((a, b) => b.weight - a.weight);
+          buyCandidates.forEach(cand => {
+            const oneHandCost = cand.costPrice * 100;
+            if (remainCashForBuys >= oneHandCost) {
+              const extraHands = Math.floor(remainCashForBuys / oneHandCost);
+              if (extraHands > 0) {
+                cand.allocatedHands += extraHands;
+                cand.allocatedShares = cand.allocatedHands * 100;
+                const extraCost = extraHands * 100 * cand.costPrice;
+                cand.allocatedCost += extraCost;
+                remainCashForBuys -= extraCost;
+                cand.insufficientCash = false;
+              }
+            }
+          });
+
+          buyCandidates.forEach(cand => {
+            if (cand.allocatedHands > 0) {
+              activeCandidates.push(cand);
+              if (!cand.hasExistingHolding) {
+                this.setHolding(cand.sym, cand.name || cand.sym, cand.allocatedHands, cand.costPrice);
+              }
+            }
+          });
+        } else {
+          buyCandidates.forEach(cand => {
+            const estPortion = Math.min(0.35, Math.max(0.10, cand.weight / 15));
+            const estBudget = Math.max(cand.costPrice * 100, (availableCashForNewBuys > 0 ? availableCashForNewBuys : currentAvailableCash * 0.2) * estPortion);
+            const calc = calculateSharesAndAmount(estBudget, cand.costPrice);
+            cand.plannedHands = Math.max(1, calc.hands);
+            cand.plannedShares = cand.plannedHands * 100;
+            cand.allocatedHands = 0;
+            cand.allocatedShares = 0;
+            cand.allocatedCost = 0;
+            cand.marketVal = 0;
+            if (availableCashForNewBuys < (cand.costPrice * 100)) {
+              cand.insufficientCash = true;
+            }
+          });
+        }
+      }
+
+      // 阶段三：统计市值与盈亏
+      activeCandidates.forEach(cand => {
+        const mVal = cand.allocatedShares * cand.curPrice;
+        const holdPnl = mVal - cand.allocatedCost;
+        const totalStockPnl = holdPnl + (cand.realizedProfit || 0);
+        const totalStockCost = cand.allocatedCost + ((cand.soldShares || 0) * cand.costPrice);
+        const pnlPct = totalStockCost > 0 ? (totalStockPnl / totalStockCost * 100) : 0;
+        const prevClose = (cand.prevClose && cand.prevClose > 0)
+          ? cand.prevClose
+          : (cand.item && cand.item.prev_close > 0 ? cand.item.prev_close : (cand.item && cand.item.current ? (cand.item.current - (cand.item.change || 0)) : cand.costPrice));
+        const sellPrice = (cand.item && cand.item.high > 0) ? cand.item.high : cand.curPrice;
+        const todayPnl = cand.isBuyToday
+          ? ((cand.curPrice - cand.costPrice) * cand.allocatedShares)
+          : ((cand.curPrice - prevClose) * cand.allocatedShares + (cand.isS3Today && isSettled ? ((sellPrice - prevClose) * (cand.soldShares || 0)) : 0));
+        const todayPct = prevClose > 0 ? ((cand.curPrice - prevClose) / prevClose * 100) : (cand.item ? (cand.item.pct_change || 0) : 0);
+
+        cand.marketVal = mVal;
+        cand.pnl = totalStockPnl;
+        cand.pnlPct = pnlPct;
+        cand.todayPnl = todayPnl;
+        cand.todayPct = todayPct;
+        cand.prevClose = prevClose;
+
+        totalPositionMarketVal += mVal;
+        totalPositionCost += cand.allocatedCost;
+        totalTodayPnl += todayPnl;
+      });
+
+      if (isSettled) {
+        itemStates.forEach(state => {
+          if (state.isSellToday && state.soldShares > 0) {
+            const sellPrice = (state.item && state.item.high > 0) ? state.item.high : state.curPrice;
             const prevClose = (state.prevClose && state.prevClose > 0)
               ? state.prevClose
               : (state.item && state.item.prev_close > 0 ? state.item.prev_close : (state.curPrice));
             const todaySoldPnl = (sellPrice - prevClose) * state.soldShares;
             const todayPct = prevClose > 0 ? ((sellPrice - prevClose) / prevClose * 100) : (state.item ? (state.item.pct_change || 0) : 0);
 
-            state.settleVal = settleVal;
-            state.profit = profit;
-            state.pnl = profit;
-            state.pnlPct = cost > 0 ? (profit / cost * 100) : 0;
             state.todayPnl = todaySoldPnl;
             state.todayPct = todayPct;
             state.prevClose = prevClose;
 
-            totalSettleCash += settleVal;
-            totalClosedProfit += profit;
             totalTodayPnl += todaySoldPnl;
-          }
-        });
-      } else {
-        itemStates.forEach(state => {
-          if (state.isBuyToday) {
-            const estPortion = Math.min(0.20, Math.max(0.10, state.weight / 25));
-            const singleEstBudget = Math.max(state.costPrice * 100, totalPosCapital * estPortion);
-            const calc = calculateSharesAndAmount(singleEstBudget, state.costPrice);
-            state.plannedHands = Math.max(1, calc.hands);
-            state.plannedShares = state.plannedHands * 100;
-            state.allocatedHands = 0;
-            state.allocatedShares = 0;
-            state.allocatedCost = 0;
-            state.marketVal = 0;
           }
         });
       }
 
-      // 用户自定持仓处理
-      const customPositions = portData.positions || {};
-      let customPositionsCost = 0;
-      Object.keys(customPositions).forEach(sym => {
-        const p = customPositions[sym];
-        const clean = sym.replace(/^(sh|sz)/i, '').toLowerCase();
-        let poolItem = pool.find(w => (w.symbol || '').toLowerCase() === sym.toLowerCase() || (w.code || '').toLowerCase() === clean);
-        const curPrice = poolItem ? poolItem.current : (p.cost_price || 1.0);
-        const prevClose = poolItem ? (poolItem.prev_close || curPrice) : curPrice;
-        const mVal = p.hands * 100 * curPrice;
-        const cost = p.hands * 100 * (p.cost_price || curPrice);
-        const pnl = mVal - cost;
-        const pnlPct = cost > 0 ? (pnl / cost * 100) : 0;
-        const todayPnl = (curPrice - prevClose) * p.hands * 100;
-        const todayPct = prevClose > 0 ? ((curPrice - prevClose) / prevClose * 100) : 0;
-
-        const existing = activeCandidates.find(c => c.sym.toLowerCase() === sym.toLowerCase() || c.itemCodeClean === clean);
-        if (!existing) {
-          const customObj = {
-            sym,
-            itemCodeClean: clean,
-            name: p.name || sym,
-            code: p.code || clean,
-            sector: '自定持仓',
-            tag: '自定持仓',
-            tag_color: '#3b82f6',
-            reason_summary: '手动设定的持仓标的',
-            curPrice,
-            prevClose,
-            costPrice: p.cost_price,
-            allocatedHands: p.hands,
-            allocatedShares: p.hands * 100,
-            allocatedCost: cost,
-            marketVal: mVal,
-            pnl,
-            pnlPct,
-            todayPnl,
-            todayPct,
-            isCustom: true
-          };
-          activeCandidates.push(customObj);
-          totalPositionMarketVal += mVal;
-          totalPositionCost += cost;
-          customPositionsCost += cost;
-          totalTodayPnl += todayPnl;
-        }
-      });
-
-      // 实时可用现金 = 账户总资金 - 模拟买入持仓支出 + 今日卖出结算回款 (买入成交扣体现金，卖出回款划入现金)
-      // 账户总资产严格保持平衡：持仓总市值 + 实时可用现金，买入绝不凭空膨胀
-      const poolPositionCost = Math.max(0, totalPositionCost - customPositionsCost);
-      const realAvailableCash = Math.max(0, currentAvailableCash - poolPositionCost + totalSettleCash);
+      // 阶段四：资产守恒与现金流
+      const realAvailableCash = Math.max(0, currentAvailableCash - totalPositionCost + totalSettleCash);
       const currentTotalAssets = realAvailableCash + totalPositionMarketVal;
-      const effectiveTotalCapital = Math.max(currentAvailableCash + customPositionsCost, totalPositionCost + realAvailableCash - totalClosedProfit);
+      const effectiveTotalCapital = Math.max(currentAvailableCash, totalPositionCost + realAvailableCash - totalClosedProfit);
       const totalPnl = (totalPositionMarketVal - totalPositionCost) + totalClosedProfit;
       const totalPnlPct = effectiveTotalCapital > 0 ? (totalPnl / effectiveTotalCapital * 100) : (totalPositionCost > 0 ? (totalPnl / totalPositionCost * 100) : 0);
 
@@ -1306,6 +1385,7 @@ const MobileQuantEngine = (function() {
         totalCapital: effectiveTotalCapital,
         availableCash: currentAvailableCash,
         realAvailableCash,
+        availableCashForNewBuys,
         currentTotalAssets,
         totalPositionMarketVal,
         totalPositionCost,

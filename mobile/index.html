@@ -2229,9 +2229,16 @@
             badgeHtml = `<span class="card-sector" style="color:#d97706; background:rgba(245,158,11,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🟡 50%底仓持仓中</span>`;
           } else if (item.isBuyToday) {
             if (isSettled) {
-              badgeHtml = `<span class="card-sector" style="color:#dc2626; background:rgba(239,68,68,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🔴 尾盘买入 (已成交${item.allocatedHands}手)</span>`;
+              if (item.allocatedHands > 0) {
+                badgeHtml = `<span class="card-sector" style="color:#dc2626; background:rgba(239,68,68,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🔴 尾盘买入 (已成交${item.allocatedHands}手)</span>`;
+              } else {
+                badgeHtml = `<span class="card-sector" style="color:#d97706; background:rgba(245,158,11,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">⚠️ 待入金买入 (计划买${item.plannedHands || 1}手·现金不足)</span>`;
+                handsDetail = `计划${item.plannedHands || 1}手 (可用现金不足)`;
+                settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-warning);">可用现金不足，充值后自动建仓</div>`;
+              }
             } else {
-              badgeHtml = `<span class="card-sector" style="color:#dc2626; background:rgba(239,68,68,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🔴 待14:50买入 (计划买${item.plannedHands}手)</span>`;
+              const cashSuffix = item.insufficientCash ? '·现金不足' : '';
+              badgeHtml = `<span class="card-sector" style="color:#dc2626; background:rgba(239,68,68,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🔴 待14:50买入 (计划买${item.plannedHands}手${cashSuffix})</span>`;
               settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-warning);">(待14:50建仓)</div>`;
             }
           } else if (item.isSellToday) {
