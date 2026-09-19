@@ -87,6 +87,98 @@ class StockDataProvider:
         except Exception as e:
             print(f"Failed to save history pnl cache to disk: {e}")
 
+    def _get_appdata_dir(self):
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            config_dir = os.path.join(appdata, "StockMaster")
+            try:
+                os.makedirs(config_dir, exist_ok=True)
+                return config_dir
+            except Exception:
+                pass
+        return None
+
+    def _get_appdata_watch_pool_cache_path(self):
+        config_dir = self._get_appdata_dir()
+        if config_dir:
+            return os.path.join(config_dir, "watch_pool_cache.json")
+        return None
+
+    def _get_appdata_kline_cache_path(self, symbol):
+        config_dir = self._get_appdata_dir()
+        if config_dir:
+            return os.path.join(config_dir, f"kline_cache_{symbol}.json")
+        return None
+
+    def _load_disk_watch_pool_cache(self):
+        try:
+            path = self._get_appdata_watch_pool_cache_path()
+            if path and os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and len(data) >= 15:
+                        return data
+        except Exception as e:
+            print(f"Failed to load watch pool cache from disk: {e}")
+        
+        # 尝试读取预置 assets/initial_watch_pool.json
+        try:
+            base_dir = os.path.abspath(os.path.dirname(__file__))
+            init_path = os.path.join(base_dir, "assets", "initial_watch_pool.json")
+            if os.path.exists(init_path):
+                with open(init_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and len(data) >= 15:
+                        return data
+        except Exception as e:
+            pass
+        return None
+
+    def _save_disk_watch_pool_cache(self, data):
+        try:
+            path = self._get_appdata_watch_pool_cache_path()
+            if path and isinstance(data, list):
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"Failed to save watch pool cache to disk: {e}")
+
+    def _load_disk_kline_cache(self, symbol, limit=600):
+        symbol = self.normalize_symbol(symbol)
+        try:
+            path = self._get_appdata_kline_cache_path(symbol)
+            if path and os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict) and "klines" in data and len(data["klines"]) > 50:
+                        return data
+        except Exception as e:
+            print(f"Failed to load kline cache from disk: {e}")
+
+        # 如果是 sh000001 且本地尚无缓存，读取预置 assets/initial_sh000001.json 极速首屏直出
+        if symbol == "sh000001":
+            try:
+                base_dir = os.path.abspath(os.path.dirname(__file__))
+                init_path = os.path.join(base_dir, "assets", "initial_sh000001.json")
+                if os.path.exists(init_path):
+                    with open(init_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if isinstance(data, dict) and "klines" in data and len(data["klines"]) > 50:
+                            return data
+            except Exception as e:
+                pass
+        return None
+
+    def _save_disk_kline_cache(self, symbol, data):
+        symbol = self.normalize_symbol(symbol)
+        try:
+            path = self._get_appdata_kline_cache_path(symbol)
+            if path and isinstance(data, dict):
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"Failed to save kline cache to disk: {e}")
+
     def _prewarm_history_analysis(self):
         try:
             time.sleep(0.5)
@@ -263,6 +355,28 @@ class StockDataProvider:
             if now_ts - last_ts < 180.0:
                 return self._daily_klines_cache[cache_key]
 
+        # 1. 磁盘缓存极速直出 (0.001s)，首屏绝无白屏
+        disk_data = self._load_disk_kline_cache(symbol, limit)
+        if disk_data and disk_data.get("klines") and len(disk_data["klines"]) > 50:
+            if not hasattr(self, '_daily_klines_cache'):
+                self._daily_klines_cache = {}
+                self._daily_klines_cache_time = {}
+            if not hasattr(self, '_kline_bg_refresh_time'):
+                self._kline_bg_refresh_time = {}
+            self._daily_klines_cache[cache_key] = disk_data
+            self._daily_klines_cache_time[cache_key] = now_ts
+            # 60秒节流：仅在缓存超过60秒时在后台静默刷新
+            if now_ts - self._kline_bg_refresh_time.get(cache_key, 0) > 60.0:
+                self._kline_bg_refresh_time[cache_key] = now_ts
+                threading.Thread(target=self._fetch_and_calculate_daily_klines, args=(symbol, limit), daemon=True).start()
+            return disk_data
+
+        return self._fetch_and_calculate_daily_klines(symbol, limit)
+
+    def _fetch_and_calculate_daily_klines(self, symbol="sh000001", limit=600):
+        symbol = self.normalize_symbol(symbol)
+        cache_key = (symbol, limit)
+
         urls = [
             f"https://ifzq.gtimg.cn/appstock/app/newfqkline/get?param={symbol},day,,,{limit},qfq",
             f"http://proxy.finance.qq.com/ifzqgtimg/appstock/app/newfqkline/get?param={symbol},day,,,{limit},qfq",
@@ -336,9 +450,12 @@ class StockDataProvider:
                 "name": name,
                 "klines": klines
             }
-            if hasattr(self, '_daily_klines_cache'):
-                self._daily_klines_cache[cache_key] = res_data
-                self._daily_klines_cache_time[cache_key] = time.time()
+            if not hasattr(self, '_daily_klines_cache'):
+                self._daily_klines_cache = {}
+                self._daily_klines_cache_time = {}
+            self._daily_klines_cache[cache_key] = res_data
+            self._daily_klines_cache_time[cache_key] = time.time()
+            self._save_disk_kline_cache(symbol, res_data)
             return res_data
         except Exception as e:
             print(f"Error fetching daily klines for {symbol}: {e}")
@@ -890,6 +1007,28 @@ class StockDataProvider:
             if now_ts - last_ts < 12.0:
                 return self._watch_pool_dict_cache[cache_key]
 
+        # 1. 磁盘缓存极速直出 (0.001s)，首屏绝无卡顿与重排跳变
+        disk_pool = self._load_disk_watch_pool_cache()
+        if disk_pool and len(disk_pool) >= 15:
+            if not hasattr(self, "_watch_pool_dict_cache"):
+                self._watch_pool_dict_cache = {}
+                self._watch_pool_dict_cache_time = {}
+            if not hasattr(self, "_watch_pool_bg_scan_time"):
+                self._watch_pool_bg_scan_time = {}
+            self._watch_pool_dict_cache[cache_key] = disk_pool
+            self._watch_pool_dict_cache_time[cache_key] = now_ts
+            self._watch_pool_cache = disk_pool
+            self._watch_pool_cache_time = now_ts
+            # 60秒节流：仅在缓存超过60秒时在后台异步全量指标扫描与更新
+            if now_ts - self._watch_pool_bg_scan_time.get(cache_key, 0) > 60.0:
+                self._watch_pool_bg_scan_time[cache_key] = now_ts
+                threading.Thread(target=self._scan_and_cache_watch_pool, args=(sector_etfs, cache_key), daemon=True).start()
+            return disk_pool
+
+        return self._scan_and_cache_watch_pool(sector_etfs, cache_key)
+
+    def _scan_and_cache_watch_pool(self, sector_etfs, cache_key):
+
         def _process_item(item):
             code = item["code"]
             try:
@@ -1129,6 +1268,7 @@ class StockDataProvider:
         self._watch_pool_dict_cache_time[cache_key] = time.time()
         self._watch_pool_cache = pool
         self._watch_pool_cache_time = time.time()
+        self._save_disk_watch_pool_cache(pool)
 
         # 后台守护线程极速预热全周期历史收益分析，用户点击历史分析时 0 秒瞬时呈现
         try:
