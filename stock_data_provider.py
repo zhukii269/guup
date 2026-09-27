@@ -352,26 +352,31 @@ class StockDataProvider:
         cache_key = (symbol, limit)
         if hasattr(self, '_daily_klines_cache') and cache_key in self._daily_klines_cache:
             last_ts = self._daily_klines_cache_time.get(cache_key, 0)
-            if now_ts - last_ts < 180.0:
+            if now_ts - last_ts < 30.0:
                 return self._daily_klines_cache[cache_key]
 
-        # 1. 磁盘缓存极速直出 (0.001s)，首屏绝无白屏
+        # 1. 优先尝试从网络拉取最新真实 K 线行情
+        try:
+            res = self._fetch_and_calculate_daily_klines(symbol, limit)
+            if res and res.get("klines") and len(res["klines"]) > 0:
+                return res
+        except Exception as e:
+            print(f"Fetch daily klines exception for {symbol}: {e}")
+
+        # 2. 网络异常或离线断网时，从本地磁盘缓存安全恢复兜底
         disk_data = self._load_disk_kline_cache(symbol, limit)
         if disk_data and disk_data.get("klines") and len(disk_data["klines"]) > 50:
             if not hasattr(self, '_daily_klines_cache'):
                 self._daily_klines_cache = {}
                 self._daily_klines_cache_time = {}
-            if not hasattr(self, '_kline_bg_refresh_time'):
-                self._kline_bg_refresh_time = {}
             self._daily_klines_cache[cache_key] = disk_data
             self._daily_klines_cache_time[cache_key] = now_ts
-            # 60秒节流：仅在缓存超过60秒时在后台静默刷新
-            if now_ts - self._kline_bg_refresh_time.get(cache_key, 0) > 60.0:
-                self._kline_bg_refresh_time[cache_key] = now_ts
-                threading.Thread(target=self._fetch_and_calculate_daily_klines, args=(symbol, limit), daemon=True).start()
             return disk_data
 
-        return self._fetch_and_calculate_daily_klines(symbol, limit)
+        if hasattr(self, '_daily_klines_cache') and cache_key in self._daily_klines_cache:
+            return self._daily_klines_cache[cache_key]
+
+        return {"symbol": symbol, "code": symbol[2:], "name": "", "klines": []}
 
     def _fetch_and_calculate_daily_klines(self, symbol="sh000001", limit=600):
         symbol = self.normalize_symbol(symbol)
@@ -1002,30 +1007,20 @@ class StockDataProvider:
 
         cache_key = tuple(sorted([x.get("code", "") for x in sector_etfs]))
         now_ts = time.time()
+        # 内存短缓存 (6秒)，避免在极短时间内多次触发并发扫描
         if hasattr(self, "_watch_pool_dict_cache") and cache_key in self._watch_pool_dict_cache:
             last_ts = self._watch_pool_dict_cache_time.get(cache_key, 0)
-            if now_ts - last_ts < 12.0:
+            if now_ts - last_ts < 6.0:
                 return self._watch_pool_dict_cache[cache_key]
 
-        # 1. 磁盘缓存极速直出 (0.001s)，首屏绝无卡顿与重排跳变
-        disk_pool = self._load_disk_watch_pool_cache()
-        if disk_pool and len(disk_pool) >= 15:
-            if not hasattr(self, "_watch_pool_dict_cache"):
-                self._watch_pool_dict_cache = {}
-                self._watch_pool_dict_cache_time = {}
-            if not hasattr(self, "_watch_pool_bg_scan_time"):
-                self._watch_pool_bg_scan_time = {}
-            self._watch_pool_dict_cache[cache_key] = disk_pool
-            self._watch_pool_dict_cache_time[cache_key] = now_ts
-            self._watch_pool_cache = disk_pool
-            self._watch_pool_cache_time = now_ts
-            # 60秒节流：仅在缓存超过60秒时在后台异步全量指标扫描与更新
-            if now_ts - self._watch_pool_bg_scan_time.get(cache_key, 0) > 60.0:
-                self._watch_pool_bg_scan_time[cache_key] = now_ts
-                threading.Thread(target=self._scan_and_cache_watch_pool, args=(sector_etfs, cache_key), daemon=True).start()
-            return disk_pool
-
-        return self._scan_and_cache_watch_pool(sector_etfs, cache_key)
+        try:
+            return self._scan_and_cache_watch_pool(sector_etfs, cache_key)
+        except Exception as e:
+            print(f"Error scanning watch pool: {e}")
+            disk_pool = self._load_disk_watch_pool_cache()
+            if disk_pool and len(disk_pool) >= 15:
+                return disk_pool
+            return []
 
     def _scan_and_cache_watch_pool(self, sector_etfs, cache_key):
 
