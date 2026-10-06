@@ -4768,17 +4768,20 @@
                   { xAxis: klineData[Math.max(rangeStatStartIdx, rangeStatEndIdx)].date, name: '终止: ' + klineData[Math.max(rangeStatStartIdx, rangeStatEndIdx)].date }
                 );
               }
-              if (allocItem && (allocItem.isBuyToday || allocItem.isHolding || allocItem.isS3Today) && allocItem.costPrice > 0 && allocItem.allocatedHands > 0) {
-                const lastClose = latestBar ? latestBar.close : allocItem.costPrice;
-                const pnlPct = ((lastClose - allocItem.costPrice) / allocItem.costPrice * 100);
+              const key = (currentSymbol || '').toLowerCase().replace(/^(sh|sz)/i, '');
+              const watchItem = (currentWatchPool || []).find(x => (x.code || x.symbol || '').toLowerCase().replace(/^(sh|sz)/i, '') === key);
+              const refCostPrice = watchItem?.buy_cost_price || watchItem?.cost_price || 0;
+              if (refCostPrice > 0) {
+                const lastClose = latestBar ? latestBar.close : refCostPrice;
+                const pnlPct = ((lastClose - refCostPrice) / refCostPrice * 100);
                 const pnlSign = pnlPct >= 0 ? '+' : '';
                 lines.push({
-                  yAxis: allocItem.costPrice,
+                  yAxis: refCostPrice,
                   lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
                   label: {
                     show: true,
                     position: 'insideEndTop',
-                    formatter: `💼 持仓成本: ${allocItem.costPrice.toFixed(3)} (${allocItem.allocatedHands}手 | ${pnlSign}${pnlPct.toFixed(2)}%)`,
+                    formatter: `参考成本: ${refCostPrice.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
                     fontSize: 10,
                     fontWeight: 'bold',
                     color: '#f59e0b',
