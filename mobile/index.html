@@ -161,13 +161,6 @@
       -webkit-overflow-scrolling: touch;
     }
 
-    #view-portfolio {
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 14px 16px 20px 16px;
-      gap: 14px;
-    }
-
     /* =========================================================================
        Tab 1: 观察池页面
        ========================================================================= */
@@ -467,151 +460,6 @@
       font-family: monospace;
     }
 
-    /* =========================================================================
-       Tab 3: 模拟持仓页面
-       ========================================================================= */
-
-    .asset-card {
-      background: linear-gradient(135deg, #1e3a8a, #1e293b);
-      border: 1px solid #3b82f6;
-      border-radius: 16px;
-      padding: 16px 18px;
-      color: #ffffff;
-      box-shadow: 0 4px 20px rgba(30, 58, 138, 0.3);
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .asset-card-title {
-      font-size: 12px;
-      color: #93c5fd;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-    .asset-total {
-      font-size: 30px;
-      font-weight: 900;
-      font-family: monospace;
-      letter-spacing: -0.5px;
-    }
-    .asset-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 6px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255,255,255,0.12);
-    }
-    .asset-sub-val {
-      font-size: 14px;
-      font-weight: 800;
-      font-family: monospace;
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .card-amount-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.05);
-      padding: 8px 12px;
-      border-radius: 10px;
-      margin: 8px 0 6px 0;
-      border: 1px solid rgba(255, 255, 255, 0.07);
-    }
-    body.light-theme .card-amount-row {
-      background: rgba(0, 0, 0, 0.03);
-      border-color: rgba(0, 0, 0, 0.06);
-    }
-    .card-pnl-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin: 8px 0;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      padding: 8px 12px;
-    }
-    body.light-theme .card-pnl-grid {
-      background: rgba(0, 0, 0, 0.03);
-      border-color: rgba(0, 0, 0, 0.06);
-    }
-    .amount-left {
-      display: flex;
-      flex-direction: column;
-    }
-    .amount-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-sub);
-    }
-    .amount-hands {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-    .amount-right {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-    }
-    .amount-val {
-      font-size: 16px;
-      font-weight: 900;
-      font-family: monospace;
-      color: var(--text-main);
-    }
-    .card-settle-tag {
-      font-size: 10.5px;
-      font-weight: 700;
-      margin-top: 2px;
-    }
-
-    .asset-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 4px;
-    }
-    .btn-action {
-      flex: 1;
-      padding: 8px 0;
-      border-radius: 10px;
-      font-size: 12.5px;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      transition: all 0.2s;
-    }
-    .btn-edit-cash {
-      background: #2563eb;
-      color: #fff;
-      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
-    }
-    .btn-edit-holdings {
-      background: rgba(59, 130, 246, 0.2);
-      color: #93c5fd;
-      border: 1px solid #3b82f6;
-    }
-    .btn-action:active {
-      transform: scale(0.96);
-    }
-
-    .section-title {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
     /* 底部导航栏 */
     nav.bottom-nav {
       flex-shrink: 0;
@@ -746,235 +594,6 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-
-    /* 通用操作弹窗 Modal & Sheet */
-    .action-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.65);
-      backdrop-filter: blur(4px);
-      z-index: 300;
-      display: none;
-      align-items: flex-end;
-      justify-content: center;
-    }
-    .action-modal.active {
-      display: flex;
-    }
-    .action-sheet {
-      width: 100%;
-      max-width: 500px;
-      background: var(--bg-card);
-      border-radius: 20px 20px 0 0;
-      padding: 18px 16px calc(20px + var(--safe-bottom)) 16px;
-      border-top: 1px solid var(--border-color);
-      box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
-      max-height: 85vh;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      animation: sheetSlideUp 0.25s ease-out;
-    }
-    @keyframes sheetSlideUp {
-      from { transform: translateY(100%); }
-      to { transform: translateY(0); }
-    }
-    .sheet-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .sheet-title {
-      font-size: 16px;
-      font-weight: 800;
-    }
-    .sheet-close {
-      background: none;
-      border: none;
-      font-size: 18px;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 4px;
-    }
-    .sheet-body {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .input-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-sub);
-    }
-    .input-wrap {
-      display: flex;
-      align-items: center;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 8px 12px;
-      gap: 6px;
-    }
-    .currency-prefix {
-      font-size: 16px;
-      font-weight: 800;
-      color: var(--color-primary);
-    }
-    .modal-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: var(--text-main);
-      font-size: 16px;
-      font-weight: 800;
-      font-family: monospace;
-    }
-    .modal-select {
-      width: 100%;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 8px 10px;
-      color: var(--text-main);
-      font-size: 13px;
-      font-weight: 600;
-      outline: none;
-    }
-    .quick-cash-row {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-    }
-    .quick-pill {
-      flex: 1;
-      padding: 6px 0;
-      text-align: center;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text-sub);
-      cursor: pointer;
-    }
-    .quick-pill:active {
-      background: var(--color-primary);
-      color: #fff;
-    }
-    .sheet-tip {
-      font-size: 11px;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-    .sheet-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 6px;
-    }
-    .sheet-btn {
-      flex: 1;
-      padding: 10px 0;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 800;
-      border: none;
-      cursor: pointer;
-      text-align: center;
-    }
-    .btn-primary {
-      background: var(--color-primary);
-      color: #fff;
-    }
-    .btn-secondary {
-      background: var(--bg-card-hover);
-      color: var(--text-main);
-      border: 1px solid var(--border-color);
-    }
-
-    /* 持仓修改表单与列表 */
-    .holding-form-box {
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .form-title {
-      font-size: 13px;
-      font-weight: 800;
-      color: var(--color-primary);
-    }
-    .form-row {
-      display: flex;
-      gap: 8px;
-    }
-    .form-item {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .sheet-subtitle {
-      font-size: 13px;
-      font-weight: 800;
-      color: var(--text-main);
-      margin-top: 4px;
-    }
-    .holding-manage-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    .manage-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-    }
-    .manage-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .manage-name {
-      font-size: 13px;
-      font-weight: 800;
-    }
-    .manage-sub {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-family: monospace;
-    }
-    .manage-del-btn {
-      padding: 4px 8px;
-      border-radius: 6px;
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
     /* 同花顺风格：左下角浮动平移与缩放工具栏 */
     .kline-float-tools {
       position: absolute;
@@ -1136,45 +755,7 @@
         </div>
       </div>
 
-      <!-- ======================================================= -->
-      <!-- TAB 3: 模拟持仓页面 -->
-      <!-- ======================================================= -->
-      <div class="view-page" id="view-portfolio">
-        <div class="asset-card">
-          <div class="asset-card-title">💼 模拟资金账户</div>
-          <div class="asset-total" id="pTotalCapital">¥100,000.00</div>
-          <div class="asset-grid">
-            <div>
-              <div class="stat-label" style="color:#93c5fd;">可用现金</div>
-              <div class="asset-sub-val" id="pAvailableCash">¥100,000.00</div>
-            </div>
-            <div>
-              <div class="stat-label" style="color:#93c5fd;">持仓市值</div>
-              <div class="asset-sub-val" id="pStockVal">¥0.00</div>
-            </div>
-            <div>
-              <div class="stat-label" style="color:#fcd34d;">持仓盈亏</div>
-              <div class="asset-sub-val" id="pTotalPnl" style="color:#fef08a;">+¥0.00</div>
-            </div>
-          </div>
-          <div class="asset-sub-bar" style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:#cbd5e1; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.15);">
-            <span>持仓收益率: <strong id="pTotalPnlPct" style="color:#fef08a; font-family:monospace;">+0.00%</strong></span>
-            <span>今日总盈亏: <strong id="pTodayPnl" style="color:#fef08a; font-family:monospace;">+¥0.00</strong></span>
-          </div>
-          <div class="asset-actions">
-            <button class="btn-action btn-edit-cash" id="btnEditCash" style="width:100%; font-size:13.5px; padding:10px 0;">💵 加入 / 提出现金</button>
-          </div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; margin-bottom:4px;">
-          <div class="section-title">📊 当前持仓标的</div>
-          <button id="btnOpenCustomHoldings" style="background:none; border:none; color:var(--color-primary); font-size:12px; cursor:pointer; font-weight:700;">➕ 自选标的自定持仓</button>
-        </div>
-        <div class="stock-list" id="portfolioList" style="padding:0;">
-          <!-- 动态持仓列表 -->
-        </div>
-      </div>
-    </main>
+      </main>
 
     <!-- 底部固定导航栏 -->
     <nav class="bottom-nav">
@@ -1185,10 +766,6 @@
       <div class="nav-item" data-tab="kline">
         <span class="nav-icon">📊</span>
         <span class="nav-label">日K线</span>
-      </div>
-      <div class="nav-item" data-tab="portfolio">
-        <span class="nav-icon">💼</span>
-        <span class="nav-label">模拟持仓</span>
       </div>
     </nav>
 
@@ -1206,93 +783,7 @@
       </div>
     </div>
 
-    <!-- 修改可用现金 Modal -->
-    <div class="action-modal" id="modalEditCash">
-      <div class="action-sheet">
-        <div class="sheet-header">
-          <span class="sheet-title">💵 加入 / 提出现金</span>
-          <button class="sheet-close" id="btnCloseEditCash">✕</button>
-        </div>
-        <div class="sheet-body">
-          <div class="input-group">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <label class="input-label" style="margin-bottom:0;">调整或设定现金</label>
-              <span id="cashCurValHint" style="font-size:11.5px; color:var(--text-sub);">当前现金: ¥100,000</span>
-            </div>
-            <div class="input-wrap" style="margin-top:6px;">
-              <span class="currency-prefix">¥</span>
-              <input type="text" class="modal-input" id="inputCashAmount" placeholder="如 800(加入)、-800(扣减) 或 =5036(设定)">
-            </div>
-            <div id="cashPreviewText" style="font-size:11.5px; color:var(--color-primary); margin-top:5px; font-weight:700; min-height:16px;"></div>
-          </div>
-          <div style="font-size:11.5px; color:var(--text-sub); margin-top:8px; font-weight:700;">快捷增减现金:</div>
-          <div class="quick-cash-row" style="margin-top:4px;">
-            <button class="quick-pill cash-pill" data-val="+800">+800</button>
-            <button class="quick-pill cash-pill" data-val="-800">-800</button>
-            <button class="quick-pill cash-pill" data-val="+5000">+5000</button>
-            <button class="quick-pill cash-pill" data-val="+10000">+1万</button>
-            <button class="quick-pill cash-pill" data-val="+50000">+5万</button>
-          </div>
-          <div style="font-size:11.5px; color:var(--text-sub); margin-top:10px; font-weight:700;">直接设定现金总额 (持仓预算自动同步):</div>
-          <div class="quick-cash-row" style="margin-top:4px;">
-            <button class="quick-pill cash-set-pill" data-set="5036">5036</button>
-            <button class="quick-pill cash-set-pill" data-set="50000">5万</button>
-            <button class="quick-pill cash-set-pill" data-set="100000">10万</button>
-            <button class="quick-pill cash-set-pill" data-set="200000">20万</button>
-          </div>
-          <div class="sheet-actions" style="margin-top:14px;">
-            <button class="sheet-btn btn-secondary" id="btnCancelEditCash">取消</button>
-            <button class="sheet-btn btn-primary" id="btnConfirmEditCash">保存修改</button>
-          </div>
-        </div>
       </div>
-    </div>
-
-    <!-- 自选标的自定持仓 Modal -->
-    <div class="action-modal" id="modalEditHoldings">
-      <div class="action-sheet">
-        <div class="sheet-header">
-          <span class="sheet-title">📋 自选标的自定持仓管理</span>
-          <button class="sheet-close" id="btnCloseEditHoldings">✕</button>
-        </div>
-        <div class="sheet-body">
-          <div class="holding-form-box">
-            <div class="form-title" id="holdingFormTitle">➕ 自选标的自定持仓 (可选)</div>
-            <div class="form-item">
-              <label class="input-label">选择ETF标的</label>
-              <select class="modal-select" id="selectHoldingSymbol">
-                <!-- 动态填充 -->
-              </select>
-            </div>
-            <div class="form-row">
-              <div class="form-item" style="flex:1;">
-                <label class="input-label">持仓手数 (手)</label>
-                <div class="input-wrap">
-                  <input type="number" min="1" step="1" class="modal-input" id="inputHoldingHands" placeholder="如 10">
-                </div>
-              </div>
-              <div class="form-item" style="flex:1.2;">
-                <label class="input-label">成本均价 (元)</label>
-                <div class="input-wrap">
-                  <input type="number" step="0.001" class="modal-input" id="inputHoldingCost" placeholder="如 0.677">
-                </div>
-              </div>
-            </div>
-            <button class="sheet-btn btn-secondary" id="btnSaveHolding" style="margin-top:4px; border:1px solid var(--border-color);">保存该自选标的持仓</button>
-          </div>
-
-          <div class="sheet-subtitle" style="margin-top:10px; font-size:12px; color:var(--text-sub); font-weight:700;">📋 当前已设定的自定义持仓</div>
-          <div class="holding-manage-list" id="holdingManageList">
-            <!-- 动态渲染当前持仓项，带编辑和删除 -->
-          </div>
-
-          <div class="sheet-actions">
-            <button class="sheet-btn btn-secondary" id="btnDoneEditHoldings" style="width:100%;">完成并返回</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script>
     // =========================================================================
@@ -1310,9 +801,7 @@
       const dom = {
         viewWatchpool: document.getElementById('view-watchpool'),
         viewKline: document.getElementById('view-kline'),
-        viewPortfolio: document.getElementById('view-portfolio'),
         stockList: document.getElementById('stockListContainer'),
-        portfolioList: document.getElementById('portfolioList'),
         klineStockName: document.getElementById('klineStockName'),
         klineStockCode: document.getElementById('klineStockCode'),
         klineCursorDate: document.getElementById('klineCursorDate'),
@@ -1330,30 +819,6 @@
         statRange: document.getElementById('statRange'),
         statPctChg: document.getElementById('statPctChg'),
         statHiLo: document.getElementById('statHiLo'),
-        pTotalCapital: document.getElementById('pTotalCapital'),
-        pAvailableCash: document.getElementById('pAvailableCash'),
-        pStockVal: document.getElementById('pStockVal'),
-        pTotalPnl: document.getElementById('pTotalPnl'),
-        pTotalPnlPct: document.getElementById('pTotalPnlPct'),
-        pTodayPnl: document.getElementById('pTodayPnl'),
-        btnEditCash: document.getElementById('btnEditCash'),
-        btnOpenCustomHoldings: document.getElementById('btnOpenCustomHoldings'),
-        modalEditCash: document.getElementById('modalEditCash'),
-        btnCloseEditCash: document.getElementById('btnCloseEditCash'),
-        btnCancelEditCash: document.getElementById('btnCancelEditCash'),
-        btnConfirmEditCash: document.getElementById('btnConfirmEditCash'),
-        inputCashAmount: document.getElementById('inputCashAmount'),
-        cashCurValHint: document.getElementById('cashCurValHint'),
-        cashPreviewText: document.getElementById('cashPreviewText'),
-        modalEditHoldings: document.getElementById('modalEditHoldings'),
-        btnCloseEditHoldings: document.getElementById('btnCloseEditHoldings'),
-        btnDoneEditHoldings: document.getElementById('btnDoneEditHoldings'),
-        holdingFormTitle: document.getElementById('holdingFormTitle'),
-        selectHoldingSymbol: document.getElementById('selectHoldingSymbol'),
-        inputHoldingHands: document.getElementById('inputHoldingHands'),
-        inputHoldingCost: document.getElementById('inputHoldingCost'),
-        btnSaveHolding: document.getElementById('btnSaveHolding'),
-        holdingManageList: document.getElementById('holdingManageList'),
         searchModal: document.getElementById('searchModal'),
         searchInput: document.getElementById('searchInput'),
         searchResults: document.getElementById('searchResults'),
@@ -1398,7 +863,6 @@
         dom.navItems.forEach(i => i.classList.toggle('active', i.getAttribute('data-tab') === tab));
         dom.viewWatchpool.classList.toggle('active', tab === 'watchpool');
         dom.viewKline.classList.toggle('active', tab === 'kline');
-        dom.viewPortfolio.classList.toggle('active', tab === 'portfolio');
 
         if (tab === 'kline') {
           requestAnimationFrame(() => {
@@ -1410,8 +874,6 @@
               }
             }
           });
-        } else if (tab === 'portfolio') {
-          renderPortfolioView();
         }
       }
 
@@ -1430,9 +892,7 @@
         try {
           watchPoolData = await MobileQuantEngine.getWatchPool();
           renderWatchPoolCards();
-          if (currentTab === 'portfolio') {
-            renderPortfolioView();
-          }
+
         } catch (e) {
           console.error('Failed to load watch pool:', e);
         }
@@ -1698,19 +1158,13 @@
           }
         });
 
-        // 持仓成本参考线
+        // 参考成本线 (若观察池有买入参考价)
         const markLines = [];
-        const portData = MobileQuantEngine.PortfolioManager.getData();
         let costPrice = null;
-        const pos = (portData.positions || {})[currentSymbol];
-        if (pos && pos.cost_price > 0) {
-          costPrice = pos.cost_price;
-        } else {
-          const clean = (currentSymbol || '').toLowerCase().replace(/^(sh|sz)/i, '');
-          const poolItem = (watchPoolData || []).find(w => (w.symbol || '').toLowerCase() === (currentSymbol || '').toLowerCase() || (w.code || '').toLowerCase() === clean);
-          if (poolItem && (poolItem.buy_cost_price > 0 || poolItem.cost_price > 0)) {
-            costPrice = poolItem.buy_cost_price || poolItem.cost_price;
-          }
+        const clean = (currentSymbol || '').toLowerCase().replace(/^(sh|sz)/i, '');
+        const poolItem = (watchPoolData || []).find(w => (w.symbol || '').toLowerCase() === (currentSymbol || '').toLowerCase() || (w.code || '').toLowerCase() === clean);
+        if (poolItem && (poolItem.buy_cost_price > 0 || poolItem.cost_price > 0)) {
+          costPrice = poolItem.buy_cost_price || poolItem.cost_price;
         }
         if (costPrice && costPrice > 0) {
           const lastC = klines[klines.length - 1].close;
@@ -1722,14 +1176,14 @@
             label: {
               show: true,
               position: 'insideEndTop',
-              formatter: `💼 持仓成本: ${costPrice.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
+              formatter: `参考成本: ${costPrice.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
               fontSize: 9.5,
               fontWeight: 'bold',
               color: '#f59e0b',
               backgroundColor: isDark ? 'rgba(30, 41, 59, 0.92)' : 'rgba(254, 243, 199, 0.95)',
               borderColor: '#f59e0b',
               borderWidth: 1,
-              padding: [2, 4],
+              padding: [1, 4],
               borderRadius: 3
             }
           });
@@ -2120,522 +1574,6 @@
         }
       }
 
-      function isMobileSettlementAfter1450() {
-        const now = new Date();
-        const day = now.getDay();
-        const timeNum = now.getHours() * 100 + now.getMinutes();
-        if (day === 0 || day === 6) return true;
-        if (timeNum >= 915 && timeNum < 1450) return false;
-        return true;
-      }
-
-      // 渲染模拟持仓页面
-      function renderPortfolioView() {
-        const allocData = MobileQuantEngine.PortfolioManager.computePaperPortfolioAllocations(watchPoolData || []);
-        const {
-          isSettled,
-          totalPosCapital,
-          realAvailableCash,
-          currentTotalAssets,
-          totalPositionMarketVal,
-          activeCandidates,
-          itemStates
-        } = allocData;
-
-        dom.portfolioList.innerHTML = '';
-
-        // 更新顶部资产看板
-        dom.pTotalCapital.textContent = `¥${currentTotalAssets.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        dom.pAvailableCash.textContent = `¥${realAvailableCash.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        dom.pStockVal.textContent = `¥${totalPositionMarketVal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-        // 持仓盈亏与收益率 (与电脑版 KPI 4 累计总盈亏 100% 对齐)
-        if (dom.pTotalPnl) {
-          const pnlVal = allocData.totalPnl || 0;
-          const sign = pnlVal >= 0 ? '+' : '';
-          dom.pTotalPnl.textContent = `${sign}¥${pnlVal.toFixed(2)}`;
-          dom.pTotalPnl.style.color = pnlVal >= 0 ? 'var(--color-up)' : 'var(--color-down)';
-        }
-        if (dom.pTotalPnlPct) {
-          const pnlPctVal = allocData.totalPnlPct || 0;
-          const sign = pnlPctVal >= 0 ? '+' : '';
-          dom.pTotalPnlPct.textContent = `${sign}${pnlPctVal.toFixed(2)}%`;
-          dom.pTotalPnlPct.style.color = pnlPctVal >= 0 ? 'var(--color-up)' : 'var(--color-down)';
-        }
-
-        // 今日总盈亏 (与电脑版 KPI 5 今日总盈亏 100% 对齐)
-        if (dom.pTodayPnl) {
-          const todayVal = allocData.totalTodayPnl || 0;
-          const todaySign = todayVal >= 0 ? '+' : '';
-          dom.pTodayPnl.textContent = `${todaySign}¥${todayVal.toFixed(2)}`;
-          dom.pTodayPnl.style.color = todayVal >= 0 ? 'var(--color-up)' : 'var(--color-down)';
-        }
-
-        // 收集需要展示的持仓标的卡片：
-        // 1. activeCandidates: 当前持仓中、S3减半持仓中、自定持仓、待尾盘买入/卖出标的
-        // 2. 如果已结算 (14:50后)，还包括今日已清仓交割的标的 (isSellToday && isSettled)，展示回款入现金
-        const displayCards = [...activeCandidates];
-
-        if (isSettled) {
-          itemStates.forEach(state => {
-            if (state.isSellToday && !displayCards.some(c => c.sym === state.sym || c.itemCodeClean === state.itemCodeClean)) {
-              displayCards.push(state);
-            }
-          });
-        }
-
-        if (displayCards.length === 0) {
-          dom.portfolioList.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">暂无持仓标的，点击上方【加入/提出现金】可自动计算持仓预算并分配买入</div>';
-          return;
-        }
-
-        displayCards.forEach(item => {
-          // 今日对比昨收的涨跌计算 (确保今日盈亏与今日涨跌100%对齐)
-          const prevClose = item.prevClose || (item.item && item.item.prev_close > 0 ? item.item.prev_close : (item.item && item.item.current ? (item.item.current - (item.item.change || 0)) : item.costPrice));
-          const todayPriceChg = item.curPrice - prevClose;
-          const todayPct = (typeof item.todayPct === 'number') ? item.todayPct : (prevClose > 0 ? (todayPriceChg / prevClose * 100) : (item.item ? (item.item.pct_change || 0) : 0));
-          const todayIsUp = todayPriceChg >= 0;
-          const todayColor = todayIsUp ? 'var(--color-up)' : 'var(--color-down)';
-          const todaySign = todayIsUp ? '+' : '';
-
-          // 持仓盈亏 (累计浮盈/收益率)
-          const pnlPct = item.pnlPct || 0;
-          const pnlSign = pnlPct >= 0 ? '+' : '';
-          const pnlColor = pnlPct >= 0 ? 'var(--color-up)' : 'var(--color-down)';
-          const pnlMoney = item.pnl || 0;
-          const pnlMoneySign = pnlMoney >= 0 ? '+' : '';
-
-          // 今日盈亏 (当日变动金额)
-          const todayPnl = item.todayPnl || 0;
-          const todayPnlSign = todayPnl >= 0 ? '+' : '';
-          const todayPnlColor = todayPnl >= 0 ? 'var(--color-up)' : 'var(--color-down)';
-
-          // 状态徽章与文案
-          let badgeHtml = '';
-          let handsDetail = `${item.allocatedHands}手 (${item.allocatedShares}股)`;
-          let settleNoticeHtml = '';
-
-          if (item.isCustom) {
-            badgeHtml = '<span class="card-sector" style="color:var(--color-primary); background:rgba(59,130,246,0.15); padding:2px 6px; border-radius:4px; font-weight:700;">自定持仓</span>';
-          } else if (item.isS3Today) {
-            if (isSettled) {
-              badgeHtml = `<span class="card-sector" style="color:#d97706; background:rgba(245,158,11,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🟡 减半止盈 (留${item.allocatedHands}手底仓)</span>`;
-              settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-down);">减半回款 ¥${(item.settleVal || 0).toFixed(2)} 直接入现金</div>`;
-            } else {
-              badgeHtml = `<span class="card-sector" style="color:#d97706; background:rgba(245,158,11,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🟡 待14:50减半 (计划卖${item.plannedSoldHands}手)</span>`;
-              settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-warning);">(待14:50结算)</div>`;
-            }
-          } else if (item.item?.has_s3_holding) {
-            badgeHtml = `<span class="card-sector" style="color:#d97706; background:rgba(245,158,11,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🟡 50%底仓持仓中</span>`;
-          } else if (item.isBuyToday) {
-            if (isSettled) {
-              if (item.allocatedHands > 0) {
-                badgeHtml = `<span class="card-sector" style="color:#dc2626; background:rgba(239,68,68,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🔴 尾盘买入 (已成交${item.allocatedHands}手)</span>`;
-              } else {
-                badgeHtml = `<span class="card-sector" style="color:#d97706; background:rgba(245,158,11,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">⚠️ 待入金买入 (计划买${item.plannedHands || 1}手·现金不足)</span>`;
-                handsDetail = `计划${item.plannedHands || 1}手 (可用现金不足)`;
-                settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-warning);">可用现金不足，充值后自动建仓</div>`;
-              }
-            } else {
-              const cashSuffix = item.insufficientCash ? '·现金不足' : '';
-              badgeHtml = `<span class="card-sector" style="color:#dc2626; background:rgba(239,68,68,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🔴 待14:50买入 (计划买${item.plannedHands}手${cashSuffix})</span>`;
-              settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-warning);">(待14:50建仓)</div>`;
-            }
-          } else if (item.isSellToday) {
-            if (isSettled) {
-              badgeHtml = `<span class="card-sector" style="color:#16a34a; background:rgba(34,197,94,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🟢 今天卖出 (已清仓)</span>`;
-              settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-down);">回款 ¥${(item.settleVal || 0).toFixed(2)} 直接入现金</div>`;
-              handsDetail = `已结清${item.soldHands}手`;
-            } else {
-              badgeHtml = `<span class="card-sector" style="color:#16a34a; background:rgba(34,197,94,0.18); padding:2px 6px; border-radius:4px; font-weight:700;">🟢 待14:50卖出 (持仓${item.allocatedHands}手)</span>`;
-              settleNoticeHtml = `<div class="card-settle-tag" style="color:var(--color-warning);">(持仓额·待14:50结算)</div>`;
-            }
-          } else {
-            badgeHtml = `<span class="card-sector" style="color:var(--color-primary); background:rgba(59,130,246,0.15); padding:2px 6px; border-radius:4px; font-weight:700;">💼 持仓中</span>`;
-          }
-
-          const card = document.createElement('div');
-          card.className = 'stock-card';
-          card.innerHTML = `
-            <div class="card-top">
-              <div class="card-name-group">
-                <span class="card-name">${item.name}</span>
-                <span class="card-code">${item.code || item.sym} · ${handsDetail}</span>
-              </div>
-              ${badgeHtml}
-            </div>
-
-            <!-- 专属醒目的【持仓金额】区域 -->
-            <div class="card-amount-row">
-              <div class="amount-left">
-                <span class="amount-title">持仓金额</span>
-                <span class="amount-hands">${handsDetail}</span>
-              </div>
-              <div class="amount-right">
-                <span class="amount-val">¥${item.marketVal.toFixed(2)}</span>
-                ${settleNoticeHtml}
-              </div>
-            </div>
-
-            <div class="card-mid" style="margin-top:6px; display:flex; justify-content:space-between; align-items:baseline;">
-              <div class="card-price-group">
-                <span class="card-price" style="color:${todayColor}; font-weight:800;">${item.curPrice.toFixed(3)}</span>
-                <span style="font-size:12px; font-weight:700; color:${todayColor}; margin-left:4px;">(${todaySign}${todayPct.toFixed(2)}%)</span>
-                <span style="font-size:11px; color:var(--text-muted); margin-left:8px;">成本:${item.costPrice.toFixed(3)}</span>
-              </div>
-            </div>
-
-            <!-- 与电脑版完全对齐的双列盈亏对比栏：持仓盈亏 VS 今日盈亏 -->
-            <div class="card-pnl-grid">
-              <div style="display:flex; flex-direction:column;">
-                <span style="font-size:11px; color:var(--text-sub); font-weight:700;">持仓盈亏</span>
-                <span style="font-size:14px; font-weight:900; font-family:monospace; color:${pnlColor}; margin-top:2px;">
-                  ${pnlMoneySign}¥${pnlMoney.toFixed(2)}
-                </span>
-                <span style="font-size:11px; font-weight:700; color:${pnlColor}; margin-top:1px;">
-                  收益率: ${pnlSign}${pnlPct.toFixed(2)}%
-                </span>
-              </div>
-              <div style="display:flex; flex-direction:column; align-items:flex-end;">
-                <span style="font-size:11px; color:var(--text-sub); font-weight:700;">今日盈亏</span>
-                <span style="font-size:14px; font-weight:900; font-family:monospace; color:${todayPnlColor}; margin-top:2px;">
-                  ${todayPnlSign}¥${todayPnl.toFixed(2)}
-                </span>
-                <span style="font-size:11px; font-weight:700; color:${todayColor}; margin-top:1px;">
-                  今日: ${todaySign}${todayPct.toFixed(2)}%
-                </span>
-              </div>
-            </div>
-
-            <div class="card-bot">
-              <span class="decision-tag" style="background:${item.tag_color}22; color:${item.tag_color}; border:1px solid ${item.tag_color};">${item.tag}</span>
-              <span class="decision-reason">${item.reason_summary}</span>
-            </div>
-          `;
-
-          card.addEventListener('click', () => {
-            currentSymbol = item.sym || item.symbol || item.code;
-            switchTab('kline');
-            loadStockKline(currentSymbol);
-          });
-          dom.portfolioList.appendChild(card);
-        });
-      }
-
-      // -------------------------------------------------------------
-      // 模态弹窗 1: 修改可用现金 (持仓预算自动计算)
-      // -------------------------------------------------------------
-      function updateCashPreview() {
-        if (!dom.cashPreviewText) return;
-        const portData = MobileQuantEngine.PortfolioManager.getData();
-        const curCash = portData.available_cash || 0;
-        const raw = (dom.inputCashAmount.value || '').trim().replace(/\s+/g, '');
-        if (!raw) {
-          dom.cashPreviewText.textContent = '';
-          return;
-        }
-
-        if (raw.startsWith('=')) {
-          const val = parseFloat(raw.slice(1));
-          if (!isNaN(val) && val >= 0) {
-            dom.cashPreviewText.textContent = `🎯 设定为: ¥${val.toLocaleString()} (持仓预算同步生效)`;
-            dom.cashPreviewText.style.color = '#2563eb';
-          } else {
-            dom.cashPreviewText.textContent = '⚠️ 请输入有效金额';
-            dom.cashPreviewText.style.color = '#dc2626';
-          }
-        } else if (raw.startsWith('+')) {
-          const delta = parseFloat(raw.slice(1));
-          if (!isNaN(delta) && delta > 0) {
-            dom.cashPreviewText.textContent = `➕ 增加现金 +¥${delta.toLocaleString()} → 最新: ¥${(curCash + delta).toLocaleString()}`;
-            dom.cashPreviewText.style.color = '#16a34a';
-          } else {
-            dom.cashPreviewText.textContent = '⚠️ 请输入有效金额';
-            dom.cashPreviewText.style.color = '#dc2626';
-          }
-        } else if (raw.startsWith('-')) {
-          const delta = parseFloat(raw.slice(1));
-          if (!isNaN(delta) && delta > 0) {
-            const nextVal = Math.max(0, curCash - delta);
-            dom.cashPreviewText.textContent = `➖ 扣减现金 -¥${delta.toLocaleString()} → 最新: ¥${nextVal.toLocaleString()}`;
-            dom.cashPreviewText.style.color = '#dc2626';
-          } else {
-            dom.cashPreviewText.textContent = '⚠️ 请输入有效金额';
-            dom.cashPreviewText.style.color = '#dc2626';
-          }
-        } else {
-          const val = parseFloat(raw);
-          if (!isNaN(val) && val > 0) {
-            // 用户未输符号：根据用户习惯，默认累加现金（如输入800则+800）
-            dom.cashPreviewText.textContent = `➕ 增加现金 +¥${val.toLocaleString()} → 最新: ¥${(curCash + val).toLocaleString()} (直接设为请输入=${val})`;
-            dom.cashPreviewText.style.color = '#16a34a';
-          } else {
-            dom.cashPreviewText.textContent = '';
-          }
-        }
-      }
-
-      function openModalCash() {
-        const portData = MobileQuantEngine.PortfolioManager.getData();
-        const curCash = portData.available_cash || 0;
-        if (dom.cashCurValHint) {
-          dom.cashCurValHint.textContent = `当前现金: ¥${curCash.toLocaleString()}`;
-        }
-        dom.inputCashAmount.value = '';
-        if (dom.cashPreviewText) dom.cashPreviewText.textContent = '';
-        dom.modalEditCash.classList.add('active');
-        setTimeout(() => dom.inputCashAmount.focus(), 150);
-      }
-
-      function closeModalCash() {
-        dom.modalEditCash.classList.remove('active');
-      }
-
-      dom.btnEditCash.addEventListener('click', openModalCash);
-      dom.btnCloseEditCash.addEventListener('click', closeModalCash);
-      dom.btnCancelEditCash.addEventListener('click', closeModalCash);
-      dom.modalEditCash.addEventListener('click', (e) => {
-        if (e.target === dom.modalEditCash) closeModalCash();
-      });
-
-      dom.inputCashAmount.addEventListener('input', updateCashPreview);
-
-      // 快捷增减药丸按钮
-      document.querySelectorAll('#modalEditCash .cash-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-          const val = pill.getAttribute('data-val');
-          if (val) {
-            dom.inputCashAmount.value = val;
-            updateCashPreview();
-          }
-        });
-      });
-
-      // 直接设定药丸按钮 (如 5036, 5万等)
-      document.querySelectorAll('#modalEditCash .cash-set-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-          const setVal = pill.getAttribute('data-set');
-          if (setVal) {
-            dom.inputCashAmount.value = `=${setVal}`;
-            updateCashPreview();
-          }
-        });
-      });
-
-      // 确认保存现金修改 (输入800则+800，输入-800则-800，输入=5036或点击设为5036则直接设为该值)
-      dom.btnConfirmEditCash.addEventListener('click', () => {
-        const raw = (dom.inputCashAmount.value || '').trim().replace(/\s+/g, '');
-        if (!raw) {
-          alert('请输入金额，如 800 (加入) 或 -800 (扣减)，或点击下方快捷按钮直接设定');
-          return;
-        }
-        const portData = MobileQuantEngine.PortfolioManager.getData();
-        const curCash = portData.available_cash || 0;
-        let finalCash = curCash;
-
-        if (raw.startsWith('=')) {
-          const target = parseFloat(raw.slice(1));
-          if (isNaN(target) || target < 0) {
-            alert('请输入有效的设定金额');
-            return;
-          }
-          finalCash = target;
-        } else if (raw.startsWith('+')) {
-          const delta = parseFloat(raw.slice(1));
-          if (isNaN(delta)) {
-            alert('请输入有效的金额');
-            return;
-          }
-          finalCash = curCash + delta;
-        } else if (raw.startsWith('-')) {
-          const delta = parseFloat(raw.slice(1));
-          if (isNaN(delta)) {
-            alert('请输入有效的金额');
-            return;
-          }
-          finalCash = Math.max(0, curCash - delta);
-        } else {
-          const delta = parseFloat(raw);
-          if (isNaN(delta)) {
-            alert('请输入有效的金额');
-            return;
-          }
-          finalCash = Math.max(0, curCash + delta);
-        }
-
-        MobileQuantEngine.PortfolioManager.setAvailableCash(finalCash);
-        closeModalCash();
-        renderPortfolioView();
-      });
-
-      // -------------------------------------------------------------
-      // 模态弹窗 2: 管理自选标的自定持仓
-      // -------------------------------------------------------------
-      function openModalHoldings() {
-        populateHoldingSymbolOptions();
-        renderModalHoldingsList();
-        dom.modalEditHoldings.classList.add('active');
-      }
-
-      function closeModalHoldings() {
-        dom.modalEditHoldings.classList.remove('active');
-        renderPortfolioView();
-        if (currentKlines && currentKlines.length > 0 && currentTab === 'kline') {
-          renderDailyChart(currentKlines);
-        }
-      }
-
-      if (dom.btnOpenCustomHoldings) {
-        dom.btnOpenCustomHoldings.addEventListener('click', openModalHoldings);
-      }
-      dom.btnCloseEditHoldings.addEventListener('click', closeModalHoldings);
-      dom.btnDoneEditHoldings.addEventListener('click', closeModalHoldings);
-      dom.modalEditHoldings.addEventListener('click', (e) => {
-        if (e.target === dom.modalEditHoldings) closeModalHoldings();
-      });
-
-      // 填充标的选择下拉框
-      function populateHoldingSymbolOptions() {
-        dom.selectHoldingSymbol.innerHTML = '';
-        const portData = MobileQuantEngine.PortfolioManager.getData();
-        const existingSyms = new Set(Object.keys(portData.positions || {}));
-
-        // 先放 10 个系统跟踪 ETF
-        const etfs = MobileQuantEngine.TRACKED_ETFS || [];
-        const optGroup1 = document.createElement('optgroup');
-        optGroup1.label = '系统推荐跟踪 ETF';
-        etfs.forEach(item => {
-          const opt = document.createElement('option');
-          opt.value = item.symbol;
-          opt.textContent = `${item.name} (${item.code})`;
-          optGroup1.appendChild(opt);
-        });
-        dom.selectHoldingSymbol.appendChild(optGroup1);
-
-        // 如果用户有其他自定义持仓标的
-        const customSyms = Array.from(existingSyms).filter(s => !etfs.some(e => e.symbol === s));
-        if (customSyms.length > 0) {
-          const optGroup2 = document.createElement('optgroup');
-          optGroup2.label = '其他已持仓标的';
-          customSyms.forEach(sym => {
-            const p = portData.positions[sym];
-            const opt = document.createElement('option');
-            opt.value = sym;
-            opt.textContent = `${p.name || sym} (${sym})`;
-            optGroup2.appendChild(opt);
-          });
-          dom.selectHoldingSymbol.appendChild(optGroup2);
-        }
-
-        // 默认选中当前选中的股票或第一个
-        if (currentSymbol && dom.selectHoldingSymbol.querySelector(`option[value="${currentSymbol}"]`)) {
-          dom.selectHoldingSymbol.value = currentSymbol;
-        }
-        updateHoldingFormPrefill();
-      }
-
-      // 下拉框改变时自动带入已有持仓数据
-      dom.selectHoldingSymbol.addEventListener('change', updateHoldingFormPrefill);
-
-      function updateHoldingFormPrefill() {
-        const sym = dom.selectHoldingSymbol.value;
-        const portData = MobileQuantEngine.PortfolioManager.getData();
-        const pos = (portData.positions || {})[sym];
-        if (pos) {
-          dom.inputHoldingHands.value = pos.hands;
-          dom.inputHoldingCost.value = pos.cost_price;
-          dom.holdingFormTitle.textContent = `📝 修改持仓: ${pos.name || sym}`;
-        } else {
-          dom.inputHoldingHands.value = '';
-          const poolItem = (watchPoolData || []).find(w => w.symbol === sym);
-          dom.inputHoldingCost.value = poolItem ? poolItem.current.toFixed(3) : '';
-          dom.holdingFormTitle.textContent = '➕ 添加新持仓标的';
-        }
-      }
-
-      // 渲染弹窗内的已设持仓列表
-      function renderModalHoldingsList() {
-        dom.holdingManageList.innerHTML = '';
-        const portData = MobileQuantEngine.PortfolioManager.getData();
-        const keys = Object.keys(portData.positions || {});
-        if (keys.length === 0) {
-          dom.holdingManageList.innerHTML = '<div style="text-align:center; padding:12px; color:var(--text-muted); font-size:12px;">暂未设置自定义持仓，请在上方选择标的添加</div>';
-          return;
-        }
-
-        keys.forEach(sym => {
-          const p = portData.positions[sym];
-          const row = document.createElement('div');
-          row.className = 'manage-item';
-          row.innerHTML = `
-            <div class="manage-info">
-              <span class="manage-name">${p.name || sym}</span>
-              <span class="manage-sub">${p.hands}手 (${p.hands * 100}股) · 成本: ¥${p.cost_price.toFixed(3)}</span>
-            </div>
-            <div style="display:flex; gap:6px;">
-              <button class="manage-del-btn" style="background:rgba(59,130,246,0.15); color:#3b82f6; border-color:rgba(59,130,246,0.3);" data-edit="${sym}">编辑</button>
-              <button class="manage-del-btn" data-del="${sym}">删除</button>
-            </div>
-          `;
-          row.querySelector(`[data-edit="${sym}"]`).addEventListener('click', () => {
-            dom.selectHoldingSymbol.value = sym;
-            dom.inputHoldingHands.value = p.hands;
-            dom.inputHoldingCost.value = p.cost_price;
-            dom.holdingFormTitle.textContent = `📝 修改持仓: ${p.name || sym}`;
-            dom.inputHoldingHands.focus();
-          });
-          row.querySelector(`[data-del="${sym}"]`).addEventListener('click', () => {
-            if (confirm(`确定删除 ${p.name || sym} 的持仓记录吗？`)) {
-              MobileQuantEngine.PortfolioManager.removeHolding(sym);
-              renderModalHoldingsList();
-              updateHoldingFormPrefill();
-              renderPortfolioView();
-              if (currentKlines && currentKlines.length > 0 && currentTab === 'kline') {
-                renderDailyChart(currentKlines);
-              }
-            }
-          });
-          dom.holdingManageList.appendChild(row);
-        });
-      }
-
-      // 保存标的持仓按钮
-      dom.btnSaveHolding.addEventListener('click', () => {
-        const sym = dom.selectHoldingSymbol.value;
-        const hands = parseInt(dom.inputHoldingHands.value, 10);
-        const cost = parseFloat(dom.inputHoldingCost.value);
-
-        if (!sym) {
-          alert('请选择ETF标的');
-          return;
-        }
-        if (isNaN(hands) || hands <= 0) {
-          alert('请输入合法的持仓手数 (大于0的整数)');
-          return;
-        }
-        if (isNaN(cost) || cost <= 0) {
-          alert('请输入合法的成本均价 (大于0)');
-          return;
-        }
-
-        let name = sym;
-        const poolItem = (watchPoolData || []).find(w => w.symbol === sym);
-        if (poolItem) name = poolItem.name;
-        else {
-          const etf = (MobileQuantEngine.TRACKED_ETFS || []).find(e => e.symbol === sym);
-          if (etf) name = etf.name;
-        }
-
-        MobileQuantEngine.PortfolioManager.setHolding(sym, name, hands, cost);
-        renderModalHoldingsList();
-        updateHoldingFormPrefill();
-        renderPortfolioView();
-        if (currentKlines && currentKlines.length > 0 && currentTab === 'kline') {
-          renderDailyChart(currentKlines);
-        }
-        alert(`已成功保存 ${name} 的持仓配置！`);
-      });
-
       // 搜索功能
       document.getElementById('btnOpenSearch').addEventListener('click', () => {
         dom.searchModal.classList.add('active');
@@ -2702,16 +1640,14 @@
       document.getElementById('btnRefresh').addEventListener('click', () => {
         if (currentTab === 'watchpool') loadWatchPool();
         else if (currentTab === 'kline') loadStockKline(currentSymbol);
-        else if (currentTab === 'portfolio') renderPortfolioView();
-      });
+              });
 
       // 切换手机前后台时自动更新最新行情
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           if (currentTab === 'watchpool') loadWatchPool();
           else if (currentTab === 'kline') loadStockKline(currentSymbol);
-          else if (currentTab === 'portfolio') renderPortfolioView();
-        }
+                  }
       });
 
       // 启动加载：渲染观察池并初始化第一支标的日K
