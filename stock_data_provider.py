@@ -1061,6 +1061,9 @@ class StockDataProvider:
             prev_k = prev_bar.get("k", 50.0)
             prev_d = prev_bar.get("d", 50.0)
             prev_j = prev_bar.get("j", 50.0)
+            prev2_j = prev2_bar.get("j", 50.0)
+            ma10 = bar.get("ma10")
+            volume = bar.get("volume", 0)
 
             # K线形态分析
             candle_body = abs(bar["close"] - bar["open"])
@@ -1117,20 +1120,81 @@ class StockDataProvider:
                 is_high_position = (pos_ratio_60 >= 0.65) or (gain_from_recent_low >= 0.15)
                 is_volume_surge_up = is_high_position and (bar["pct_change"] >= 3.0) and (bar["volume"] >= 1.3 * vol_ma5)
 
-                # 全部同时满足方可开仓 (严格秉承“低吸买点、位置甄别”原则)
-                if cond_ma5_up and cond_macd_trend and cond_macd_gold_close and cond_kdj_bull and (not is_volume_surge_up):
-                    bar["signal_type"] = "B"
-                    bar["signal_name"] = f"买入: {timeframe_name}多指标共振"
-                    bar["signal_position"] = "标准建仓 / 试错开仓"
-                    reason_extra = "底部放量突破确认" if ((bar["pct_change"] >= 3.0) and (bar["volume"] >= 1.3 * vol_ma5)) else "满足共振条件"
-                    bar["signal_reason"] = f"MA5止跌({ma5:.3f})，MACD金叉附近(场景A/B+DIF主动上行)，KDJ多头(K>D)，{reason_extra}"
-                    
+                # ----------------------------------------------------
+                # 共振强度 4 档分级模型：
+                # 4档(全仓100%): 三指标金叉 + (黄金坑深跌反转 或 放量突破站稳MA10)
+                # 3档(重仓75%):  三指标金叉 + 站稳MA5收红
+                # 2档(半仓50%):  三指标标准金叉多头
+                # 1档(轻仓25%):  MA5走平 + MACD拐头收敛 (双指标初现企稳试错)
+                # ----------------------------------------------------
+                cond_3_base = cond_ma5_up and cond_macd_trend and cond_macd_gold_close and cond_kdj_bull and (not is_volume_surge_up)
+
+                is_vol_11 = (volume >= 1.1 * vol_ma5)
+                is_vol_125 = (volume >= 1.25 * vol_ma5)
+                is_red_bar = (bar.get("pct_change", 0) > 0) or (bar["close"] >= bar["open"])
+                is_above_ma5 = (ma5 is not None and bar["close"] >= ma5)
+                is_above_ma10 = (ma10 is not None and bar["close"] >= ma10)
+
+                # 严重超跌反弹定义：此前J值曾深探 < 15 或 K < 20，且当前大幅拔起金叉
+                is_deep_oversold_bounce = (prev_j < 15 or prev2_j < 15 or prev_k < 20) and (j_val >= prev_j + 5.0)
+                # 突破型启动：站稳MA10且成交量放大1.25倍收红
+                is_breakout_launch = is_above_ma10 and is_vol_125 and is_red_bar
+
+                if cond_3_base:
+                    # 4 档：全仓 100%
+                    if is_deep_oversold_bounce or is_breakout_launch:
+                        tier = 4
+                        st = "B4"
+                        sname = f"买入: {timeframe_name}4档全仓共振"
+                        spos = "全仓 100% 顶格建仓"
+                        launch_reason = "深跌黄金坑强力拔起" if is_deep_oversold_bounce else "放量突破站稳MA10"
+                        sreason = f"4档全仓共振：三大指标金叉 + {launch_reason}，建议100%全仓出击"
+                    # 3 档：重仓 75%
+                    elif is_above_ma5 and is_red_bar:
+                        tier = 3
+                        st = "B3"
+                        sname = f"买入: {timeframe_name}3档重仓共振"
+                        spos = "重仓 75% 积极建仓"
+                        vol_note = "温和放量" if is_vol_11 else "站稳均线"
+                        sreason = f"3档重仓共振：三大指标金叉 + {vol_note}收红站上MA5，建议75%重仓建仓"
+                    # 2 档：半仓 50%
+                    else:
+                        tier = 2
+                        st = "B2"
+                        sname = f"买入: {timeframe_name}2档半仓共振"
+                        spos = "半仓 50% 标准建仓"
+                        sreason = f"2档标准共振：MA5向上 + MACD动能修复 + KDJ多头，建议50%半仓稳健建仓"
+
+                    bar["signal_type"] = st
+                    bar["signal_name"] = sname
+                    bar["signal_position"] = spos
+                    bar["signal_reason"] = sreason
+                    bar["buy_tier"] = tier
+
                     in_position = True
                     s3_triggered = False
                     buy_index = i
                     buy_price = bar["close"]
                     buy_highest = bar["high"]
                     continue
+                else:
+                    # 1 档：轻仓 25% 试错
+                    cond_2_base = cond_ma5_up and cond_macd_trend and cond_macd_gold_close and (not is_volume_surge_up) and (j_val > prev_j)
+                    if cond_2_base:
+                        tier = 1
+                        st = "B1"
+                        bar["signal_type"] = st
+                        bar["signal_name"] = f"买入: {timeframe_name}1档轻仓共振"
+                        bar["signal_position"] = "轻仓 25% 试探建仓"
+                        bar["signal_reason"] = f"1档试错共振：MA5走平止跌 + MACD动能修复，双指标企稳，防踏空轻仓25%试探"
+                        bar["buy_tier"] = tier
+
+                        in_position = True
+                        s3_triggered = False
+                        buy_index = i
+                        buy_price = bar["close"]
+                        buy_highest = bar["high"]
+                        continue
 
             # ----------------------------------------------------
             # 模式 B: 持仓状态，评估【卖出条件 (止盈 / 止损)】
@@ -1471,7 +1535,7 @@ class StockDataProvider:
 
                 for k in reversed(klines[:-1]):
                     sig = k.get("signal_type")
-                    if sig in ["B", "B1"]:
+                    if sig and sig.startswith("B"):
                         in_pos = True
                         buy_cost_price = k.get("close", bar["close"])
                         buy_date = k.get("date", "")
@@ -1489,11 +1553,32 @@ class StockDataProvider:
                 sort_priority = 10
 
                 # 优先判定【今日 (最新交易日 对应周期)】是否刚触发买卖/减仓信号
-                if today_sig in ["B", "B1"]:
-                    tag = f"{tf_name}买入"
-                    tag_color = "#dc2626"  # 鲜艳大红高亮 (买点专用)
-                    reason_summary = f"{tf_name}多指标共振确认，顺势分批建仓"
-                    sort_priority = 100
+                if today_sig and today_sig.startswith("B"):
+                    if today_sig == "B4":
+                        tag = f"{tf_name}4档买入"
+                        tag_color = "#b91c1c"  # 深红/紫红高亮 (全仓100%)
+                        reason_summary = f"{tf_name}4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击"
+                        sort_priority = 110
+                    elif today_sig == "B3":
+                        tag = f"{tf_name}3档买入"
+                        tag_color = "#dc2626"  # 大红高亮 (重仓75%)
+                        reason_summary = f"{tf_name}3档重仓共振(站上MA5收红)，建议75%重仓建仓"
+                        sort_priority = 105
+                    elif today_sig == "B2":
+                        tag = f"{tf_name}2档买入"
+                        tag_color = "#ea580c"  # 橙红高亮 (半仓50%)
+                        reason_summary = f"{tf_name}2档标准共振(三指标金叉)，建议50%半仓稳健建仓"
+                        sort_priority = 100
+                    elif today_sig == "B1":
+                        tag = f"{tf_name}1档买入"
+                        tag_color = "#2563eb"  # 蓝色高亮 (轻仓25%)
+                        reason_summary = f"{tf_name}1档试错共振(双指标初现企稳)，建议25%轻仓试探"
+                        sort_priority = 98
+                    else:
+                        tag = f"{tf_name}买入"
+                        tag_color = "#dc2626"
+                        reason_summary = f"{tf_name}多指标共振确认，顺势分批建仓"
+                        sort_priority = 100
                     buy_cost_price = bar["close"]
                     buy_date = bar.get("date", "")
 
@@ -2141,7 +2226,7 @@ class StockDataProvider:
                 if not k:
                     continue
                 sig = k.get("signal_type")
-                if sig in ["B", "B1"]:
+                if sig and sig.startswith("B"):
                     pos = positions.get(code)
                     cur_cost = pos["buy_amount"] if pos else 0.0
                     room = max_single_pos_cap - cur_cost
@@ -2149,8 +2234,8 @@ class StockDataProvider:
                         dif = k.get("dif", 0.0)
                         score = k.get("score", 3)
                         trend_mult = 1.3 if dif > 0 else 1.0
-                        conf_mult = 1.5 if score >= 4 else (1.0 if score == 3 else 0.7)
-                        final_weight = max(0.5, score * trend_mult * conf_mult)
+                        tier_mult = 2.0 if sig == "B4" else (1.5 if sig == "B3" else (1.0 if sig == "B2" else 0.6))
+                        final_weight = max(0.5, score * trend_mult * tier_mult)
                         buy_candidates.append({
                             "code": code,
                             "price": k["close"],

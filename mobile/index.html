@@ -1212,7 +1212,7 @@
               label: {
                 show: true,
                 position: isBuy ? 'bottom' : 'top',
-                formatter: b.signal_type,
+                formatter: (b.signal_type === 'B4' ? 'B4(全仓)' : (b.signal_type === 'B3' ? 'B3(重仓)' : (b.signal_type === 'B2' ? 'B2(半仓)' : (b.signal_type === 'B1' ? 'B1(轻仓)' : b.signal_type)))),
                 fontSize: 9,
                 fontWeight: 'bold',
                 color: isBuy ? '#ef4444' : '#10b981',
@@ -1320,7 +1320,9 @@
               if (bar.signal_type) {
                 const isB = bar.signal_type.startsWith('B');
                 const sigColor = isB ? '#ef4444' : '#10b981';
-                return `<div style="font-weight:bold; font-size:12px; color:${sigColor};">🚨 ${bar.signal_name} (${bar.signal_type})</div><div style="font-size:10px; color:#94a3b8; margin-top:2px;">${bar.date}</div>`;
+                const posLine = bar.signal_position ? `<div style="font-size:11px; color:#f59e0b; margin-top:2px;">🎯 仓位建议: ${bar.signal_position}</div>` : '';
+                const reasonLine = bar.signal_reason ? `<div style="font-size:10px; color:#94a3b8; margin-top:2px;">💡 原因: ${bar.signal_reason}</div>` : '';
+                return `<div style="font-weight:bold; font-size:12px; color:${sigColor};">🚨 ${bar.signal_name} (${bar.signal_type})</div>${posLine}${reasonLine}<div style="font-size:10px; color:#64748b; margin-top:2px;">${bar.date}</div>`;
               }
               return '';
             }
