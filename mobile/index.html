@@ -369,6 +369,31 @@
       font-size: 10.5px;
       color: var(--text-muted);
     }
+    .kline-period-group {
+      display: inline-flex;
+      align-items: center;
+      background: var(--bg-card-hover);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .kline-period-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .kline-period-btn.active {
+      background: var(--color-primary);
+      color: #ffffff;
+      box-shadow: 0 1px 4px rgba(59, 130, 246, 0.3);
+    }
 
     .kline-quote-bar {
       display: flex;
@@ -670,12 +695,12 @@
         <div class="filter-bar">
           <div class="pill-scroll" id="filterPills">
             <div class="filter-pill active" data-filter="全部">全部</div>
-            <div class="filter-pill" data-filter="买入">尾盘买入</div>
+            <div class="filter-pill" data-filter="买入">60分买入</div>
             <div class="filter-pill" data-filter="持有">持仓观察</div>
             <div class="filter-pill" data-filter="减仓">减半止盈</div>
             <div class="filter-pill" data-filter="即将满足">即将满足</div>
             <div class="filter-pill" data-filter="观望">观望等待</div>
-            <div class="filter-pill" data-filter="卖出">高位卖出</div>
+            <div class="filter-pill" data-filter="卖出">60分卖出</div>
           </div>
         </div>
 
@@ -685,7 +710,7 @@
       </div>
 
       <!-- ======================================================= -->
-      <!-- TAB 2: 日K线决策图页面 (完全移除分时与5分图) -->
+      <!-- TAB 2: K线决策图页面 (支持 60分 / 日K 自由切换) -->
       <!-- ======================================================= -->
       <div class="view-page" id="view-kline">
         <div class="kline-header">
@@ -696,8 +721,9 @@
               <span class="kline-stock-code" id="klineStockCode">sh515880</span>
               <span class="kline-cursor-date" id="klineCursorDate"></span>
             </div>
-            <div class="kline-gesture-hint">
-              <span>双指缩放 · 单指十字线</span>
+            <div class="kline-period-group">
+              <button class="kline-period-btn active" id="btnPeriod60m" onclick="switchKlinePeriod('m60')">60分</button>
+              <button class="kline-period-btn" id="btnPeriodDay" onclick="switchKlinePeriod('day')">日K</button>
             </div>
           </div>
 
@@ -765,7 +791,7 @@
       </div>
       <div class="nav-item" data-tab="kline">
         <span class="nav-icon">📊</span>
-        <span class="nav-label">日K线</span>
+        <span class="nav-label">60分K线</span>
       </div>
     </nav>
 
@@ -1056,11 +1082,28 @@
         }
       }
 
-      // 加载个股日K线数据
-      async function loadStockKline(symbol) {
+      let currentPeriod = 'm60';
+
+      function switchKlinePeriod(period) {
+        currentPeriod = period;
+        const b60 = document.getElementById('btnPeriod60m');
+        const bDay = document.getElementById('btnPeriodDay');
+        if (b60) b60.classList.toggle('active', period === 'm60');
+        if (bDay) bDay.classList.toggle('active', period === 'day');
+        loadStockKline(currentSymbol, period);
+      }
+      window.switchKlinePeriod = switchKlinePeriod;
+
+      // 加载个股K线数据 (支持 60分 / 日K)
+      async function loadStockKline(symbol, period = currentPeriod) {
         dom.chartLoading.style.display = 'flex';
         try {
-          const res = await MobileQuantEngine.getDailyKlines(symbol, 400);
+          let res;
+          if (period === 'm60') {
+            res = await MobileQuantEngine.get60MinKlines(symbol, 320);
+          } else {
+            res = await MobileQuantEngine.getDailyKlines(symbol, 400);
+          }
           currentKlines = res.klines || [];
           dom.klineStockName.textContent = res.name;
           dom.klineStockCode.textContent = res.symbol;
@@ -1088,7 +1131,7 @@
         }
       }
 
-      // 渲染高保真日K线图 (MA, VOL, MACD, KDJ, 买卖信号, 持仓成本线)
+      // 渲染高保真K线图 (MA, VOL, MACD, KDJ, 买卖信号, 持仓成本线)
       function renderDailyChart(klines) {
         if (!klines || klines.length === 0) return;
         if (dom.dailyChart.clientWidth === 0 || dom.dailyChart.clientHeight === 0) {
@@ -1126,7 +1169,8 @@
         const ma5Str = lastBar.ma5 ? lastBar.ma5.toFixed(3) : '--';
         const ma10Str = lastBar.ma10 ? lastBar.ma10.toFixed(3) : '--';
         const ma20Str = lastBar.ma20 ? lastBar.ma20.toFixed(3) : '--';
-        const maTitle = `日K线  MA5:${ma5Str}  MA10:${ma10Str}  MA20:${ma20Str}`;
+        const periodLabel = currentPeriod === 'm60' ? '60分K线' : '日K线';
+        const maTitle = `${periodLabel}  MA5:${ma5Str}  MA10:${ma10Str}  MA20:${ma20Str}`;
 
         // 买卖信号标记
         const markPoints = [];
