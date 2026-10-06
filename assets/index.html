@@ -1887,8 +1887,6 @@
         <div class="chart-type-tabs">
           <button class="chart-type-tab active" id="tab60Min" onclick="switchChartType('60min')">⏱️ 60分钟</button>
           <button class="chart-type-tab" id="tabKline" onclick="switchChartType('kline')">📊 日K线</button>
-          <button class="chart-type-tab" id="tabTimeShare" onclick="switchChartType('timeShare')">📈 分时走势</button>
-          <button class="chart-type-tab" id="tab5Min" onclick="switchChartType('5min')">⏱️ 5分钟</button>
         </div>
 
 
@@ -1898,19 +1896,6 @@
           <span class="flush-gain-val up-color" id="statGainVal">+2.83%</span>
           <span class="flush-period" id="statPeriod">10周期</span>
           <span class="btn-range-stat" onclick="toggleRangeStatMode()" title="点击开启/关闭同花顺区间统计模式">区间统计 &gt;</span>
-        </div>
-
-        <div class="timeshare-header-info" id="timeShareHeaderInfo" style="display:none; align-items:center; gap:12px;">
-          <span style="font-size:11px; color:#2563eb; font-weight:700;">⚪ 蓝线: 即时价格</span>
-          <span style="font-size:11px; color:#f59e0b; font-weight:700;">🟡 黄线: 分时均价 (VWAP)</span>
-          <span style="font-size:11px; color:#16a34a; font-weight:700;">▲/▼ 三角形: 尾盘买卖点</span>
-          <span style="font-size:11px; color:#64748b;" id="timeShareLiveTime">同花顺标准241分盘口 (未走完右侧留白)</span>
-        </div>
-
-        <div class="fivemin-header-info" id="fiveMinHeaderInfo" style="display:none; align-items:center; gap:10px;">
-          <span style="font-size:11px; color:#2563eb; font-weight:700;">⏱️ 5分钟K线</span>
-          <span style="font-size:11px; color:#64748b;" id="fiveMinCountLabel">默认展示今日 · 滚轮自由缩放/平移历史K线</span>
-          <span class="btn-range-stat" onclick="reset5MinZoomToday()" title="点击重置视口居中于今日K线" style="cursor:pointer;">定位今日 &gt;</span>
         </div>
       </div>
 
@@ -2124,7 +2109,8 @@
       { sector: "半导体芯片", code: "sz159995", desc: "芯片ETF", close: 1.152, prev_close: 1.114, change: 0.038, pct_change: 3.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
       { sector: "半导体设备", code: "sz159516", desc: "半导体设备ETF", close: 0.729, prev_close: 0.703, change: 0.026, pct_change: 3.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
       { sector: "消费电子", code: "sz159997", desc: "电子ETF", close: 2.114, prev_close: 2.059, change: 0.055, pct_change: 2.67, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, change: 0.014, pct_change: 2.38, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" }
+      { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, change: 0.014, pct_change: 2.38, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
+      { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" }
     ];
 
     function getUserWatchList() {
@@ -2133,11 +2119,11 @@
         if (saved) {
           const arr = JSON.parse(saved);
           if (Array.isArray(arr) && arr.length > 0) {
-            // 智能自愈修复：如果本地存储列表只是默认ETF的缺失子集（比如之前网络偶发丢弃或少于22只，且没有用户自定义添加的其他股票）
+            // 智能自愈修复：如果本地存储列表只是默认ETF的缺失子集（比如之前网络偶发丢弃或少于23只，且没有用户自定义添加的其他股票）
             const savedCodes = new Set(arr.map(x => (x.code || x.symbol || '').toLowerCase()));
             const isPureSubset = arr.every(x => DEFAULT_SECTOR_ETFS.some(d => d.code.toLowerCase() === (x.code || x.symbol || '').toLowerCase()));
             if (isPureSubset && arr.length < DEFAULT_SECTOR_ETFS.length) {
-              // 自动补齐缺失的全部 22 只默认板块 ETF，彻底解决少于 22 只的问题
+              // 自动补齐缺失的全部 23 只默认板块 ETF，彻底解决少于 23 只的问题
               const merged = [...arr];
               DEFAULT_SECTOR_ETFS.forEach(d => {
                 if (!savedCodes.has(d.code.toLowerCase())) {
@@ -2174,11 +2160,11 @@
       } catch(e) {}
       currentWatchPool = [];
       if (isBatchDeleteMode) toggleBatchDeleteMode(false);
-      showOrderToast("🔄 正在重新加载全部 22 只主流板块 ETF...");
+      showOrderToast("🔄 正在重新加载全部 23 只主流板块 ETF...");
       loadWatchPool();
     }
 
-    const WATCH_POOL_CACHE_VER = '20261006_m60_v1';
+    const WATCH_POOL_CACHE_VER = '20261006_m60_v2';
 
     function renderWatchPoolImmediate() {
       try {
@@ -2542,20 +2528,15 @@
           if (typeof params.end === 'number') e = params.end;
         }
         if (s !== null && e !== null) {
-          if (currentChartType === 'kline' || currentChartType === '60min') {
-            zoomStart = s;
-            zoomEnd = e;
-          } else if (currentChartType === '5min') {
-            zoomStart5Min = s;
-            zoomEnd5Min = e;
-          }
+          zoomStart = s;
+          zoomEnd = e;
         }
       });
 
       const zr = chartInstance.getZr();
 
       zr.on('mousedown', (e) => {
-        if (currentChartType !== 'kline' || !isRangeStatActive || !klineData || klineData.length === 0) return;
+        if (!isRangeStatActive || !klineData || klineData.length === 0) return;
         const idx = getXIndexFromPixel(e.offsetX);
         if (idx >= 0) {
           isMouseDownOnChart = true;
@@ -2564,7 +2545,7 @@
       });
 
       zr.on('mousemove', (e) => {
-        if (currentChartType !== 'kline' || !isRangeStatActive || !klineData || klineData.length === 0) return;
+        if (!isRangeStatActive || !klineData || klineData.length === 0) return;
         const idx = getXIndexFromPixel(e.offsetX);
         if (idx < 0) return;
 
@@ -2585,7 +2566,7 @@
       });
 
       zr.on('mouseup', (e) => {
-        if (currentChartType !== 'kline' || !isRangeStatActive || !klineData || klineData.length === 0) return;
+        if (!isRangeStatActive || !klineData || klineData.length === 0) return;
         if (isMouseDownOnChart) {
           isMouseDownOnChart = false;
           const idx = getXIndexFromPixel(e.offsetX);
@@ -2602,7 +2583,7 @@
       });
 
       chartInstance.on('click', (params) => {
-        if (currentChartType !== 'kline' || !isRangeStatActive || !klineData || klineData.length === 0) return;
+        if (!isRangeStatActive || !klineData || klineData.length === 0) return;
         let idx = -1;
         if (params && typeof params.dataIndex === 'number') {
           idx = params.dataIndex;
@@ -2840,11 +2821,7 @@
       
       chartDom.addEventListener('wheel', function(e) {
         if (!chartInstance) return;
-        if (currentChartType !== 'kline' && currentChartType !== '5min' && currentChartType !== '60min') return;
-
-        const isKline = (currentChartType === 'kline' || currentChartType === '60min');
-        if (isKline && (!klineData || klineData.length === 0)) return;
-        if (!isKline && (!kline5MinData || kline5MinData.length === 0)) return;
+        if (!klineData || klineData.length === 0) return;
 
         e.preventDefault();
         e.stopPropagation();
@@ -2852,8 +2829,8 @@
         const delta = (Math.abs(e.deltaX) > Math.abs(e.deltaY)) ? e.deltaX : e.deltaY;
         if (delta === 0) return;
 
-        let curStart = isKline ? zoomStart : (typeof zoomStart5Min === 'number' ? zoomStart5Min : 70);
-        let curEnd = isKline ? zoomEnd : (typeof zoomEnd5Min === 'number' ? zoomEnd5Min : 100);
+        let curStart = zoomStart;
+        let curEnd = zoomEnd;
         const range = curEnd - curStart;
 
         if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
@@ -2870,8 +2847,8 @@
             newStart = 100 - range;
           }
 
-          if (isKline) { zoomStart = newStart; zoomEnd = newEnd; }
-          else { zoomStart5Min = newStart; zoomEnd5Min = newEnd; }
+          zoomStart = newStart;
+          zoomEnd = newEnd;
         } else {
           const zoomFactor = delta > 0 ? 1.12 : 0.88;
           let newRange = range * zoomFactor;
@@ -2890,19 +2867,16 @@
             newStart = 100 - newRange;
           }
 
-          if (isKline) { zoomStart = newStart; zoomEnd = newEnd; }
-          else { zoomStart5Min = newStart; zoomEnd5Min = newEnd; }
+          zoomStart = newStart;
+          zoomEnd = newEnd;
         }
-
-        const finalStart = isKline ? zoomStart : zoomStart5Min;
-        const finalEnd = isKline ? zoomEnd : zoomEnd5Min;
 
         chartInstance.dispatchAction({
           type: 'dataZoom',
           batch: [{
             dataZoomIndex: 0,
-            start: finalStart,
-            end: finalEnd
+            start: zoomStart,
+            end: zoomEnd
           }]
         });
       }, true);
@@ -3404,58 +3378,31 @@
       }
     }
 
-    let currentChartType = '60min'; // '60min' | 'kline' | 'timeShare' | '5min'
-    let minuteData = null;
-    let kline5MinData = [];
+    let currentChartType = '60min'; // '60min' | 'kline'
     let kline60MinData = [];
     let klineDailyData = [];
 
     function switchChartType(type) {
       isChartSwitching = true;
-      currentChartType = type;
+      currentChartType = (type === 'kline') ? 'kline' : '60min';
       document.querySelectorAll('.chart-type-tab').forEach(b => b.classList.remove('active'));
 
-      let tabEl = document.getElementById('tab60Min');
-      if (type === 'kline') tabEl = document.getElementById('tabKline');
-      else if (type === 'timeShare') tabEl = document.getElementById('tabTimeShare');
-      else if (type === '5min') tabEl = document.getElementById('tab5Min');
+      let tabEl = document.getElementById(currentChartType === 'kline' ? 'tabKline' : 'tab60Min');
       if (tabEl) tabEl.classList.add('active');
 
       const klineInfo = document.getElementById('klineRangeHeaderInfo');
-      const tsInfo = document.getElementById('timeShareHeaderInfo');
-      const fiveMinInfo = document.getElementById('fiveMinHeaderInfo');
       const hint = document.querySelector('.chart-controls-hint');
       const hud = document.getElementById('flushRangeHud');
 
-      if (type === 'timeShare') {
-        if (klineInfo) klineInfo.style.display = 'none';
-        if (tsInfo) tsInfo.style.display = 'flex';
-        if (fiveMinInfo) fiveMinInfo.style.display = 'none';
-        if (hint) hint.innerText = '💡 分时走势：参考同花顺标准241分钟固定盘口，蓝线为现价，黄线为加权均价(VWAP)，未走完右侧留白';
-        if (hud) hud.style.display = 'none';
-        loadMinuteData(currentSymbol);
-      } else if (type === '5min') {
-        if (klineInfo) klineInfo.style.display = 'none';
-        if (tsInfo) tsInfo.style.display = 'none';
-        if (fiveMinInfo) fiveMinInfo.style.display = 'flex';
-        if (hint) hint.innerText = '💡 5分K线：默认展示今日 | 滚轮：放大/缩小 | Shift+滚轮：左右平移查看历史K线';
-        if (hud) hud.style.display = 'none';
-        zoomStart5Min = null; // Always open centered on today
-        load5MinData(currentSymbol);
-      } else if (type === '60min') {
-        if (klineInfo) klineInfo.style.display = 'flex';
-        if (tsInfo) tsInfo.style.display = 'none';
-        if (fiveMinInfo) fiveMinInfo.style.display = 'none';
-        if (hint) hint.innerText = '💡 60分K线：量化买卖核心参考周期 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
-        if (isRangeStatActive && hud) hud.style.display = 'block';
-        load60MinData(currentSymbol);
-      } else {
-        if (klineInfo) klineInfo.style.display = 'flex';
-        if (tsInfo) tsInfo.style.display = 'none';
-        if (fiveMinInfo) fiveMinInfo.style.display = 'none';
+      if (klineInfo) klineInfo.style.display = 'flex';
+      if (isRangeStatActive && hud) hud.style.display = 'block';
+
+      if (currentChartType === 'kline') {
         if (hint) hint.innerText = '💡 日K线：趋势参考 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
-        if (isRangeStatActive && hud) hud.style.display = 'block';
         loadStockData(currentSymbol);
+      } else {
+        if (hint) hint.innerText = '💡 60分K线：量化买卖核心参考周期 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
+        load60MinData(currentSymbol);
       }
     }
 
@@ -4670,9 +4617,6 @@
         const rt = await window.pywebview.api.get_realtime_quote(currentSymbol);
         latestRealtimeQuote = rt;
         updateRealtimeUI(rt);
-        if (currentChartType === 'timeShare') {
-          loadMinuteData(currentSymbol);
-        }
       }
     }
 
@@ -4698,11 +4642,6 @@
         }
       } else if (currentChartType === '60min') {
         // 处于60分周期下，保持60分K线视图
-      } else if (currentChartType === 'timeShare') {
-        loadMinuteData(currentSymbol);
-      } else if (currentChartType === '5min') {
-        zoomStart5Min = null;
-        load5MinData(currentSymbol);
       }
       refreshRealtimeQuote();
     }
@@ -5411,16 +5350,10 @@
 
     function switchStock(symbol) {
       currentSymbol = symbol;
-      zoomStart5Min = null;
-      zoomEnd5Min = 100;
-      if (currentChartType === '60min') {
-        load60MinData(symbol);
-      } else if (currentChartType === 'timeShare') {
-        loadMinuteData(symbol);
-      } else if (currentChartType === '5min') {
-        load5MinData(symbol);
-      } else {
+      if (currentChartType === 'kline') {
         loadStockData(symbol);
+      } else {
+        load60MinData(symbol);
       }
     }
 

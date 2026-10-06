@@ -28,7 +28,8 @@ const MobileQuantEngine = (function() {
     { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF", close: 0.571, prev_close: 0.565, pct_change: 1.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
     { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, pct_change: 1.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
     { sector: "电力绿电", code: "sz159611", desc: "电力ETF", close: 1.040, prev_close: 1.037, pct_change: 0.29, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-    { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, pct_change: -0.14, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" }
+    { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, pct_change: -0.14, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
+    { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" }
   ];
 
   const STORAGE_KEY_WATCHLIST = "stock_master_mobile_watchlist";
@@ -40,7 +41,7 @@ const MobileQuantEngine = (function() {
     if (!raw) return "sh515880";
     let s = String(raw).trim().toLowerCase();
     if (/^\d{6}$/.test(s)) {
-      if (s.startsWith("6") || s.startsWith("9") || s.startsWith("688")) {
+      if (s.startsWith("6") || s.startsWith("9") || s.startsWith("688") || s.startsWith("588") || s.startsWith("51")) {
         return "sh" + s;
       } else if (s.startsWith("0") || s.startsWith("3") || s.startsWith("159") || s.startsWith("12") || s.startsWith("16") || s.startsWith("399")) {
         return "sz" + s;
@@ -661,7 +662,23 @@ const MobileQuantEngine = (function() {
     let customList = [];
     try {
       const saved = localStorage.getItem(STORAGE_KEY_WATCHLIST);
-      if (saved) customList = JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const savedCodes = new Set(parsed.map(x => (x.code || x.symbol || '').toLowerCase()));
+          const isPureSubset = parsed.every(x => DEFAULT_SECTOR_ETFS.some(d => d.code.toLowerCase() === (x.code || x.symbol || '').toLowerCase()));
+          if (isPureSubset && parsed.length < DEFAULT_SECTOR_ETFS.length) {
+            const merged = [...parsed];
+            DEFAULT_SECTOR_ETFS.forEach(d => {
+              if (!savedCodes.has(d.code.toLowerCase())) merged.push(d);
+            });
+            localStorage.setItem(STORAGE_KEY_WATCHLIST, JSON.stringify(merged));
+            customList = merged;
+          } else {
+            customList = parsed;
+          }
+        }
+      }
     } catch (e) {}
 
     const listToLoad = (customList && customList.length > 0) ? customList : DEFAULT_SECTOR_ETFS;

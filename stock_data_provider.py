@@ -31,7 +31,8 @@ PRESET_ETF_QUOTES = {
     "sh512400": {"name": "有色金属ETF", "sector": "有色金属", "close": 1.732, "prev_close": 1.708, "pct_change": 1.41, "tag": "防守持有", "tag_color": "#64748b", "reason": "大宗商品周期震荡"},
     "sh515220": {"name": "煤炭ETF", "sector": "煤炭周期", "close": 1.249, "prev_close": 1.258, "pct_change": -0.72, "tag": "防守持有", "tag_color": "#64748b", "reason": "高股息防御风格"},
     "sz159611": {"name": "电力ETF", "sector": "电力绿电", "close": 1.040, "prev_close": 1.037, "pct_change": 0.29, "tag": "防守持有", "tag_color": "#64748b", "reason": "绿电稳健防御"},
-    "sh515180": {"name": "红利ETF", "sector": "红利低波", "close": 1.409, "prev_close": 1.411, "pct_change": -0.14, "tag": "防守持有", "tag_color": "#64748b", "reason": "红利低波防御"}
+    "sh515180": {"name": "红利ETF", "sector": "红利低波", "close": 1.409, "prev_close": 1.411, "pct_change": -0.14, "tag": "防守持有", "tag_color": "#64748b", "reason": "红利低波防御"},
+    "sh588000": {"name": "科创50ETF", "sector": "科创50", "close": 1.616, "prev_close": 1.657, "pct_change": -2.47, "tag": "蓄势回调", "tag_color": "#94a3b8", "reason": "科创硬科技探底寻支撑"}
 }
 
 
@@ -273,7 +274,7 @@ class StockDataProvider:
                 "sz159851", "sz159819", "sz159995", "sz159516", "sh515880", "sz159997",
                 "sz159869", "sh512720", "sh515030", "sh515790", "sh512010", "sz159992",
                 "sz159567", "sh513060", "sh513330", "sh512880", "sh512660", "sh562500",
-                "sh512400", "sh515220", "sz159611", "sh515180"
+                "sh512400", "sh515220", "sz159611", "sh515180", "sh588000"
             ]
         norm_symbols = []
         for s in symbols:
@@ -1150,7 +1151,8 @@ class StockDataProvider:
                 {"sector": "有色金属", "code": "sh512400", "desc": "有色金属ETF"},
                 {"sector": "煤炭周期", "code": "sh515220", "desc": "煤炭ETF"},
                 {"sector": "电力绿电", "code": "sz159611", "desc": "电力ETF"},
-                {"sector": "红利低波", "code": "sh515180", "desc": "红利ETF"}
+                {"sector": "红利低波", "code": "sh515180", "desc": "红利ETF"},
+                {"sector": "科创50", "code": "sh588000", "desc": "科创50ETF"}
             ]
 
         cache_key = tuple(sorted([x.get("code", "") for x in sector_etfs]))
@@ -1699,7 +1701,7 @@ class StockDataProvider:
                 "sh512690": "酒ETF", "sh512010": "医药ETF", "sh512480": "半导体ETF",
                 "sz159928": "消费ETF", "sh512800": "银行ETF", "sh515050": "5GETF",
                 "sz159996": "家电ETF", "sh515790": "光伏ETF", "sh515030": "新能源车ETF",
-                "sh510300": "沪深300ETF", "sh000001": "上证指数"
+                "sh510300": "沪深300ETF", "sh588000": "科创50ETF", "sh000001": "上证指数"
             }
             name = pool_map.get(symbol.lower(), symbol)
 
@@ -1807,7 +1809,8 @@ class StockDataProvider:
                 {"sector": "有色金属", "code": "sh512400", "desc": "有色金属ETF"},
                 {"sector": "煤炭周期", "code": "sh515220", "desc": "煤炭ETF"},
                 {"sector": "电力绿电", "code": "sz159611", "desc": "电力ETF"},
-                {"sector": "红利低波", "code": "sh515180", "desc": "红利ETF"}
+                {"sector": "红利低波", "code": "sh515180", "desc": "红利ETF"},
+                {"sector": "科创50", "code": "sh588000", "desc": "科创50ETF"}
             ]
 
         try:
