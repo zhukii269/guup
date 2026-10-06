@@ -695,12 +695,12 @@
         <div class="filter-bar">
           <div class="pill-scroll" id="filterPills">
             <div class="filter-pill active" data-filter="全部">全部</div>
-            <div class="filter-pill" data-filter="买入">60分买入</div>
+            <div class="filter-pill" data-filter="买入">买入信号</div>
             <div class="filter-pill" data-filter="持有">持仓观察</div>
             <div class="filter-pill" data-filter="减仓">减半止盈</div>
             <div class="filter-pill" data-filter="即将满足">即将满足</div>
             <div class="filter-pill" data-filter="观望">观望等待</div>
-            <div class="filter-pill" data-filter="卖出">60分卖出</div>
+            <div class="filter-pill" data-filter="卖出">卖出信号</div>
           </div>
         </div>
 
@@ -710,7 +710,7 @@
       </div>
 
       <!-- ======================================================= -->
-      <!-- TAB 2: K线决策图页面 (支持 60分 / 日K 自由切换) -->
+      <!-- TAB 2: K线决策图页面 (支持 30分 / 60分 / 日K 自由切换) -->
       <!-- ======================================================= -->
       <div class="view-page" id="view-kline">
         <div class="kline-header">
@@ -722,6 +722,7 @@
               <span class="kline-cursor-date" id="klineCursorDate"></span>
             </div>
             <div class="kline-period-group">
+              <button class="kline-period-btn" id="btnPeriod30m" onclick="switchKlinePeriod('m30')">30分</button>
               <button class="kline-period-btn active" id="btnPeriod60m" onclick="switchKlinePeriod('m60')">60分</button>
               <button class="kline-period-btn" id="btnPeriodDay" onclick="switchKlinePeriod('day')">日K</button>
             </div>
@@ -941,12 +942,14 @@
           const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
           const sign = isUp ? '+' : '';
           const card = document.createElement('div');
-          card.className = 'stock-card';
-          card.innerHTML = `
+            const isT0 = item.trade_rule === 'T+0' || (window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(item.code, item.name));
+            const t0Badge = isT0 ? '<span style="font-size:10px; background:#0284c7; color:#fff; padding:1px 4px; border-radius:3px; font-weight:700; margin-left:3px;">T+0</span>' : '';
+            card.innerHTML = `
             <div class="card-top">
               <div class="card-name-group">
                 <span class="card-name">${item.name}</span>
                 <span class="card-code">${item.code}</span>
+                ${t0Badge}
               </div>
               <span class="card-sector">${item.sector}</span>
             </div>
@@ -1086,20 +1089,41 @@
 
       function switchKlinePeriod(period) {
         currentPeriod = period;
+        const b30 = document.getElementById('btnPeriod30m');
         const b60 = document.getElementById('btnPeriod60m');
         const bDay = document.getElementById('btnPeriodDay');
+        if (b30) b30.classList.toggle('active', period === 'm30');
         if (b60) b60.classList.toggle('active', period === 'm60');
         if (bDay) bDay.classList.toggle('active', period === 'day');
         loadStockKline(currentSymbol, period);
       }
       window.switchKlinePeriod = switchKlinePeriod;
 
-      // 加载个股K线数据 (支持 60分 / 日K)
-      async function loadStockKline(symbol, period = currentPeriod) {
+      // 加载个股K线数据 (支持 30分 / 60分 / 日K)
+      async function loadStockKline(symbol, period = null) {
         dom.chartLoading.style.display = 'flex';
         try {
+          // 若未明确传周期，根据交易制度智能选择: T+0 -> 30分, T+1 -> 60分 (若当前在日K则保持日K)
+          if (!period) {
+            if (currentPeriod === 'day') {
+              period = 'day';
+            } else {
+              const isT0 = window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(symbol);
+              period = isT0 ? 'm30' : 'm60';
+            }
+          }
+          currentPeriod = period;
+          const b30 = document.getElementById('btnPeriod30m');
+          const b60 = document.getElementById('btnPeriod60m');
+          const bDay = document.getElementById('btnPeriodDay');
+          if (b30) b30.classList.toggle('active', period === 'm30');
+          if (b60) b60.classList.toggle('active', period === 'm60');
+          if (bDay) bDay.classList.toggle('active', period === 'day');
+
           let res;
-          if (period === 'm60') {
+          if (period === 'm30') {
+            res = await MobileQuantEngine.get30MinKlines(symbol, 320);
+          } else if (period === 'm60') {
             res = await MobileQuantEngine.get60MinKlines(symbol, 320);
           } else {
             res = await MobileQuantEngine.getDailyKlines(symbol, 400);
@@ -1169,7 +1193,7 @@
         const ma5Str = lastBar.ma5 ? lastBar.ma5.toFixed(3) : '--';
         const ma10Str = lastBar.ma10 ? lastBar.ma10.toFixed(3) : '--';
         const ma20Str = lastBar.ma20 ? lastBar.ma20.toFixed(3) : '--';
-        const periodLabel = currentPeriod === 'm60' ? '60分K线' : '日K线';
+        const periodLabel = currentPeriod === 'm30' ? '30分K线' : (currentPeriod === 'm60' ? '60分K线' : '日K线');
         const maTitle = `${periodLabel}  MA5:${ma5Str}  MA10:${ma10Str}  MA20:${ma20Str}`;
 
         // 买卖信号标记

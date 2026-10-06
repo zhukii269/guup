@@ -1885,6 +1885,7 @@
       <!-- Subtitle & Chart Type Switcher Line -->
       <div class="flush-subtitle-bar">
         <div class="chart-type-tabs">
+          <button class="chart-type-tab" id="tab30Min" onclick="switchChartType('30min')">⏱️ 30分钟</button>
           <button class="chart-type-tab active" id="tab60Min" onclick="switchChartType('60min')">⏱️ 60分钟</button>
           <button class="chart-type-tab" id="tabKline" onclick="switchChartType('kline')">📊 日K线</button>
         </div>
@@ -2087,30 +2088,48 @@
       return Math.round((Number(val) || 0) * 1000) / 1000;
     }
 
+    function isT0Symbol(symbol, name = '') {
+      if (!symbol) return false;
+      const sym = String(symbol).toLowerCase().trim();
+      const code = sym.startsWith('sh') || sym.startsWith('sz') ? sym.slice(2) : sym;
+      const nameStr = String(name || '');
+      const t0Keywords = ['港股', '恒生', '中概', '纳指', '纳斯达克', '标普', '日经', '德国', '黄金', '白银', '豆粕', '有色期货', '大宗商品', '海外', '境外', '美股', '道琼斯', '亚太', '东证', '国债', '转债', '货币'];
+      if (t0Keywords.some(k => nameStr.includes(k))) return true;
+      if (sym.startsWith('sh')) {
+        if (code.startsWith('513') || code.startsWith('518') || code.startsWith('511')) return true;
+      }
+      if (sym.startsWith('sz')) {
+        const t0SzCodes = new Set(['159567', '159792', '159740', '159920', '159941', '159934', '159937', '159830', '159834', '159980', '159985', '159981']);
+        if (t0SzCodes.has(code)) return true;
+        if ((code.startsWith('1595') || code.startsWith('1597')) && ['港', '恒', '美', '海外', '科技'].some(w => nameStr.includes(w))) return true;
+      }
+      return false;
+    }
+
     const DEFAULT_SECTOR_ETFS = [
-      { sector: "通信技术", code: "sh515880", desc: "通信ETF", close: 0.626, prev_close: 0.627, change: -0.001, pct_change: -0.16, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "新能源车", code: "sh515030", desc: "新能源车ETF", close: 1.456, prev_close: 1.458, change: -0.002, pct_change: -0.14, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF", close: 1.080, prev_close: 1.071, change: 0.009, pct_change: 0.84, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "光伏新能源", code: "sh515790", desc: "光伏ETF", close: 0.815, prev_close: 0.793, change: 0.022, pct_change: 2.77, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "A股创新药", code: "sz159992", desc: "创新药ETF", close: 0.835, prev_close: 0.830, change: 0.005, pct_change: 0.60, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "大金融证券", code: "sh512880", desc: "证券ETF", close: 1.057, prev_close: 1.042, change: 0.015, pct_change: 1.44, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "国防军工", code: "sh512660", desc: "军工ETF", close: 1.160, prev_close: 1.142, change: 0.018, pct_change: 1.58, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF", close: 1.249, prev_close: 1.258, change: -0.009, pct_change: -0.72, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "医药生物", code: "sh512010", desc: "医药ETF", close: 0.373, prev_close: 0.372, change: 0.001, pct_change: 0.27, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, change: -0.002, pct_change: -0.14, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓" },
-      { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF", close: 0.682, prev_close: 0.680, change: 0.002, pct_change: 0.29, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "60分多头趋势保持良好，继续持有观察" },
-      { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "60分多头趋势保持良好，继续持有观察" },
-      { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF", close: 0.571, prev_close: 0.565, change: 0.006, pct_change: 1.06, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "60分多头趋势保持良好，继续持有观察" },
-      { sector: "恒生互联网", code: "sh513330", desc: "恒生互联网ETF", close: 0.346, prev_close: 0.341, change: 0.005, pct_change: 1.47, tag: "即将满足", tag_color: "#2563eb", reason_summary: "60分关键指标转多，密切留意共振" },
-      { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, change: 0.018, pct_change: 1.97, tag: "即将满足", tag_color: "#2563eb", reason_summary: "60分关键指标转多，密切留意共振" },
-      { sector: "计算机软件", code: "sh512720", desc: "计算机ETF", close: 1.134, prev_close: 1.114, change: 0.020, pct_change: 1.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "电力绿电", code: "sz159611", desc: "电力ETF", close: 1.040, prev_close: 1.037, change: 0.003, pct_change: 0.29, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "人工智能", code: "sz159819", desc: "人工智能ETF", close: 1.762, prev_close: 1.714, change: 0.048, pct_change: 2.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "半导体芯片", code: "sz159995", desc: "芯片ETF", close: 1.152, prev_close: 1.114, change: 0.038, pct_change: 3.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "半导体设备", code: "sz159516", desc: "半导体设备ETF", close: 0.729, prev_close: 0.703, change: 0.026, pct_change: 3.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "消费电子", code: "sz159997", desc: "电子ETF", close: 2.114, prev_close: 2.059, change: 0.055, pct_change: 2.67, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, change: 0.014, pct_change: 2.38, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" },
-      { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察" }
+      { sector: "通信技术", code: "sh515880", desc: "通信ETF", close: 0.626, prev_close: 0.627, change: -0.001, pct_change: -0.16, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "新能源车", code: "sh515030", desc: "新能源车ETF", close: 1.456, prev_close: 1.458, change: -0.002, pct_change: -0.14, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF", close: 1.080, prev_close: 1.071, change: 0.009, pct_change: 0.84, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "光伏新能源", code: "sh515790", desc: "光伏ETF", close: 0.815, prev_close: 0.793, change: 0.022, pct_change: 2.77, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "A股创新药", code: "sz159992", desc: "创新药ETF", close: 0.835, prev_close: 0.830, change: 0.005, pct_change: 0.60, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "大金融证券", code: "sh512880", desc: "证券ETF", close: 1.057, prev_close: 1.042, change: 0.015, pct_change: 1.44, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "国防军工", code: "sh512660", desc: "军工ETF", close: 1.160, prev_close: 1.142, change: 0.018, pct_change: 1.58, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF", close: 1.249, prev_close: 1.258, change: -0.009, pct_change: -0.72, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "医药生物", code: "sh512010", desc: "医药ETF", close: 0.373, prev_close: 0.372, change: 0.001, pct_change: 0.27, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, change: -0.002, pct_change: -0.14, tag: "60分买入", tag_color: "#dc2626", reason_summary: "60分钟多指标共振确认，顺势分批建仓", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "恒生互联网", code: "sh513330", desc: "恒生互联网ETF", close: 0.346, prev_close: 0.341, change: 0.005, pct_change: 1.47, tag: "30分买入", tag_color: "#dc2626", reason_summary: "30分钟多指标共振确认，顺势分批建仓", trade_rule: "T+0", optimal_period: "30min" },
+      { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF", close: 0.682, prev_close: 0.680, change: 0.002, pct_change: 0.29, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "30min" },
+      { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "60分多头趋势保持良好，继续持有观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF", close: 0.571, prev_close: 0.565, change: 0.006, pct_change: 1.06, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "30min" },
+      { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, change: 0.018, pct_change: 1.97, tag: "即将满足", tag_color: "#2563eb", reason_summary: "60分关键指标转多，密切留意共振", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "计算机软件", code: "sh512720", desc: "计算机ETF", close: 1.134, prev_close: 1.114, change: 0.020, pct_change: 1.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "电力绿电", code: "sz159611", desc: "电力ETF", close: 1.040, prev_close: 1.037, change: 0.003, pct_change: 0.29, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "人工智能", code: "sz159819", desc: "人工智能ETF", close: 1.762, prev_close: 1.714, change: 0.048, pct_change: 2.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "半导体芯片", code: "sz159995", desc: "芯片ETF", close: 1.152, prev_close: 1.114, change: 0.038, pct_change: 3.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "半导体设备", code: "sz159516", desc: "半导体设备ETF", close: 0.729, prev_close: 0.703, change: 0.026, pct_change: 3.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "消费电子", code: "sz159997", desc: "电子ETF", close: 2.114, prev_close: 2.059, change: 0.055, pct_change: 2.67, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, change: 0.014, pct_change: 2.38, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
+      { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" }
     ];
 
     function getUserWatchList() {
@@ -2164,7 +2183,7 @@
       loadWatchPool();
     }
 
-    const WATCH_POOL_CACHE_VER = '20261006_m60_v2';
+    const WATCH_POOL_CACHE_VER = '20261006_m30_m60_v1';
 
     function renderWatchPoolImmediate() {
       try {
@@ -2312,7 +2331,11 @@
 
         // 并行非阻塞异步执行，绝不串行等待，确保各模块瞬间呈现
         syncAppConfig().catch(e => console.error("syncAppConfig error:", e));
-        load60MinData(currentSymbol).catch(e => console.error("load60MinData error:", e));
+        if (isT0Symbol(currentSymbol)) {
+          switchChartType('30min');
+        } else {
+          switchChartType('60min');
+        }
         loadWatchPool().catch(e => console.error("loadWatchPool error:", e));
       }
 
@@ -2333,7 +2356,11 @@
             clearInterval(timer);
             if (!pywebviewInitDone) {
               pywebviewInitDone = true;
-              fetchDirect60MinData(currentSymbol);
+              if (isT0Symbol(currentSymbol)) {
+                switchChartType('30min');
+              } else {
+                switchChartType('60min');
+              }
               if (!currentWatchPool || currentWatchPool.length === 0) {
                 renderWatchPool(DEFAULT_SECTOR_ETFS.map(x => ({ ...x, pct_change: x.pct_change || 0.0, close: x.close || 1.0, tag: x.tag || '蓄势观察' })));
               }
@@ -2352,6 +2379,12 @@
       
       // 0毫秒极速瞬时渲染观察池，首屏绝不留白
       renderWatchPoolImmediate();
+
+      if (isT0Symbol(currentSymbol)) {
+        load30MinData(currentSymbol);
+      } else {
+        load60MinData(currentSymbol);
+      }
 
       initPyWebViewReady();
 
@@ -2473,12 +2506,15 @@
         const tagText = item.tag || '观望持仓';
         const tagBg = item.tag_color || '#ea580c';
 
+        const isT0 = item.trade_rule === 'T+0' || isT0Symbol(item.code, item.name);
+        const t0Badge = isT0 ? `<span style="font-size:9px; background:#0284c7; color:#fff; border-radius:3px; padding:1px 3px; font-weight:700; margin-left:3px;">T+0</span>` : '';
+
         return `
           <div class="watch-card-wrapper">
             ${checkboxHtml}
             <div class="watch-card ${isActive ? 'active' : ''}" style="flex:1; min-width:0;" onclick="${isBatchDeleteMode ? `toggleSelectCard('${item.code}', event)` : `selectWatchItem('${item.symbol || item.code}')`}">
               <div class="watch-card-top" style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="watch-sector-name">${item.sector || '自选板块'}</span>
+                <span class="watch-sector-name">${item.sector || '自选板块'}${t0Badge}</span>
                 <span class="watch-tag" style="background:${tagBg}; color:#ffffff; font-weight:bold; padding:2px 6px; border-radius:4px; font-size:10px; flex-shrink:0;">${tagText}</span>
               </div>
               <div class="watch-card-mid" style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
@@ -2518,7 +2554,7 @@
       window.addEventListener('resize', () => chartInstance.resize());
 
       chartInstance.on('dataZoom', (params) => {
-        if (currentChartType !== 'kline' && currentChartType !== '5min' && currentChartType !== '60min') return;
+        if (currentChartType !== 'kline' && currentChartType !== '5min' && currentChartType !== '60min' && currentChartType !== '30min') return;
         let s = null, e = null;
         if (params.batch && params.batch[0]) {
           if (typeof params.batch[0].start === 'number') s = params.batch[0].start;
@@ -2658,7 +2694,7 @@
         updateHeaderFromBar(klineData[klineData.length - 1]);
       }
 
-      if (currentChartType === 'kline') {
+      if (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min') {
         if (klineData && klineData.length > 0) {
           const latestBar = klineData[klineData.length - 1];
           chartInstance.setOption({
@@ -2699,7 +2735,7 @@
       if (!chartInstance || isChartSwitching || activeRenderedChartType !== currentChartType) return;
       lastHoveredIdx = idx;
 
-      if (currentChartType === 'kline') {
+      if (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min') {
         if (!klineData || idx >= klineData.length) return;
         const bar = klineData[idx];
         if (!bar) return;
@@ -2764,7 +2800,7 @@
 
     function getMaTitle(bar) {
       if (!bar) return '{lbl|均线}';
-      const prefix = (currentChartType === '60min') ? '60分均线' : '均线';
+      const prefix = (currentChartType === '30min') ? '30分均线' : ((currentChartType === '60min') ? '60分均线' : '均线');
       return `{lbl|${prefix}}  {m5|MA5:${bar.ma5 ? bar.ma5.toFixed(3) : '-'}}  {m10|MA10:${bar.ma10 ? bar.ma10.toFixed(3) : '-'}}  {m20|MA20:${bar.ma20 ? bar.ma20.toFixed(3) : '-'}}  {m30|MA30:${bar.ma30 ? bar.ma30.toFixed(3) : '-'}}`;
     }
 
@@ -2882,10 +2918,134 @@
       }, true);
 
       chartDom.addEventListener('mouseleave', function() {
-        if (klineData && klineData.length > 0 && (currentChartType === 'kline' || currentChartType === '60min')) {
+        if (klineData && klineData.length > 0 && (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min')) {
           updateTitles(klineData[klineData.length - 1]);
         }
       });
+    }
+
+    async function load30MinData(symbol) {
+      currentSymbol = symbol;
+      latestRealtimeQuote = null;
+
+      // 1. 本地 localStorage 极速直出 (0ms 秒开)
+      try {
+        const cachedKlines = localStorage.getItem('stock_master_kline30_cache_' + symbol);
+        if (cachedKlines) {
+          const parsed = JSON.parse(cachedKlines);
+          if (parsed && parsed.klines && parsed.klines.length > 0) {
+            kline30MinData = parsed.klines;
+            if (currentChartType === '30min') {
+              renderData30Min(parsed);
+            }
+          }
+        }
+      } catch(e) {}
+
+      // 2. 异步请求最新 30 分钟行情并更新本地缓存
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_30min_klines) {
+          const res = await window.pywebview.api.get_30min_klines(symbol);
+          if (res && res.klines && res.klines.length > 0) {
+            kline30MinData = res.klines;
+            if (currentChartType === '30min') {
+              renderData30Min(res);
+            }
+            try {
+              localStorage.setItem('stock_master_kline30_cache_' + symbol, JSON.stringify(res));
+            } catch(e) {}
+          }
+        } else {
+          fetchDirect30MinData(symbol);
+        }
+      } catch (err) {
+        console.error("Error loading 30min stock data:", err);
+        fetchDirect30MinData(symbol);
+      }
+    }
+
+    async function fetchDirect30MinData(symbol) {
+      currentSymbol = symbol;
+      try {
+        const url = `https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=${symbol},m30,,320`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const stockDict = data?.data?.[symbol] || {};
+        const m30Data = stockDict.m30 || [];
+
+        const klines = [];
+        for (let i = 0; i < m30Data.length; i++) {
+          const bar = m30Data[i];
+          if (bar.length >= 6) {
+            const dtStr = String(bar[0]);
+            const fmtDt = dtStr.length >= 12 ? `${dtStr.slice(0,4)}-${dtStr.slice(4,6)}-${dtStr.slice(6,8)} ${dtStr.slice(8,10)}:${dtStr.slice(10,12)}` : dtStr;
+            const datePart = dtStr.length >= 8 ? `${dtStr.slice(0,4)}-${dtStr.slice(4,6)}-${dtStr.slice(6,8)}` : dtStr;
+            const timePart = dtStr.length >= 12 ? `${dtStr.slice(8,10)}:${dtStr.slice(10,12)}` : dtStr;
+
+            const openVal = parseFloat(bar[1]);
+            const closeVal = parseFloat(bar[2]);
+            const highVal = parseFloat(bar[3]);
+            const lowVal = parseFloat(bar[4]);
+            const volVal = parseFloat(bar[5]);
+            const prevClose = i > 0 ? parseFloat(m30Data[i-1][2]) : openVal;
+            const chgVal = closeVal - prevClose;
+            const pctVal = prevClose > 0 ? (chgVal / prevClose * 100.0) : 0;
+
+            klines.push({
+              date: fmtDt,
+              day_date: datePart,
+              time: timePart,
+              datetime: fmtDt,
+              open: openVal,
+              close: closeVal,
+              high: highVal,
+              low: lowVal,
+              volume: volVal,
+              prev_close: prevClose,
+              change: chgVal,
+              pct_change: pctVal
+            });
+          }
+        }
+
+        computeClientIndicators(klines);
+        addClientSignals(klines, "30分");
+
+        const resObj = {
+          symbol: symbol,
+          code: symbol.slice(2),
+          name: stockDict?.qt?.[symbol]?.[1] || (symbol === 'sh000001' ? '上证指数' : '股票'),
+          klines: klines
+        };
+        kline30MinData = klines;
+        if (currentChartType === '30min') {
+          renderData30Min(resObj);
+        }
+      } catch (err) {
+        console.error("Direct fetch 30min error:", err);
+      }
+    }
+
+    function renderData30Min(res) {
+      if (!res || !res.klines) return;
+
+      currentStockName = res.name || currentSymbol;
+      document.getElementById('stockName').innerText = res.name || "股票/指数";
+      document.getElementById('stockCode').innerText = res.code ? `${res.code}.${res.symbol.slice(0, 2).toUpperCase()}` : res.symbol;
+
+      kline30MinData = res.klines;
+      klineData = res.klines;
+      if (klineData.length > 0) {
+        const lastBar = klineData[klineData.length - 1];
+        updateHeaderFromBar(lastBar);
+
+        const defaultIdx = Math.max(0, klineData.length - 27);
+        updateFlushRangeStat(defaultIdx);
+        updateQuantStatusChip(lastBar);
+
+        renderKlineChart();
+      }
+      refreshRealtimeQuote();
     }
 
     async function load60MinData(symbol) {
@@ -2973,7 +3133,7 @@
         }
 
         computeClientIndicators(klines);
-        addClientSignals(klines);
+        addClientSignals(klines, "60分");
 
         const resObj = {
           symbol: symbol,
@@ -3169,7 +3329,7 @@
       }
     }
 
-    function addClientSignals(klines) {
+    function addClientSignals(klines, timeframeName = "60分") {
       if (!klines || klines.length < 30) return;
 
       let inPosition = false;
@@ -3259,7 +3419,7 @@
 
           if (condMa5Up && condMacdTrend && condMacdGoldClose && condKdjBull && (!isVolumeSurgeUp)) {
             bar.signal_type = "B";
-            bar.signal_name = "买入: 60分多指标共振";
+            bar.signal_name = `买入: ${timeframeName}多指标共振`;
             bar.signal_position = "标准建仓 / 试错开仓";
             const reasonExtra = (bar.pct_change >= 3.0 && bar.volume >= 1.3 * volMa5) ? "底部放量突破确认" : "满足共振条件";
             bar.signal_reason = `MA5止跌(${ma5 ? ma5.toFixed(3) : '-'}), MACD金叉附近(场景A/B+DIF主动上行), KDJ多头(K>D), ${reasonExtra}`;
@@ -3378,16 +3538,26 @@
       }
     }
 
-    let currentChartType = '60min'; // '60min' | 'kline'
+    let currentChartType = '60min'; // '30min' | '60min' | 'kline'
+    let kline30MinData = [];
     let kline60MinData = [];
     let klineDailyData = [];
 
     function switchChartType(type) {
       isChartSwitching = true;
-      currentChartType = (type === 'kline') ? 'kline' : '60min';
+      if (type === 'kline') {
+        currentChartType = 'kline';
+      } else if (type === '30min') {
+        currentChartType = '30min';
+      } else {
+        currentChartType = '60min';
+      }
       document.querySelectorAll('.chart-type-tab').forEach(b => b.classList.remove('active'));
 
-      let tabEl = document.getElementById(currentChartType === 'kline' ? 'tabKline' : 'tab60Min');
+      let tabId = 'tab60Min';
+      if (currentChartType === 'kline') tabId = 'tabKline';
+      else if (currentChartType === '30min') tabId = 'tab30Min';
+      let tabEl = document.getElementById(tabId);
       if (tabEl) tabEl.classList.add('active');
 
       const klineInfo = document.getElementById('klineRangeHeaderInfo');
@@ -3400,8 +3570,11 @@
       if (currentChartType === 'kline') {
         if (hint) hint.innerText = '💡 日K线：趋势参考 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
         loadStockData(currentSymbol);
+      } else if (currentChartType === '30min') {
+        if (hint) hint.innerText = '💡 30分K线：T+0核心参考周期（港股/黄金/跨境） | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
+        load30MinData(currentSymbol);
       } else {
-        if (hint) hint.innerText = '💡 60分K线：量化买卖核心参考周期 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
+        if (hint) hint.innerText = '💡 60分K线：T+1量化买卖核心参考周期 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
         load60MinData(currentSymbol);
       }
     }
@@ -4640,8 +4813,8 @@
 
           renderKlineChart();
         }
-      } else if (currentChartType === '60min') {
-        // 处于60分周期下，保持60分K线视图
+      } else if (currentChartType === '60min' || currentChartType === '30min') {
+        // 处于分时K线周期下，保持分时K线视图
       }
       refreshRealtimeQuote();
     }
@@ -5350,10 +5523,13 @@
 
     function switchStock(symbol) {
       currentSymbol = symbol;
+      const isT0 = isT0Symbol(symbol);
       if (currentChartType === 'kline') {
         loadStockData(symbol);
       } else {
-        load60MinData(symbol);
+        // 根据标的类型（T+0用30分，T+1用60分）自动匹配最优推荐周期
+        const targetType = isT0 ? '30min' : '60min';
+        switchChartType(targetType);
       }
     }
 

@@ -253,6 +253,106 @@ const MobileQuantEngine = (function() {
     return { symbol: fullSym, code: fullSym.slice(2), name: fullSym, klines: [] };
   }
 
+  // 智能识别ETF交易制度 (T+0 vs T+1)
+  function isT0Symbol(symbol, name = '') {
+    if (!symbol) return false;
+    const sym = String(symbol).toLowerCase().trim();
+    const code = sym.startsWith('sh') || sym.startsWith('sz') ? sym.slice(2) : sym;
+    const nameStr = String(name || '');
+    const t0Keywords = ['港股', '恒生', '中概', '纳指', '纳斯达克', '标普', '日经', '德国', '黄金', '白银', '豆粕', '有色期货', '大宗商品', '海外', '境外', '美股', '道琼斯', '亚太', '东证', '国债', '转债', '货币'];
+    if (t0Keywords.some(k => nameStr.includes(k))) return true;
+    if (sym.startsWith('sh')) {
+      if (code.startsWith('513') || code.startsWith('518') || code.startsWith('511')) return true;
+    }
+    if (sym.startsWith('sz')) {
+      const t0SzCodes = new Set(['159567', '159792', '159740', '159920', '159941', '159934', '159937', '159830', '159834', '159980', '159985', '159981']);
+      if (t0SzCodes.has(code)) return true;
+      if ((code.startsWith('1595') || code.startsWith('1597')) && ['港', '恒', '美', '海外', '科技'].some(w => nameStr.includes(w))) return true;
+    }
+    return false;
+  }
+
+  // 获取 30 分钟 K 线历史数据 (调用腾讯 mkline 接口，原生支持 CORS)
+  async function get30MinKlines(symbol, limit = 320) {
+    const fullSym = normalizeSymbol(symbol);
+    const url = `https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=${fullSym},m30,,${limit}`;
+    try {
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (data && data.data && data.data[fullSym]) {
+        const stockData = data.data[fullSym];
+        const rawBars = stockData.m30 || [];
+        const name = (stockData.qt && stockData.qt[fullSym] && stockData.qt[fullSym][1]) ? stockData.qt[fullSym][1] : fullSym;
+
+        let prevClose = null;
+        const klines = [];
+        for (let i = 0; i < rawBars.length; i++) {
+          const item = rawBars[i];
+          if (!item || item.length < 6) continue;
+          const dtStr = String(item[0]);
+          let dPart = dtStr;
+          let tPart = "";
+          let dtFmt = dtStr;
+          if (dtStr.length >= 12) {
+            dPart = `${dtStr.slice(0, 4)}-${dtStr.slice(4, 6)}-${dtStr.slice(6, 8)}`;
+            tPart = `${dtStr.slice(8, 10)}:${dtStr.slice(10, 12)}`;
+            dtFmt = `${dPart} ${tPart}`;
+          } else if (dtStr.length >= 8) {
+            dPart = `${dtStr.slice(0, 4)}-${dtStr.slice(4, 6)}-${dtStr.slice(6, 8)}`;
+            dtFmt = dPart;
+          }
+
+          const open = parseFloat(item[1]);
+          const close = parseFloat(item[2]);
+          const high = parseFloat(item[3]);
+          const low = parseFloat(item[4]);
+          const volume = parseFloat(item[5]) * 100;
+          const amount = item[7] ? parseFloat(item[7]) * 10000 : 0;
+
+          let pct_change = 0.0;
+          if (prevClose !== null && prevClose > 0) {
+            pct_change = Math.round(((close - prevClose) / prevClose * 100) * 100) / 100;
+          }
+          prevClose = close;
+
+          klines.push({
+            date: dtFmt,
+            day_date: dPart,
+            time: tPart,
+            datetime: dtFmt,
+            open,
+            close,
+            high,
+            low,
+            volume,
+            amount,
+            pct_change
+          });
+        }
+
+        // 注入所有量化技术指标与买卖信号 (标明 30分)
+        addMovingAverages(klines);
+        addEmas(klines);
+        addBoll(klines);
+        addVolumeMovingAverages(klines);
+        addMacd(klines);
+        addKdj(klines);
+        addRsi(klines);
+        addSignals(klines, '30分');
+
+        return {
+          symbol: fullSym,
+          code: fullSym.slice(2),
+          name: name,
+          klines: klines
+        };
+      }
+    } catch (e) {
+      console.error("get30MinKlines error for " + fullSym, e);
+    }
+    return { symbol: fullSym, code: fullSym.slice(2), name: fullSym, klines: [] };
+  }
+
   // 计算均线 MA5, 10, 20, 30, 60
   function addMovingAverages(klines) {
     const closes = klines.map(k => k.close);
@@ -421,7 +521,7 @@ const MobileQuantEngine = (function() {
   }
 
   // 注入量化决策信号 (B, S1, S2, S3, S4, S7)
-  function addSignals(klines) {
+  function addSignals(klines, tfLabel = '60分') {
     if (!klines || klines.length < 30) return;
 
     let inPosition = false;
@@ -526,7 +626,7 @@ const MobileQuantEngine = (function() {
 
         if (condMa5Up && condMacdTrend && condMacdGoldClose && condKdjBull && (!isVolumeSurgeUp)) {
           bar.signal_type = "B";
-          bar.signal_name = "买入: 60分多指标共振";
+          bar.signal_name = `买入: ${tfLabel}多指标共振`;
           bar.signal_position = "标准建仓 / 试错开仓";
           const reasonExtra = (bar.pct_change >= 3.0 && bar.volume >= 1.3 * volMa5) ? "底部放量突破确认" : "满足共振条件";
           bar.signal_reason = `MA5止跌(${ma5.toFixed(3)})，MACD金叉附近(场景A/B+DIF主动上行)，KDJ多头(K>D)，${reasonExtra}`;
@@ -683,10 +783,14 @@ const MobileQuantEngine = (function() {
 
     const listToLoad = (customList && customList.length > 0) ? customList : DEFAULT_SECTOR_ETFS;
 
-    // 并发拉取各标的的 60分钟 K 线数据并判别状态
+    // 并发拉取各标的的 K 线数据 (T+0 标的自动匹配 30分钟，T+1 标的自动匹配 60分钟)
     const promises = listToLoad.map(async (item) => {
       const code = item.code || item.symbol;
-      const data = await get60MinKlines(code, 320);
+      const isT0 = isT0Symbol(code, item.desc || item.name);
+      const tfLabel = isT0 ? "30分" : "60分";
+      const checkBarsCount = isT0 ? 8 : 4;
+
+      const data = isT0 ? await get30MinKlines(code, 320) : await get60MinKlines(code, 320);
       const klines = data.klines || [];
       const quote = await getRealtimeQuote(code);
 
@@ -713,7 +817,9 @@ const MobileQuantEngine = (function() {
           tag_color: "#64748b",
           tag_group: "观望",
           sort_priority: 10,
-          reason_summary: "等待更多 60分钟 交易数据确认",
+          reason_summary: `等待更多 ${tfLabel} 交易数据确认`,
+          trade_rule: isT0 ? "T+0" : "T+1",
+          optimal_period: isT0 ? "m30" : "m60",
           latest_bar: null
         };
       }
@@ -760,20 +866,20 @@ const MobileQuantEngine = (function() {
       let tagColor = "#64748b";
       let tagGroup = "观望";
       let sortPriority = 10;
-      let reasonSummary = "60分形态震荡蓄势，未触发共振买点";
+      let reasonSummary = `${tfLabel}形态震荡蓄势，未触发共振买点`;
 
       if (todaySig === "B" || todaySig === "B1") {
-        tag = "60分买入";
+        tag = `${tfLabel}买入`;
         tagColor = "#dc2626"; // 鲜艳大红 (买入专用)
         tagGroup = "买入";
         sortPriority = 100;
-        reasonSummary = "60分钟多指标共振确认，顺势分批建仓";
+        reasonSummary = `${tfLabel}多指标共振确认，顺势分批建仓`;
       } else if (["S1", "S2", "S7", "S4"].includes(todaySig)) {
-        tag = "60分卖出";
+        tag = `${tfLabel}卖出`;
         tagColor = "#16a34a"; // 鲜艳大绿 (卖出专用)
         tagGroup = "卖出";
         sortPriority = 95;
-        reasonSummary = "60分钟触发分级止盈/止损卖点，建议平仓";
+        reasonSummary = `${tfLabel}触发分级止盈/止损卖点，建议平仓`;
       } else if (todaySig === "S3") {
         tag = "减半止盈";
         tagColor = "#f59e0b"; // 醒目琥珀金 (减仓50%专用)
@@ -792,7 +898,7 @@ const MobileQuantEngine = (function() {
           tagColor = "#ea580c";
           tagGroup = "持有";
           sortPriority = 75;
-          reasonSummary = "60分多头趋势保持良好，继续持有观察";
+          reasonSummary = `${tfLabel}多头趋势保持良好，继续持有观察`;
         }
       } else {
         // 评估是否“即将满足”
@@ -808,7 +914,7 @@ const MobileQuantEngine = (function() {
           tagColor = "#2563eb";
           tagGroup = "即将满足";
           sortPriority = 60;
-          reasonSummary = "60分关键技术指标转多，密切留意共振";
+          reasonSummary = `${tfLabel}关键技术指标转多，密切留意共振`;
         }
       }
 
@@ -839,6 +945,8 @@ const MobileQuantEngine = (function() {
         tag_group: tagGroup,
         sort_priority: sortPriority,
         reason_summary: reasonSummary,
+        trade_rule: isT0 ? "T+0" : "T+1",
+        optimal_period: isT0 ? "m30" : "m60",
         cost_price: inPos ? buyCostPrice : 0,
         buy_cost_price: inPos ? buyCostPrice : 0,
         buy_date: buyDate,
@@ -982,8 +1090,10 @@ const MobileQuantEngine = (function() {
 
   return {
     normalizeSymbol,
+    isT0Symbol,
     getRealtimeQuote,
     getDailyKlines,
+    get30MinKlines,
     get60MinKlines,
     getWatchPool,
     searchStock,

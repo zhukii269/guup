@@ -36,6 +36,30 @@ PRESET_ETF_QUOTES = {
 }
 
 
+def is_t0_etf(symbol, name=""):
+    """
+    智能识别ETF交易制度:
+    T+0品种: 跨境ETF(港股/恒生/美股/日经/德国等)、黄金/商品ETF、国债/债券ETF、货币基金
+    T+1品种: A股境内股票型行业/主题/宽基ETF
+    """
+    sym = str(symbol).lower().strip()
+    code = sym[2:] if sym.startswith(('sh', 'sz')) else sym
+    name_str = str(name or "")
+    t0_keywords = ['港股', '恒生', '中概', '纳指', '纳斯达克', '标普', '日经', '德国', '黄金', '白银', '豆粕', '有色期货', '大宗商品', '海外', '境外', '美股', '道琼斯', '亚太', '东证', '国债', '转债', '货币']
+    if any(k in name_str for k in t0_keywords):
+        return True
+    if sym.startswith('sh'):
+        if code.startswith(('513', '518', '511')):
+            return True
+    if sym.startswith('sz'):
+        t0_sz_codes = {'159567', '159792', '159740', '159920', '159941', '159934', '159937', '159830', '159834', '159980', '159985', '159981'}
+        if code in t0_sz_codes:
+            return True
+        if code.startswith(('1595', '1597')) and any(w in name_str for w in ['港', '恒', '美', '海外', '科技']):
+            return True
+    return False
+
+
 class StockDataProvider:
     def __init__(self):
         self.session = requests.Session()
@@ -50,6 +74,8 @@ class StockDataProvider:
         self._item_data_cache = {}
         self._daily_klines_cache = {}
         self._daily_klines_cache_time = {}
+        self._30min_klines_cache = {}
+        self._30min_klines_cache_time = {}
         self._60min_klines_cache = {}
         self._60min_klines_cache_time = {}
         self._history_pnl_cache = None
@@ -617,6 +643,152 @@ class StockDataProvider:
                 return self._60min_klines_cache[cache_key]
             return {"symbol": symbol, "code": symbol[2:], "name": "", "klines": []}
 
+    def get_30min_klines(self, symbol="sh000001", limit=320):
+        symbol = self.normalize_symbol(symbol)
+        now_ts = time.time()
+        cache_key = (symbol, limit)
+        if hasattr(self, '_30min_klines_cache') and cache_key in self._30min_klines_cache:
+            last_ts = self._30min_klines_cache_time.get(cache_key, 0)
+            if now_ts - last_ts < 20.0:
+                return self._30min_klines_cache[cache_key]
+
+        try:
+            res = self._fetch_and_calculate_30min_klines(symbol, limit)
+            if res and res.get("klines") and len(res["klines"]) > 0:
+                return res
+        except Exception as e:
+            print(f"Fetch 30min klines exception for {symbol}: {e}")
+
+        disk_data = self._load_disk_kline_cache(f"{symbol}_m30", limit)
+        if disk_data and disk_data.get("klines") and len(disk_data["klines"]) > 20:
+            if not hasattr(self, '_30min_klines_cache'):
+                self._30min_klines_cache = {}
+                self._30min_klines_cache_time = {}
+            self._30min_klines_cache[cache_key] = disk_data
+            self._30min_klines_cache_time[cache_key] = now_ts
+            return disk_data
+
+        if hasattr(self, '_30min_klines_cache') and cache_key in self._30min_klines_cache:
+            return self._30min_klines_cache[cache_key]
+
+        return {"symbol": symbol, "code": symbol[2:], "name": "", "klines": []}
+
+    def _fetch_and_calculate_30min_klines(self, symbol="sh000001", limit=320):
+        symbol = self.normalize_symbol(symbol)
+        cache_key = (symbol, limit)
+
+        urls = [
+            f"https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={symbol},m30,,{limit}",
+            f"http://proxy.finance.qq.com/ifzqgtimg/appstock/app/kline/mkline?param={symbol},m30,,{limit}",
+            f"https://web.ifzq.gtimg.cn/appstock/app/kline/mkline?param={symbol},m30,,{limit}"
+        ]
+        data = {}
+        for url in urls:
+            try:
+                res = self.session.get(url, timeout=5)
+                if res.status_code == 200 and res.text.startswith('{'):
+                    data = res.json()
+                    if 'data' in data and symbol in data.get('data', {}):
+                        break
+            except Exception as e:
+                pass
+
+        try:
+            stock_dict = data.get('data', {}).get(symbol, {})
+            m30_data = stock_dict.get('m30', [])
+
+            raw_bars = []
+            for bar in m30_data:
+                if len(bar) >= 6:
+                    dt_str = str(bar[0])
+                    if len(dt_str) >= 12:
+                        d_part = f"{dt_str[:4]}-{dt_str[4:6]}-{dt_str[6:8]}"
+                        t_part = f"{dt_str[8:10]}:{dt_str[10:12]}"
+                        dt_fmt = f"{d_part} {t_part}"
+                    elif len(dt_str) >= 8:
+                        d_part = f"{dt_str[:4]}-{dt_str[4:6]}-{dt_str[6:8]}"
+                        t_part = ""
+                        dt_fmt = d_part
+                    else:
+                        d_part = dt_str
+                        t_part = ""
+                        dt_fmt = dt_str
+
+                    try:
+                        o_val = float(bar[1])
+                        c_val = float(bar[2])
+                        h_val = float(bar[3])
+                        l_val = float(bar[4])
+                        v_val = float(bar[5])
+                    except Exception:
+                        continue
+
+                    raw_bars.append({
+                        "date": d_part,
+                        "time": t_part,
+                        "datetime": dt_fmt,
+                        "open": o_val,
+                        "close": c_val,
+                        "high": h_val,
+                        "low": l_val,
+                        "volume": v_val
+                    })
+
+            klines = []
+            for i, bar in enumerate(raw_bars):
+                prev_close = raw_bars[i-1]["close"] if i > 0 else bar["open"]
+                chg_val = round(bar["close"] - prev_close, 3)
+                pct_val = round((chg_val / prev_close * 100.0) if prev_close > 0 else 0.0, 2)
+
+                klines.append({
+                    "date": bar["datetime"],
+                    "day_date": bar["date"],
+                    "time": bar["time"],
+                    "datetime": bar["datetime"],
+                    "open": bar["open"],
+                    "close": bar["close"],
+                    "high": bar["high"],
+                    "low": bar["low"],
+                    "volume": bar["volume"],
+                    "prev_close": prev_close,
+                    "change": chg_val,
+                    "pct_change": pct_val
+                })
+
+            self._add_moving_averages(klines)
+            self._add_emas(klines)
+            self._add_boll(klines)
+            self._add_volume_moving_averages(klines)
+            self._add_macd(klines)
+            self._add_kdj(klines)
+            self._add_rsi(klines)
+
+            self._add_signals(klines, timeframe_name="30分")
+
+            name = stock_dict.get('qt', {}).get(symbol, ['', ''])[1] if 'qt' in stock_dict else ""
+            if not name:
+                rt = self.get_realtime_quote(symbol)
+                name = rt.get('name', '')
+
+            res_data = {
+                "symbol": symbol,
+                "code": symbol[2:],
+                "name": name,
+                "klines": klines
+            }
+            if not hasattr(self, '_30min_klines_cache'):
+                self._30min_klines_cache = {}
+                self._30min_klines_cache_time = {}
+            self._30min_klines_cache[cache_key] = res_data
+            self._30min_klines_cache_time[cache_key] = time.time()
+            self._save_disk_kline_cache(f"{symbol}_m30", res_data)
+            return res_data
+        except Exception as e:
+            print(f"Error calculating 30min klines for {symbol}: {e}")
+            if hasattr(self, '_30min_klines_cache') and cache_key in self._30min_klines_cache:
+                return self._30min_klines_cache[cache_key]
+            return {"symbol": symbol, "code": symbol[2:], "name": "", "klines": []}
+
     def _add_moving_averages(self, klines):
         closes = [k["close"] for k in klines]
         for i in range(len(klines)):
@@ -844,7 +1016,7 @@ class StockDataProvider:
 
         return m60_signals
 
-    def _add_signals(self, klines, m60_signals=None):
+    def _add_signals(self, klines, m60_signals=None, timeframe_name="60分"):
         if not klines or len(klines) < 30:
             return
 
@@ -948,7 +1120,7 @@ class StockDataProvider:
                 # 全部同时满足方可开仓 (严格秉承“低吸买点、位置甄别”原则)
                 if cond_ma5_up and cond_macd_trend and cond_macd_gold_close and cond_kdj_bull and (not is_volume_surge_up):
                     bar["signal_type"] = "B"
-                    bar["signal_name"] = "买入: 60分多指标共振"
+                    bar["signal_name"] = f"买入: {timeframe_name}多指标共振"
                     bar["signal_position"] = "标准建仓 / 试错开仓"
                     reason_extra = "底部放量突破确认" if ((bar["pct_change"] >= 3.0) and (bar["volume"] >= 1.3 * vol_ma5)) else "满足共振条件"
                     bar["signal_reason"] = f"MA5止跌({ma5:.3f})，MACD金叉附近(场景A/B+DIF主动上行)，KDJ多头(K>D)，{reason_extra}"
@@ -1176,15 +1348,26 @@ class StockDataProvider:
 
         def _process_item(item):
             code = item["code"]
+            name_hint = item.get("desc", item.get("name", ""))
+            is_t0 = is_t0_etf(code, name_hint)
+            tf_name = "30分" if is_t0 else "60分"
+            tf_check_bars = 8 if is_t0 else 4
+
             try:
-                data = self.get_60min_klines(code)
-                klines = data.get("klines", [])
-                
-                # 若初次拉取无数据，自动重试一次防抖
-                if not klines:
-                    time.sleep(0.15)
+                if is_t0:
+                    data = self.get_30min_klines(code)
+                    klines = data.get("klines", [])
+                    if not klines:
+                        time.sleep(0.15)
+                        data = self.get_30min_klines(code)
+                        klines = data.get("klines", [])
+                else:
                     data = self.get_60min_klines(code)
                     klines = data.get("klines", [])
+                    if not klines:
+                        time.sleep(0.15)
+                        data = self.get_60min_klines(code)
+                        klines = data.get("klines", [])
 
                 if not klines:
                     # 备选回退日K
@@ -1223,7 +1406,9 @@ class StockDataProvider:
                         "buy_date": "",
                         "sort_priority": 20,
                         "is_triggered": False,
-                        "reason_summary": p_reason
+                        "reason_summary": p_reason,
+                        "trade_rule": "T+0" if is_t0 else "T+1",
+                        "optimal_period": "30min" if is_t0 else "60min"
                     }
                 
                 bar = klines[-1]
@@ -1265,9 +1450,9 @@ class StockDataProvider:
 
                 score = sum([c1, c2, c3, c4])
 
-                # 检查今日 (最新交易日 60分钟) 是否刚触发买卖信号
+                # 检查今日 (最新交易日 对应周期) 是否刚触发买卖信号
                 today_date = bar.get("day_date") or bar.get("datetime", "")[:10]
-                today_bars = [k for k in klines[-4:] if (k.get("day_date") == today_date or k.get("datetime", "").startswith(today_date))]
+                today_bars = [k for k in klines[-tf_check_bars:] if (k.get("day_date") == today_date or k.get("datetime", "").startswith(today_date))]
                 if not today_bars:
                     today_bars = [bar]
 
@@ -1303,19 +1488,19 @@ class StockDataProvider:
 
                 sort_priority = 10
 
-                # 优先判定【今日 (最新交易日 60分钟)】是否刚触发买卖/减仓信号
+                # 优先判定【今日 (最新交易日 对应周期)】是否刚触发买卖/减仓信号
                 if today_sig in ["B", "B1"]:
-                    tag = "60分买入"
+                    tag = f"{tf_name}买入"
                     tag_color = "#dc2626"  # 鲜艳大红高亮 (买点专用)
-                    reason_summary = "60分钟多指标共振确认，顺势分批建仓"
+                    reason_summary = f"{tf_name}多指标共振确认，顺势分批建仓"
                     sort_priority = 100
                     buy_cost_price = bar["close"]
                     buy_date = bar.get("date", "")
 
                 elif today_sig in ["S1", "S2", "S7", "S4"]:
-                    tag = "60分卖出"
+                    tag = f"{tf_name}卖出"
                     tag_color = "#16a34a"  # 鲜艳大绿高亮 (卖点专用)
-                    reason_summary = "60分钟触发分级止盈/止损卖点，建议平仓"
+                    reason_summary = f"{tf_name}触发分级止盈/止损卖点，建议平仓"
                     sort_priority = 95
                 elif today_sig == "S3":
                     tag = "减半止盈"
@@ -1331,7 +1516,7 @@ class StockDataProvider:
                     else:
                         tag = "观望持仓"
                         tag_color = "#ea580c"  # 红橙色 (已持仓多头状态)
-                        reason_summary = "60分持仓观望中，等待后续卖点"
+                        reason_summary = f"{tf_name}持仓观望中，等待后续卖点"
                         sort_priority = 70
                 elif score >= 3:
                     tag = "即将满足"
@@ -1343,12 +1528,12 @@ class StockDataProvider:
                     if scenario_b: sub_reasons.append("红柱初期")
                     elif scenario_a: sub_reasons.append("绿柱末期")
                     if c4: sub_reasons.append("KDJ多头")
-                    reason_summary = " · ".join(sub_reasons[:2]) if sub_reasons else "60分多指标向好"
+                    reason_summary = " · ".join(sub_reasons[:2]) if sub_reasons else f"{tf_name}多指标向好"
                     sort_priority = 50
                 else:
                     tag = "蓄势回调"
                     tag_color = "#94a3b8"  # 浅灰
-                    reason_summary = "60分寻支撑，密切观察"
+                    reason_summary = f"{tf_name}寻支撑，密切观察"
                     sort_priority = 10
 
                 res_dict = {
@@ -1374,7 +1559,9 @@ class StockDataProvider:
                     "reason_summary": reason_summary,
                     "signal_type": today_sig,
                     "is_s3_today": (today_sig == "S3"),
-                    "has_s3_holding": has_s3_holding
+                    "has_s3_holding": has_s3_holding,
+                    "trade_rule": "T+0" if is_t0 else "T+1",
+                    "optimal_period": "30min" if is_t0 else "60min"
                 }
                 if not hasattr(self, "_item_data_cache"):
                     self._item_data_cache = {}
