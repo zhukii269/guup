@@ -2401,6 +2401,16 @@
   </div>
 
   <script>
+    window.__errors = [];
+    window.onerror = function(msg, url, line, col, error) {
+      window.__errors.push({msg: String(msg), line: line, col: col, stack: error ? error.stack : ''});
+      console.error("WINDOW ERROR:", msg, line, error);
+    };
+    window.addEventListener('unhandledrejection', function(event) {
+      window.__errors.push({msg: 'Promise rejection: ' + event.reason, stack: event.reason ? event.reason.stack : ''});
+      console.error("UNHANDLED REJECTION:", event.reason);
+    });
+
     let currentSymbol = "sh000001";
     let currentStockName = "上证指数";
     let chartInstance = null;

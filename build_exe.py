@@ -36,7 +36,9 @@ def build_executable():
     add_data_param = f"{assets_dir};assets"
     
     cmd = [
-        "pyinstaller",
+        sys.executable,
+        "-m",
+        "PyInstaller",
         "--noconfirm",
         "--onedir",
         "--windowed",

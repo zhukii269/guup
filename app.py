@@ -6,64 +6,64 @@ from interval_calculator import IntervalCalculator
 
 class StockApi:
     def __init__(self):
-        self.dp = StockDataProvider()
-        self.window = None
-        self.prev_width = 1340
-        self.prev_height = 920
+        self._dp = StockDataProvider()
+        self._window = None
+        self._prev_width = 1340
+        self._prev_height = 920
 
-    def set_window(self, window):
-        self.window = window
+    def _set_window(self, window):
+        self._window = window
 
     def set_mini_mode(self, is_mini=True, width=340, height=220, on_top=True):
-        if not self.window:
+        if not self._window:
             return False
         try:
             if is_mini:
-                if self.window.width > 500:
-                    self.prev_width = self.window.width
-                    self.prev_height = self.window.height
+                if self._window.width > 500:
+                    self._prev_width = self._window.width
+                    self._prev_height = self._window.height
                 try:
-                    self.window.on_top = bool(on_top)
+                    self._window.on_top = bool(on_top)
                 except Exception as e:
                     print("set on_top error:", e)
-                self.window.resize(int(width), int(height))
+                self._window.resize(int(width), int(height))
             else:
                 try:
-                    self.window.on_top = False
+                    self._window.on_top = False
                 except Exception as e:
                     print("set on_top error:", e)
-                w = max(1120, getattr(self, 'prev_width', 1340))
-                h = max(720, getattr(self, 'prev_height', 920))
-                self.window.resize(int(w), int(h))
+                w = max(1120, getattr(self, '_prev_width', 1340))
+                h = max(720, getattr(self, '_prev_height', 920))
+                self._window.resize(int(w), int(h))
             return True
         except Exception as e:
             print("set_mini_mode error:", e)
             return False
 
     def set_always_on_top(self, on_top=True):
-        if not self.window:
+        if not self._window:
             return False
         try:
-            self.window.on_top = bool(on_top)
+            self._window.on_top = bool(on_top)
             return True
         except Exception as e:
             print("set_always_on_top error:", e)
             return False
 
     def minimize_window(self):
-        if self.window:
+        if self._window:
             try:
-                self.window.minimize()
+                self._window.minimize()
                 return True
             except Exception as e:
                 print("minimize_window error:", e)
         return False
 
     def get_stock_data(self, symbol="sh000001"):
-        return self.dp.get_daily_klines(symbol)
+        return self._dp.get_daily_klines(symbol)
 
     def get_realtime_quote(self, symbol="sh000001"):
-        return self.dp.get_realtime_quote(symbol)
+        return self._dp.get_realtime_quote(symbol)
 
     def calculate_interval_gain(self, klines, start_date, end_date, preset_key="1m"):
         if preset_key and preset_key != "custom":
@@ -71,34 +71,34 @@ class StockApi:
         return IntervalCalculator.calculate_by_dates(klines, start_date, end_date)
 
     def search_stock(self, keyword):
-        return self.dp.search_stock(keyword)
+        return self._dp.search_stock(keyword)
 
     def get_watch_pool(self, custom_list=None):
-        return self.dp.get_watch_pool(custom_list)
+        return self._dp.get_watch_pool(custom_list)
 
     def get_minute_data(self, symbol="sh000001"):
-        return self.dp.get_minute_data(symbol)
+        return self._dp.get_minute_data(symbol)
 
     def get_5min_klines(self, symbol="sh000001"):
-        return self.dp.get_5min_klines(symbol)
+        return self._dp.get_5min_klines(symbol)
 
     def get_30min_klines(self, symbol="sh000001"):
-        return self.dp.get_30min_klines(symbol)
+        return self._dp.get_30min_klines(symbol)
 
     def get_60min_klines(self, symbol="sh000001"):
-        return self.dp.get_60min_klines(symbol)
+        return self._dp.get_60min_klines(symbol)
 
     def get_user_config(self):
-        return self.dp.get_user_config()
+        return self._dp.get_user_config()
 
     def save_user_config(self, config_dict):
-        return self.dp.save_user_config(config_dict)
+        return self._dp.save_user_config(config_dict)
 
     def get_history_pnl_analysis(self, custom_list=None, total_capital=100000):
-        return self.dp.get_history_pnl_analysis(custom_list, total_capital)
+        return self._dp.get_history_pnl_analysis(custom_list, total_capital)
 
     def get_batch_realtime_quotes(self, symbols=None):
-        return self.dp.get_batch_realtime_quotes(symbols)
+        return self._dp.get_batch_realtime_quotes(symbols)
 
 def get_asset_path(filename):
     if hasattr(sys, '_MEIPASS'):
@@ -123,7 +123,7 @@ def main():
         resizable=True,
         text_select=False
     )
-    api.set_window(window)
+    api._set_window(window)
     
     webview.start(debug=False)
 
