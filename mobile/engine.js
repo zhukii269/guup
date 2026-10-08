@@ -812,31 +812,76 @@ const MobileQuantEngine = (function() {
     }
   }
 
-  // 获取观察池列表与分类状态
-  async function getWatchPool() {
-    let customList = [];
+  // ==========================================
+  // 自选观察池存储与增删管理
+  // ==========================================
+  function getWatchList() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_WATCHLIST);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const savedCodes = new Set(parsed.map(x => (x.code || x.symbol || '').toLowerCase()));
-          const isPureSubset = parsed.every(x => DEFAULT_SECTOR_ETFS.some(d => d.code.toLowerCase() === (x.code || x.symbol || '').toLowerCase()));
-          if (isPureSubset && parsed.length < DEFAULT_SECTOR_ETFS.length) {
-            const merged = [...parsed];
-            DEFAULT_SECTOR_ETFS.forEach(d => {
-              if (!savedCodes.has(d.code.toLowerCase())) merged.push(d);
-            });
-            localStorage.setItem(STORAGE_KEY_WATCHLIST, JSON.stringify(merged));
-            customList = merged;
-          } else {
-            customList = parsed;
-          }
+        if (Array.isArray(parsed)) {
+          return parsed;
         }
       }
     } catch (e) {}
+    saveWatchList(DEFAULT_SECTOR_ETFS);
+    return [...DEFAULT_SECTOR_ETFS];
+  }
 
-    const listToLoad = (customList && customList.length > 0) ? customList : DEFAULT_SECTOR_ETFS;
+  function saveWatchList(list) {
+    try {
+      localStorage.setItem(STORAGE_KEY_WATCHLIST, JSON.stringify(list));
+    } catch (e) {}
+  }
+
+  function addToWatchList(item) {
+    if (!item) return false;
+    const fullSym = normalizeSymbol(item.code || item.symbol || item);
+    const list = getWatchList();
+    const exists = list.some(x => normalizeSymbol(x.code || x.symbol) === fullSym);
+    if (!exists) {
+      const name = item.desc || item.name || item.sector || fullSym;
+      const isT0 = isT0Symbol(fullSym, name);
+      list.push({
+        sector: item.sector || name || "自选标的",
+        code: fullSym,
+        symbol: fullSym,
+        desc: name,
+        trade_rule: isT0 ? "T+0" : "T+1",
+        optimal_period: isT0 ? "m30" : "m60"
+      });
+      saveWatchList(list);
+      return true;
+    }
+    return false;
+  }
+
+  function removeFromWatchList(symbol) {
+    if (!symbol) return false;
+    const fullSym = normalizeSymbol(symbol);
+    const list = getWatchList();
+    const filtered = list.filter(x => normalizeSymbol(x.code || x.symbol) !== fullSym);
+    saveWatchList(filtered);
+    return true;
+  }
+
+  function isInWatchList(symbol) {
+    if (!symbol) return false;
+    const fullSym = normalizeSymbol(symbol);
+    const list = getWatchList();
+    return list.some(x => normalizeSymbol(x.code || x.symbol) === fullSym);
+  }
+
+  function resetWatchListToDefault() {
+    saveWatchList([...DEFAULT_SECTOR_ETFS]);
+    return [...DEFAULT_SECTOR_ETFS];
+  }
+
+  // 获取观察池列表与分类状态
+  async function getWatchPool() {
+    const listToLoad = getWatchList();
+    if (!listToLoad || listToLoad.length === 0) return [];
 
     // 并发拉取各标的的 K 线数据 (T+0 标的自动匹配 30分钟，T+1 标的自动匹配 60分钟)
     const promises = listToLoad.map(async (item) => {
@@ -1173,6 +1218,12 @@ const MobileQuantEngine = (function() {
     getDailyKlines,
     get30MinKlines,
     get60MinKlines,
+    getWatchList,
+    saveWatchList,
+    addToWatchList,
+    removeFromWatchList,
+    isInWatchList,
+    resetWatchListToDefault,
     getWatchPool,
     searchStock,
     calculateInterval,

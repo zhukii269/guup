@@ -164,11 +164,55 @@
     /* =========================================================================
        Tab 1: 观察池页面
        ========================================================================= */
-    .filter-bar {
-      padding: 12px 16px 8px 16px;
+    .watch-pool-subbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px 2px 16px;
       background-color: var(--bg-primary);
       position: sticky;
       top: 0;
+      z-index: 25;
+    }
+    .watch-subbar-info {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .watch-subbar-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .subbar-btn {
+      font-size: 11.5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-sub);
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .subbar-btn:active {
+      transform: scale(0.95);
+    }
+    .subbar-btn.primary {
+      border-color: var(--color-primary);
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--color-primary);
+      font-weight: 700;
+    }
+    .subbar-btn.primary.active {
+      background: var(--color-primary);
+      color: #ffffff;
+    }
+    .filter-bar {
+      padding: 8px 16px 8px 16px;
+      background-color: var(--bg-primary);
+      position: sticky;
+      top: 36px;
       z-index: 20;
     }
     .pill-scroll {
@@ -249,6 +293,43 @@
       background: var(--bg-primary);
       color: var(--text-sub);
       border: 1px solid var(--border-color);
+    }
+    .card-quick-del-btn {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--text-muted);
+      border: none;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      margin-left: 6px;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .card-quick-del-btn:active {
+      background: #ef4444;
+      color: #ffffff;
+    }
+    .card-delete-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid #ef4444;
+      cursor: pointer;
+      margin-left: 6px;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .card-delete-badge:active {
+      background: #ef4444;
+      color: #ffffff;
     }
 
     .card-mid {
@@ -355,6 +436,30 @@
       font-size: 12px;
       color: var(--text-muted);
       font-family: monospace;
+    }
+    .btn-kline-star {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-muted);
+      cursor: pointer;
+      outline: none;
+      transition: all 0.15s;
+      vertical-align: middle;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .btn-kline-star:active {
+      transform: scale(0.92);
+    }
+    .btn-kline-star.active {
+      border-color: #f59e0b;
+      background: rgba(245, 158, 11, 0.2);
+      color: #f59e0b;
     }
     .kline-cursor-date {
       font-size: 11px;
@@ -593,6 +698,29 @@
     .search-result-item:active {
       background: var(--bg-card-hover);
     }
+    .search-add-btn {
+      padding: 4px 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--color-primary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .search-add-btn:active {
+      transform: scale(0.92);
+    }
+    .search-add-btn.active {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #10b981;
+    }
 
     /* 加载中动画遮罩 */
     .loading-overlay {
@@ -692,6 +820,16 @@
       <!-- TAB 1: 观察池页面 -->
       <!-- ======================================================= -->
       <div class="view-page active" id="view-watchpool">
+        <div class="watch-pool-subbar">
+          <div class="watch-subbar-info">
+            观察池 (<span id="watchPoolCountText" style="color:var(--color-primary); font-weight:800;">23</span>只)
+          </div>
+          <div class="watch-subbar-actions">
+            <button class="subbar-btn" id="btnResetMobileWatch" title="恢复预设的全部23只主流板块ETF">恢复默认</button>
+            <button class="subbar-btn primary" id="btnManageMobileWatch" title="管理/删除自选标的">⚙️ 管理</button>
+          </div>
+        </div>
+
         <div class="filter-bar">
           <div class="pill-scroll" id="filterPills">
             <div class="filter-pill active" data-filter="全部">全部</div>
@@ -719,6 +857,7 @@
               <button class="btn-back-pool" id="btnBackToPool" title="返回观察池">◀ 观察池</button>
               <span class="kline-stock-name" id="klineStockName">通信ETF</span>
               <span class="kline-stock-code" id="klineStockCode">sh515880</span>
+              <button class="btn-kline-star" id="btnKlineStar" onclick="toggleKlineStockStar()" title="加自选/移出自选">⭐ +自选</button>
               <span class="kline-cursor-date" id="klineCursorDate"></span>
             </div>
             <div class="kline-period-group">
@@ -914,18 +1053,103 @@
         });
       });
 
+      // 优雅移动端轻量 Toast
+      function showMobileToast(msg) {
+        let toast = document.getElementById('mobileToast');
+        if (!toast) {
+          toast = document.createElement('div');
+          toast.id = 'mobileToast';
+          toast.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.92); color:#fff; padding:8px 16px; border-radius:20px; font-size:12px; font-weight:600; z-index:99999; box-shadow:0 4px 12px rgba(0,0,0,0.3); pointer-events:none; transition:opacity 0.25s, transform 0.25s; opacity:0; border:1px solid rgba(255,255,255,0.1);';
+          document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateX(-50%) translateY(-8px)';
+        }, 1800);
+      }
+
+      let isWatchManageMode = false;
+      const btnManageMobileWatch = document.getElementById('btnManageMobileWatch');
+      if (btnManageMobileWatch) {
+        btnManageMobileWatch.addEventListener('click', () => {
+          isWatchManageMode = !isWatchManageMode;
+          btnManageMobileWatch.textContent = isWatchManageMode ? '✓ 完成' : '⚙️ 管理';
+          btnManageMobileWatch.classList.toggle('active', isWatchManageMode);
+          renderWatchPoolCards();
+        });
+      }
+
+      const btnResetMobileWatch = document.getElementById('btnResetMobileWatch');
+      if (btnResetMobileWatch) {
+        btnResetMobileWatch.addEventListener('click', () => {
+          if (confirm('确定恢复预设的 23 只主流板块 ETF 观察池吗？')) {
+            MobileQuantEngine.resetWatchListToDefault();
+            showMobileToast('已恢复预设 23 只 ETF');
+            loadWatchPool();
+          }
+        });
+      }
+
+      function deleteMobileWatchItem(code) {
+        MobileQuantEngine.removeFromWatchList(code);
+        watchPoolData = watchPoolData.filter(x => MobileQuantEngine.normalizeSymbol(x.code || x.symbol) !== MobileQuantEngine.normalizeSymbol(code));
+        renderWatchPoolCards();
+        updateKlineStarButton();
+        showMobileToast('已从自选观察池中移出');
+      }
+      window.deleteMobileWatchItem = deleteMobileWatchItem;
+
+      function updateKlineStarButton() {
+        const btn = document.getElementById('btnKlineStar');
+        if (!btn) return;
+        const inWatch = MobileQuantEngine.isInWatchList(currentSymbol);
+        if (inWatch) {
+          btn.innerHTML = '★ 已自选';
+          btn.classList.add('active');
+          btn.title = '点击移出自选观察池';
+        } else {
+          btn.innerHTML = '☆ +自选';
+          btn.classList.remove('active');
+          btn.title = '点击加入自选观察池';
+        }
+      }
+      window.updateKlineStarButton = updateKlineStarButton;
+
+      function toggleKlineStockStar() {
+        const inWatch = MobileQuantEngine.isInWatchList(currentSymbol);
+        if (inWatch) {
+          MobileQuantEngine.removeFromWatchList(currentSymbol);
+          watchPoolData = watchPoolData.filter(x => MobileQuantEngine.normalizeSymbol(x.code || x.symbol) !== MobileQuantEngine.normalizeSymbol(currentSymbol));
+          renderWatchPoolCards();
+          showMobileToast('已从自选观察池移出');
+        } else {
+          const name = (dom.klineStockName && dom.klineStockName.textContent) ? dom.klineStockName.textContent : currentSymbol;
+          MobileQuantEngine.addToWatchList({ symbol: currentSymbol, code: currentSymbol, name: name });
+          showMobileToast('已成功加入自选观察池');
+          loadWatchPool();
+        }
+        updateKlineStarButton();
+      }
+      window.toggleKlineStockStar = toggleKlineStockStar;
+
       // 加载观察池数据
       async function loadWatchPool() {
         try {
           watchPoolData = await MobileQuantEngine.getWatchPool();
           renderWatchPoolCards();
-
         } catch (e) {
           console.error('Failed to load watch pool:', e);
         }
       }
 
       function renderWatchPoolCards() {
+        const countEl = document.getElementById('watchPoolCountText');
+        if (countEl) countEl.textContent = watchPoolData.length;
+
         const filtered = watchPoolData.filter(item => {
           if (currentFilter === '全部') return true;
           return item.tag_group === currentFilter;
@@ -933,7 +1157,7 @@
 
         dom.stockList.innerHTML = '';
         if (filtered.length === 0) {
-          dom.stockList.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">暂无【' + currentFilter + '】分类标的</div>';
+          dom.stockList.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">暂无【' + currentFilter + '】分类标的<br><span style="font-size:12px; margin-top:8px; display:inline-block; color:var(--color-primary);">点击右上角 🔍 即可搜索添加自选</span></div>';
           return;
         }
 
@@ -942,16 +1166,27 @@
           const chgColor = isUp ? 'var(--color-up)' : 'var(--color-down)';
           const sign = isUp ? '+' : '';
           const card = document.createElement('div');
-            const isT0 = item.trade_rule === 'T+0' || (window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(item.code, item.name));
-            const t0Badge = isT0 ? '<span style="font-size:10px; background:#0284c7; color:#fff; padding:1px 4px; border-radius:3px; font-weight:700; margin-left:3px;">T+0</span>' : '';
-            card.innerHTML = `
+          card.className = 'stock-card' + (isWatchManageMode ? ' manage-mode' : '');
+          const isT0 = item.trade_rule === 'T+0' || (window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(item.code, item.name));
+          const t0Badge = isT0 ? '<span style="font-size:10px; background:#0284c7; color:#fff; padding:1px 4px; border-radius:3px; font-weight:700; margin-left:3px;">T+0</span>' : '';
+
+          const actionHtml = isWatchManageMode ? `
+            <button class="card-delete-badge" onclick="event.stopPropagation(); deleteMobileWatchItem('${item.code}')">🗑️ 移出</button>
+          ` : `
+            <button class="card-quick-del-btn" title="移出自选" onclick="event.stopPropagation(); deleteMobileWatchItem('${item.code}')">✕</button>
+          `;
+
+          card.innerHTML = `
             <div class="card-top">
               <div class="card-name-group">
                 <span class="card-name">${item.name}</span>
                 <span class="card-code">${item.code}</span>
                 ${t0Badge}
               </div>
-              <span class="card-sector">${item.sector}</span>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span class="card-sector">${item.sector}</span>
+                ${actionHtml}
+              </div>
             </div>
             <div class="card-mid">
               <div class="card-price-group">
@@ -967,6 +1202,10 @@
           `;
 
           card.addEventListener('click', () => {
+            if (isWatchManageMode) {
+              deleteMobileWatchItem(item.code);
+              return;
+            }
             currentSymbol = item.symbol || item.code;
             switchTab('kline');
             loadStockKline(currentSymbol);
@@ -1103,6 +1342,8 @@
       async function loadStockKline(symbol, period = null) {
         dom.chartLoading.style.display = 'flex';
         try {
+          if (symbol) currentSymbol = symbol;
+          updateKlineStarButton();
           // 若未明确传周期，根据交易制度智能选择: T+0 -> 30分, T+1 -> 60分 (若当前在日K则保持日K)
           if (!period) {
             if (currentPeriod === 'day') {
@@ -1686,15 +1927,48 @@
             return;
           }
           results.forEach(r => {
+            const sym = r.symbol;
+            let inWatch = MobileQuantEngine.isInWatchList(sym);
             const row = document.createElement('div');
             row.className = 'search-result-item';
             row.innerHTML = `
-              <div>
-                <div style="font-weight:700;">${r.name}</div>
-                <div style="font-size:11px; color:var(--text-muted); font-family:monospace;">${r.symbol} (${r.market})</div>
+              <div style="flex:1; cursor:pointer;" class="search-item-info">
+                <div style="font-weight:700; font-size:14px;">${r.name}</div>
+                <div style="font-size:11px; color:var(--text-muted); font-family:monospace;">${r.symbol} ${r.market ? '(' + r.market + ')' : ''}</div>
               </div>
-              <span style="font-size:12px; color:var(--color-primary); font-weight:700;">查看日K ></span>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button class="search-add-btn ${inWatch ? 'active' : ''}" data-symbol="${sym}">
+                  ${inWatch ? '✓ 已自选' : '+ 加自选'}
+                </button>
+                <span style="font-size:12px; color:var(--color-primary); font-weight:700; cursor:pointer;">查看 ></span>
+              </div>
             `;
+
+            const addBtn = row.querySelector('.search-add-btn');
+            addBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const nowInWatch = MobileQuantEngine.isInWatchList(sym);
+              if (nowInWatch) {
+                MobileQuantEngine.removeFromWatchList(sym);
+                addBtn.classList.remove('active');
+                addBtn.textContent = '+ 加自选';
+                showMobileToast(`已将 ${r.name} 移出自选`);
+              } else {
+                MobileQuantEngine.addToWatchList({
+                  symbol: sym,
+                  code: sym,
+                  name: r.name,
+                  desc: r.name,
+                  market: r.market
+                });
+                addBtn.classList.add('active');
+                addBtn.textContent = '✓ 已自选';
+                showMobileToast(`已添加 ${r.name} 至自选`);
+              }
+              loadWatchPool();
+              updateKlineStarButton();
+            });
+
             row.addEventListener('click', () => {
               dom.searchModal.classList.remove('active');
               currentSymbol = r.symbol;
@@ -1722,6 +1996,7 @@
 
       // 启动加载：渲染观察池并初始化第一支标的日K
       loadWatchPool();
+      updateKlineStarButton();
       MobileQuantEngine.getDailyKlines(currentSymbol, 400).then(res => {
         currentKlines = res.klines || [];
         dom.klineStockName.textContent = res.name;

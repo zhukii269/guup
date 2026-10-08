@@ -425,17 +425,101 @@
       background: #d32f2f;
     }
 
-    /* Batch Edit Mode Cards */
+    /* Batch Edit Mode Cards & Quick Delete */
     .watch-card-wrapper {
       display: flex;
       align-items: center;
       gap: 6px;
+      position: relative;
     }
     .watch-card-checkbox {
       width: 16px;
       height: 16px;
       cursor: pointer;
       accent-color: #f63538;
+      flex-shrink: 0;
+    }
+    .watch-card-del-btn {
+      position: absolute;
+      right: 4px;
+      top: 4px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(148, 163, 184, 0.25);
+      color: #64748b;
+      border: none;
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      z-index: 5;
+      transition: all 0.15s;
+    }
+    .watch-card-wrapper:hover .watch-card-del-btn {
+      display: flex;
+    }
+    .watch-card-del-btn:hover {
+      background: #ef4444;
+      color: #ffffff;
+      transform: scale(1.15);
+    }
+    body.dark-theme .watch-card-del-btn {
+      background: rgba(255, 255, 255, 0.15);
+      color: #94a3b8;
+    }
+    body.dark-theme .watch-card-del-btn:hover {
+      background: #ef4444;
+      color: #ffffff;
+    }
+
+    /* Header Watch Star Button */
+    .btn-header-watch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #475569;
+      transition: all 0.15s ease;
+      outline: none;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .btn-header-watch:hover {
+      border-color: #f59e0b;
+      color: #d97706;
+      background: #fffbeb;
+    }
+    .btn-header-watch.in-watch {
+      border-color: #f59e0b;
+      background: #fef3c7;
+      color: #b45309;
+      font-weight: 700;
+    }
+    body.dark-theme .btn-header-watch {
+      background: #1e293b;
+      border-color: #334155;
+      color: #94a3b8;
+    }
+    body.dark-theme .btn-header-watch:hover {
+      border-color: #f59e0b;
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.15);
+    }
+    body.dark-theme .btn-header-watch.in-watch {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: #f59e0b;
+      color: #fbbf24;
     }
 
     /* Search Add Button */
@@ -1265,9 +1349,10 @@
 
   <!-- Top Header -->
   <header>
-    <div class="stock-title">
+    <div class="stock-title" style="display:flex; align-items:center; gap:8px;">
       <span class="stock-name" id="stockName">上证指数</span>
       <span class="stock-code" id="stockCode">000001.SH</span>
+      <button class="btn-header-watch" id="btnHeaderWatch" onclick="toggleCurrentStockWatch()" title="点击加入或移出自选观察池">☆ +加自选</button>
     </div>
 
     <div style="display:flex; align-items:center; gap:12px;">
@@ -1295,11 +1380,12 @@
         <div class="watch-pool-title">
           <span>🔥 板块观察池</span>
           <div class="watch-pool-header-actions" id="watchHeaderActionsNormal">
+            <button class="btn-watch-action" onclick="restoreDefaultWatchPool()" title="恢复预设的全部23只行业板块ETF">🔄 恢复</button>
             <button class="btn-watch-action" onclick="toggleBatchDeleteMode(true)">⚙️ 管理</button>
           </div>
           <div class="watch-pool-header-actions" id="watchHeaderActionsEdit" style="display:none;">
             <button class="btn-watch-action" id="btnSelectAll" onclick="toggleSelectAll()">全选</button>
-            <button class="btn-watch-action" onclick="toggleBatchDeleteMode(false)">取消</button>
+            <button class="btn-watch-action" onclick="toggleBatchDeleteMode(false)">完成</button>
             <button class="btn-watch-action danger" id="btnConfirmDelete" onclick="confirmBatchDelete()">删除(0)</button>
           </div>
         </div>
@@ -2137,26 +2223,13 @@
         const saved = localStorage.getItem('stock_master_watch_list');
         if (saved) {
           const arr = JSON.parse(saved);
-          if (Array.isArray(arr) && arr.length > 0) {
-            // 智能自愈修复：如果本地存储列表只是默认ETF的缺失子集（比如之前网络偶发丢弃或少于23只，且没有用户自定义添加的其他股票）
-            const savedCodes = new Set(arr.map(x => (x.code || x.symbol || '').toLowerCase()));
-            const isPureSubset = arr.every(x => DEFAULT_SECTOR_ETFS.some(d => d.code.toLowerCase() === (x.code || x.symbol || '').toLowerCase()));
-            if (isPureSubset && arr.length < DEFAULT_SECTOR_ETFS.length) {
-              // 自动补齐缺失的全部 23 只默认板块 ETF，彻底解决少于 23 只的问题
-              const merged = [...arr];
-              DEFAULT_SECTOR_ETFS.forEach(d => {
-                if (!savedCodes.has(d.code.toLowerCase())) {
-                  merged.push(d);
-                }
-              });
-              saveUserWatchList(merged);
-              return merged;
-            }
+          if (Array.isArray(arr)) {
             return arr;
           }
         }
       } catch(e) {}
-      return DEFAULT_SECTOR_ETFS;
+      saveUserWatchList(DEFAULT_SECTOR_ETFS);
+      return [...DEFAULT_SECTOR_ETFS];
     }
 
     let userWatchList = getUserWatchList();
@@ -2179,7 +2252,8 @@
       } catch(e) {}
       currentWatchPool = [];
       if (isBatchDeleteMode) toggleBatchDeleteMode(false);
-      showOrderToast("🔄 正在重新加载全部 23 只主流板块 ETF...");
+      updateHeaderWatchButton();
+      showOrderToast("🔄 已恢复预设全部 23 只主流板块 ETF");
       loadWatchPool();
     }
 
@@ -2274,15 +2348,14 @@
       if (window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool) {
         try {
           const freshPool = await window.pywebview.api.get_watch_pool(listToScan);
-          if (Array.isArray(freshPool) && freshPool.length > 0) {
-            // 合并防丢失：如果 freshPool 偶尔少于 currentWatchPool，保留已有卡片
-            if (currentWatchPool && currentWatchPool.length > freshPool.length) {
-              const freshCodes = new Set(freshPool.map(x => (x.code || x.symbol || '').toLowerCase()));
-              const kept = currentWatchPool.filter(x => !freshCodes.has((x.code || x.symbol || '').toLowerCase()));
-              currentWatchPool = [...freshPool, ...kept];
-            } else {
-              currentWatchPool = freshPool;
-            }
+          if (Array.isArray(freshPool)) {
+            // 严格以当前自选列表 listToScan 为唯一准绳，严禁追加/保留已被用户删除的卡片
+            const allowedCodes = new Set(listToScan.map(x => (x.code || x.symbol || '').toLowerCase().trim()));
+            currentWatchPool = freshPool.filter(x => {
+              const c1 = (x.code || '').toLowerCase().trim();
+              const c2 = (x.symbol || '').toLowerCase().trim();
+              return allowedCodes.has(c1) || allowedCodes.has(c2);
+            });
             try {
               localStorage.setItem('stock_master_watch_pool_cache', JSON.stringify(currentWatchPool));
               localStorage.setItem('stock_master_watch_pool_ver', WATCH_POOL_CACHE_VER);
@@ -2379,6 +2452,7 @@
       
       // 0毫秒极速瞬时渲染观察池，首屏绝不留白
       renderWatchPoolImmediate();
+      updateHeaderWatchButton();
 
       if (isT0Symbol(currentSymbol)) {
         load30MinData(currentSymbol);
@@ -2462,15 +2536,110 @@
         return;
       }
       
-      const newList = userWatchList.filter(item => {
-        const code = item.code || item.symbol;
-        return !selectedCodeSet.has(code);
+      const toRemove = new Set();
+      selectedCodeSet.forEach(c => {
+        const str = String(c).toLowerCase().trim();
+        toRemove.add(str);
+        toRemove.add(str.replace(/^(sh|sz)/, ''));
       });
 
-      saveUserWatchList(newList);
+      userWatchList = userWatchList.filter(item => {
+        const c1 = (item.code || '').toLowerCase().trim();
+        const c2 = (item.symbol || '').toLowerCase().trim();
+        const c3 = c1.replace(/^(sh|sz)/, '');
+        return !toRemove.has(c1) && !toRemove.has(c2) && !toRemove.has(c3);
+      });
+      saveUserWatchList(userWatchList);
+
+      currentWatchPool = (currentWatchPool || []).filter(item => {
+        const c1 = (item.code || '').toLowerCase().trim();
+        const c2 = (item.symbol || '').toLowerCase().trim();
+        const c3 = c1.replace(/^(sh|sz)/, '');
+        return !toRemove.has(c1) && !toRemove.has(c2) && !toRemove.has(c3);
+      });
+      try {
+        localStorage.setItem('stock_master_watch_pool_cache', JSON.stringify(currentWatchPool));
+      } catch(e) {}
+
       selectedCodeSet.clear();
       toggleBatchDeleteMode(false);
+      renderWatchPool(currentWatchPool);
+      updateHeaderWatchButton();
+      showOrderToast("已成功移出所选标的");
       loadWatchPool();
+    }
+
+    function removeSingleStockFromWatch(code, e) {
+      if (e) e.stopPropagation();
+      const str = String(code).toLowerCase().trim();
+      const raw = str.replace(/^(sh|sz)/, '');
+
+      userWatchList = userWatchList.filter(item => {
+        const c1 = (item.code || '').toLowerCase().trim();
+        const c2 = (item.symbol || '').toLowerCase().trim();
+        const c3 = c1.replace(/^(sh|sz)/, '');
+        return c1 !== str && c2 !== str && c3 !== raw;
+      });
+      saveUserWatchList(userWatchList);
+
+      currentWatchPool = (currentWatchPool || []).filter(item => {
+        const c1 = (item.code || '').toLowerCase().trim();
+        const c2 = (item.symbol || '').toLowerCase().trim();
+        const c3 = c1.replace(/^(sh|sz)/, '');
+        return c1 !== str && c2 !== str && c3 !== raw;
+      });
+      try {
+        localStorage.setItem('stock_master_watch_pool_cache', JSON.stringify(currentWatchPool));
+      } catch(e) {}
+
+      renderWatchPool(currentWatchPool);
+      updateHeaderWatchButton();
+      showOrderToast("已从自选观察池中移出");
+      loadWatchPool();
+    }
+
+    function isCurrentStockInWatch() {
+      const cur = (currentSymbol || '').toLowerCase().trim();
+      const raw = cur.replace(/^(sh|sz)/, '');
+      return (userWatchList || []).some(item => {
+        const c1 = (item.code || '').toLowerCase().trim();
+        const c2 = (item.symbol || '').toLowerCase().trim();
+        const c3 = c1.replace(/^(sh|sz)/, '');
+        return c1 === cur || c2 === cur || c3 === raw;
+      });
+    }
+
+    function updateHeaderWatchButton() {
+      const btn = document.getElementById('btnHeaderWatch');
+      if (!btn) return;
+      if (isCurrentStockInWatch()) {
+        btn.innerHTML = '★ 已在自选';
+        btn.classList.add('in-watch');
+        btn.title = '点击从自选观察池移出';
+      } else {
+        btn.innerHTML = '☆ +加自选';
+        btn.classList.remove('in-watch');
+        btn.title = '点击加入自选观察池';
+      }
+    }
+
+    function toggleCurrentStockWatch() {
+      if (isCurrentStockInWatch()) {
+        removeSingleStockFromWatch(currentSymbol);
+      } else {
+        const cur = currentSymbol;
+        const name = currentStockName || cur;
+        userWatchList.push({
+          sector: name,
+          code: cur,
+          symbol: cur,
+          desc: name
+        });
+        saveUserWatchList(userWatchList);
+        updateHeaderWatchButton();
+        showOrderToast(`已添加 ${name} 至自选观察池`);
+        loadWatchPool();
+      }
     }
 
     function renderWatchPool(pool) {
@@ -2483,7 +2652,7 @@
       }
 
       if (pool.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:24px 12px; font-size:12px; color:#94a3b8;">观察池为空<br>可通过顶部搜索框添加股票</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:24px 12px; font-size:12px; color:#94a3b8;">观察池为空<br>可通过顶部搜索框或点击右上角【+加自选】添加股票</div>`;
         return;
       }
 
@@ -2512,6 +2681,7 @@
         return `
           <div class="watch-card-wrapper">
             ${checkboxHtml}
+            <button class="watch-card-del-btn" title="移出自选" onclick="removeSingleStockFromWatch('${item.code || item.symbol}', event)">✕</button>
             <div class="watch-card ${isActive ? 'active' : ''}" style="flex:1; min-width:0;" onclick="${isBatchDeleteMode ? `toggleSelectCard('${item.code}', event)` : `selectWatchItem('${item.symbol || item.code}')`}">
               <div class="watch-card-top" style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="watch-sector-name">${item.sector || '自选板块'}${t0Badge}</span>
@@ -5562,9 +5732,12 @@
         userWatchList.push({
           sector: name,
           code: symbol,
+          symbol: symbol,
           desc: name
         });
         saveUserWatchList(userWatchList);
+        updateHeaderWatchButton();
+        showOrderToast(`已添加 ${name} 至自选观察池`);
         loadWatchPool();
       }
 
@@ -5578,6 +5751,7 @@
 
     function switchStock(symbol) {
       currentSymbol = symbol;
+      updateHeaderWatchButton();
       const isT0 = isT0Symbol(symbol);
       if (currentChartType === 'kline') {
         loadStockData(symbol);
