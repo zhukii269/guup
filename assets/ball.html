@@ -18,7 +18,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: transparent;
+      background: transparent !important;
     }
 
     /* Container Modes */
@@ -26,10 +26,11 @@
       width: 100%;
       height: 100%;
       position: relative;
+      background: transparent !important;
     }
 
     /* =========================================
-       1. FLOATING BALL VIEW (White Frosted Glass)
+       1. FLOATING BALL VIEW (100% Fully Transparent Glass)
        ========================================= */
     .ball-wrapper {
       position: absolute;
@@ -42,17 +43,16 @@
       justify-content: center;
       cursor: pointer;
       z-index: 100;
+      background: transparent !important;
     }
 
     .floating-ball {
       width: 58px;
       height: 58px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.45);
-      backdrop-filter: blur(24px) saturate(180%);
-      -webkit-backdrop-filter: blur(24px) saturate(180%);
-      border: 1.5px solid rgba(255, 255, 255, 0.75);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9);
+      background: rgba(0, 0, 0, 0.25) !important;
+      border: 2px solid rgba(255, 255, 255, 0.65);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 0 10px rgba(255, 255, 255, 0.2);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -62,44 +62,44 @@
     }
 
     .floating-ball:hover {
-      transform: scale(1.06);
-      background: rgba(255, 255, 255, 0.65);
+      transform: scale(1.08);
+      background: rgba(0, 0, 0, 0.35) !important;
       border-color: rgba(255, 255, 255, 0.95);
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18), inset 0 1px 2px rgba(255, 255, 255, 1);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), inset 0 0 12px rgba(255, 255, 255, 0.3);
     }
 
     /* Dynamic Pulse for Signal */
     .floating-ball.has-signal-buy {
-      border-color: rgba(239, 68, 68, 0.85);
+      border-color: #ef4444;
       animation: ballPulseBuy 1.8s infinite;
     }
 
     .floating-ball.has-signal-sell {
-      border-color: rgba(16, 185, 129, 0.85);
+      border-color: #10b981;
       animation: ballPulseSell 1.8s infinite;
     }
 
     @keyframes ballPulseBuy {
       0% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 8px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), inset 0 0 8px rgba(239, 68, 68, 0.4);
       }
       70% {
-        box-shadow: 0 0 0 9px rgba(239, 68, 68, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), inset 0 0 8px rgba(239, 68, 68, 0.4);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), inset 0 0 8px rgba(239, 68, 68, 0.4);
       }
     }
 
     @keyframes ballPulseSell {
       0% {
-        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6), 0 8px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7), inset 0 0 8px rgba(16, 185, 129, 0.4);
       }
       70% {
-        box-shadow: 0 0 0 9px rgba(16, 185, 129, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0), inset 0 0 8px rgba(16, 185, 129, 0.4);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), inset 0 0 8px rgba(16, 185, 129, 0.4);
       }
     }
 
@@ -107,13 +107,14 @@
       font-size: 17px;
       line-height: 1;
       margin-bottom: 2px;
-      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
     }
 
     .ball-label {
       font-size: 10px;
       font-weight: 800;
-      color: #1e293b;
+      color: #ffffff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.9);
       letter-spacing: -0.2px;
       line-height: 1;
     }
@@ -129,7 +130,7 @@
       color: #ffffff;
       background: #ef4444;
       border: 1.5px solid rgba(255, 255, 255, 0.95);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
       display: none;
       animation: badgeBounce 1.2s infinite;
     }
@@ -140,26 +141,25 @@
     }
 
     /* =========================================
-       2. EXPANDED PANELS CONTAINER
+       2. EXPANDED PANELS (Transparent Glass Drawer)
        ========================================= */
     .expanded-container {
       width: 100%;
       height: 100%;
       display: none;
       flex-direction: row;
-      background: transparent;
+      background: transparent !important;
       padding: 4px;
     }
 
-    /* Watch Pool Column Drawer */
+    /* Watch Pool Column Drawer (Transparent) */
     .drawer-panel {
       width: 320px;
       height: calc(100% - 8px);
-      background: rgba(15, 23, 42, 0.95);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(15, 23, 42, 0.45) !important;
+      border: 1px solid rgba(255, 255, 255, 0.22);
       border-radius: 14px;
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.15);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -173,8 +173,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(30, 41, 59, 0.6);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.35);
       flex-shrink: 0;
     }
 
@@ -187,7 +187,8 @@
     .drawer-title {
       font-size: 13px;
       font-weight: 700;
-      color: #f8fafc;
+      color: #ffffff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
       display: flex;
       align-items: center;
       gap: 4px;
@@ -195,8 +196,8 @@
 
     .drawer-count {
       font-size: 11px;
-      color: #94a3b8;
-      background: rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.15);
       padding: 1px 6px;
       border-radius: 8px;
     }
@@ -208,6 +209,7 @@
       background: linear-gradient(135deg, #ef4444, #dc2626);
       padding: 2px 7px;
       border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
       display: none;
     }
 
@@ -221,9 +223,9 @@
       width: 26px;
       height: 26px;
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.05);
-      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -233,8 +235,8 @@
     }
 
     .icon-btn:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: #ffffff;
+      background: rgba(255, 255, 255, 0.25);
+      border-color: rgba(255, 255, 255, 0.4);
     }
 
     .icon-btn.active {
@@ -256,7 +258,7 @@
     }
 
     .stock-list::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.25);
       border-radius: 4px;
     }
 
@@ -265,22 +267,22 @@
       align-items: center;
       justify-content: space-between;
       padding: 8px 8px;
-      margin-bottom: 3px;
+      margin-bottom: 4px;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid transparent;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       cursor: pointer;
       transition: all 0.15s ease;
     }
 
     .stock-row:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.25);
     }
 
     .stock-row.selected {
-      background: rgba(59, 130, 246, 0.18);
-      border-color: rgba(59, 130, 246, 0.5);
+      background: rgba(59, 130, 246, 0.35);
+      border-color: rgba(59, 130, 246, 0.7);
     }
 
     .stock-info-left {
@@ -298,8 +300,9 @@
 
     .stock-name {
       font-size: 12px;
-      font-weight: 600;
-      color: #f1f5f9;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -311,16 +314,17 @@
       font-weight: 700;
       padding: 0 3px;
       border-radius: 3px;
-      background: rgba(16, 185, 129, 0.2);
+      background: rgba(16, 185, 129, 0.3);
       color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      border: 1px solid rgba(16, 185, 129, 0.5);
       line-height: 12px;
     }
 
     .stock-code {
       font-size: 10px;
-      color: #64748b;
+      color: #94a3b8;
       font-family: monospace;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
 
     .stock-tag-col {
@@ -333,12 +337,13 @@
 
     .stock-signal-tag {
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 800;
       padding: 2px 6px;
       border-radius: 4px;
       white-space: nowrap;
       text-align: center;
       line-height: 1.2;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
 
     .stock-price-col {
@@ -351,41 +356,42 @@
 
     .stock-price {
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
       font-family: monospace;
-      color: #f8fafc;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
 
     .stock-pct {
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 800;
       font-family: monospace;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
 
     .up-red {
-      color: #ef4444;
+      color: #f87171;
     }
 
     .down-green {
-      color: #10b981;
+      color: #34d399;
     }
 
     .flat-gray {
-      color: #94a3b8;
+      color: #cbd5e1;
     }
 
     /* =========================================
-       3. K-LINE INSPECTOR PANEL (Slide-out Card)
+       3. K-LINE INSPECTOR PANEL (Transparent Glass)
        ========================================= */
     .kline-panel {
       width: 420px;
       height: calc(100% - 8px);
       margin-left: 8px;
-      background: rgba(15, 23, 42, 0.97);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(15, 23, 42, 0.48) !important;
+      border: 1px solid rgba(255, 255, 255, 0.22);
       border-radius: 14px;
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.15);
       display: none;
       flex-direction: column;
       overflow: hidden;
@@ -398,8 +404,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(30, 41, 59, 0.5);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.35);
       flex-shrink: 0;
     }
 
@@ -413,6 +419,7 @@
       font-size: 14px;
       font-weight: 700;
       color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
 
     .kline-price-box {
@@ -425,12 +432,14 @@
       font-size: 14px;
       font-weight: 800;
       font-family: monospace;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
 
     .kline-cur-pct {
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
       font-family: monospace;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
 
     .kline-actions {
@@ -445,8 +454,8 @@
       align-items: center;
       justify-content: space-between;
       padding: 4px 10px;
-      background: rgba(15, 23, 42, 0.6);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(0, 0, 0, 0.25);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       flex-shrink: 0;
     }
 
@@ -459,8 +468,8 @@
       font-size: 10px;
       padding: 2px 7px;
       border-radius: 4px;
-      color: #94a3b8;
-      background: rgba(255, 255, 255, 0.04);
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.08);
       border: 1px solid transparent;
       cursor: pointer;
       font-weight: 600;
@@ -474,10 +483,10 @@
 
     .btn-restore-main {
       font-size: 10px;
-      font-weight: 600;
-      color: #60a5fa;
-      background: rgba(59, 130, 246, 0.15);
-      border: 1px solid rgba(59, 130, 246, 0.35);
+      font-weight: 700;
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.25);
+      border: 1px solid rgba(59, 130, 246, 0.5);
       padding: 2px 8px;
       border-radius: 4px;
       cursor: pointer;
@@ -488,8 +497,8 @@
     }
 
     .btn-restore-main:hover {
-      background: rgba(59, 130, 246, 0.3);
-      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.4);
+      color: #ffffff;
     }
 
     /* Chart Container */
@@ -505,8 +514,8 @@
       margin: 6px 10px 8px 10px;
       padding: 8px 10px;
       border-radius: 8px;
-      background: rgba(30, 41, 59, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -526,12 +535,14 @@
       padding: 2px 7px;
       border-radius: 4px;
       color: #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
 
     .resonance-score {
       font-size: 11px;
-      font-weight: 700;
-      color: #f59e0b;
+      font-weight: 800;
+      color: #fbbf24;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
 
     .resonance-factors {
@@ -545,21 +556,22 @@
       font-size: 9px;
       padding: 1px 5px;
       border-radius: 3px;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.08);
       color: #94a3b8;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .factor-badge.pass {
       color: #34d399;
-      background: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.25);
+      background: rgba(16, 185, 129, 0.25);
+      border-color: rgba(16, 185, 129, 0.4);
     }
 
     .resonance-reason {
       font-size: 11px;
-      color: #cbd5e1;
+      color: #e2e8f0;
       line-height: 1.4;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -598,7 +610,7 @@
 <body>
   <div id="root" class="mode-ball">
     
-    <!-- 1. FLOATING BALL VIEW (White Frosted Glass) -->
+    <!-- 1. FLOATING BALL VIEW (100% Fully Transparent Glass) -->
     <div class="ball-wrapper" id="ballWrapper">
       <div class="floating-ball pywebview-drag-region" id="floatingBall" title="摸鱼悬浮球：鼠标移入展开观察池，双击恢复主窗口，按住可任意拖动位置">
         <div class="ball-icon" id="ballIcon">🎯</div>
@@ -607,7 +619,7 @@
       </div>
     </div>
 
-    <!-- 2. EXPANDED PANELS (Drawer + Kline Card) -->
+    <!-- 2. EXPANDED PANELS (Transparent Glass Drawer) -->
     <div class="expanded-container" id="expandedContainer">
       
       <!-- Left Watch Pool Column -->
@@ -626,7 +638,7 @@
           </div>
         </div>
 
-        <!-- Stock List (Clean pure column without filter tabs) -->
+        <!-- Stock List -->
         <div class="stock-list" id="stockList">
           <!-- Dynamically populated rows -->
         </div>
@@ -659,7 +671,7 @@
             <button class="period-tab" id="period30" onclick="switchPeriod('30min')">30分</button>
             <button class="period-tab" id="periodDay" onclick="switchPeriod('day')">日K</button>
           </div>
-          <span style="font-size:10px; color:#64748b;" id="klinePeriodHint">推荐: 60分共振买卖模型</span>
+          <span style="font-size:10px; color:#94a3b8; text-shadow:0 1px 2px rgba(0,0,0,0.8);" id="klinePeriodHint">推荐: 60分共振买卖模型</span>
         </div>
 
         <!-- ECharts Container -->
@@ -977,37 +989,37 @@
         }
       });
 
-      // Update Floating Ball View (White Frosted Glass)
+      // Update Floating Ball View (Fully Transparent Glass)
       floatingBall.classList.remove('has-signal-buy', 'has-signal-sell');
 
       if (highestBuyLevel >= 3) {
         floatingBall.classList.add('has-signal-buy');
         ballIcon.innerText = highestBuyLevel === 4 ? '🚨' : '⚡';
-        ballLabel.innerText = highestBuyLevel === 4 ? '4档共振' : '3档共振';
-        ballLabel.style.color = '#dc2626';
+        ballLabel.innerText = highestBuyLevel === 4 ? '4档' : '3档';
+        ballLabel.style.color = '#f87171';
         ballBadge.style.display = 'block';
         ballBadge.innerText = `🚨${highestBuyLevel}档`;
         ballBadge.style.background = '#ef4444';
       } else if (hasSellSignal) {
         floatingBall.classList.add('has-signal-sell');
         ballIcon.innerText = '⚠️';
-        ballLabel.innerText = '卖出信号';
-        ballLabel.style.color = '#059669';
+        ballLabel.innerText = '卖出';
+        ballLabel.style.color = '#34d399';
         ballBadge.style.display = 'block';
         ballBadge.innerText = '卖出';
         ballBadge.style.background = '#10b981';
       } else if (signalCount > 0) {
         floatingBall.classList.add('has-signal-buy');
         ballIcon.innerText = '⚡';
-        ballLabel.innerText = `${signalCount}信号`;
-        ballLabel.style.color = '#d97706';
+        ballLabel.innerText = `${signalCount}信`;
+        ballLabel.style.color = '#fbbf24';
         ballBadge.style.display = 'block';
         ballBadge.innerText = `${signalCount}`;
         ballBadge.style.background = '#f59e0b';
       } else {
         ballIcon.innerText = '🎯';
         ballLabel.innerText = `${watchPoolData.length || 23}标`;
-        ballLabel.style.color = '#1e293b';
+        ballLabel.style.color = '#ffffff';
         ballBadge.style.display = 'none';
       }
 
@@ -1038,7 +1050,7 @@
 
       stockList.innerHTML = '';
       if (list.length === 0) {
-        stockList.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b; font-size:12px;">暂无标的数据</div>`;
+        stockList.innerHTML = `<div style="text-align:center; padding:30px; color:#94a3b8; font-size:12px;">暂无标的数据</div>`;
         return;
       }
 
@@ -1067,7 +1079,7 @@
             <span class="stock-code">${code.toUpperCase()}</span>
           </div>
           <div class="stock-tag-col">
-            <span class="stock-signal-tag" style="background:${tagColor}22; color:${tagColor}; border:1px solid ${tagColor}44;">
+            <span class="stock-signal-tag" style="background:${tagColor}33; color:#ffffff; border:1px solid ${tagColor}88;">
               ${tag}
             </span>
           </div>
@@ -1176,7 +1188,7 @@
       const volData = displayBars.map(k => ({
         value: k.volume || k.vol || 0,
         itemStyle: {
-          color: k.close >= k.open ? '#ef4444' : '#10b981'
+          color: k.close >= k.open ? '#f87171' : '#34d399'
         }
       }));
 
@@ -1196,7 +1208,7 @@
               color: isBuySig ? '#ef4444' : '#10b981',
               borderRadius: 3,
               shadowBlur: 4,
-              shadowColor: 'rgba(0,0,0,0.3)'
+              shadowColor: 'rgba(0,0,0,0.5)'
             },
             label: {
               show: true,
@@ -1215,8 +1227,8 @@
         tooltip: {
           trigger: 'axis',
           axisPointer: { type: 'cross' },
-          backgroundColor: 'rgba(15, 23, 42, 0.9)',
-          borderColor: 'rgba(255, 255, 255, 0.2)',
+          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+          borderColor: 'rgba(255, 255, 255, 0.25)',
           textStyle: { color: '#f8fafc', fontSize: 11 },
           formatter: function(params) {
             if (!params || params.length === 0) return '';
@@ -1224,7 +1236,7 @@
             const bar = displayBars[idx];
             if (!bar) return '';
             const dateStr = bar.datetime || bar.date || '';
-            const cColor = bar.close >= bar.open ? '#ef4444' : '#10b981';
+            const cColor = bar.close >= bar.open ? '#f87171' : '#34d399';
             let res = `<div style="font-weight:700;margin-bottom:3px;">${dateStr}</div>`;
             res += `收盘: <b style="color:${cColor}">${bar.close}</b> (${(bar.pct_change || 0).toFixed(2)}%)<br/>`;
             res += `开: ${bar.open} 高: ${bar.high} 低: ${bar.low}<br/>`;
@@ -1244,7 +1256,7 @@
             data: dates,
             scale: true,
             boundaryGap: true,
-            axisLine: { lineStyle: { color: '#334155' } },
+            axisLine: { lineStyle: { color: '#475569' } },
             axisLabel: { show: false },
             splitLine: { show: false }
           },
@@ -1254,8 +1266,8 @@
             data: dates,
             scale: true,
             boundaryGap: true,
-            axisLine: { lineStyle: { color: '#334155' } },
-            axisLabel: { color: '#64748b', fontSize: 9 },
+            axisLine: { lineStyle: { color: '#475569' } },
+            axisLabel: { color: '#94a3b8', fontSize: 9 },
             splitLine: { show: false }
           }
         ],
@@ -1263,8 +1275,8 @@
           {
             scale: true,
             splitArea: { show: false },
-            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
-            axisLabel: { color: '#94a3b8', fontSize: 9 }
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+            axisLabel: { color: '#cbd5e1', fontSize: 9 }
           },
           {
             scale: true,
@@ -1304,7 +1316,7 @@
             data: ma10Data,
             smooth: true,
             showSymbol: false,
-            lineStyle: { width: 1.2, color: '#3b82f6' }
+            lineStyle: { width: 1.2, color: '#60a5fa' }
           },
           {
             name: 'MA20',
@@ -1312,7 +1324,7 @@
             data: ma20Data,
             smooth: true,
             showSymbol: false,
-            lineStyle: { width: 1.2, color: '#ec4899' }
+            lineStyle: { width: 1.2, color: '#f472b6' }
           },
           {
             name: '成交量',

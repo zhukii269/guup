@@ -26,6 +26,7 @@ class StockApi:
 
     def switch_to_ball_mode(self):
         try:
+            self._in_ball_mode = True
             if self._main_window:
                 self._main_window.hide()
             if self._ball_window:
@@ -43,6 +44,7 @@ class StockApi:
 
     def switch_to_main_mode(self, symbol=None):
         try:
+            self._in_ball_mode = False
             if self._ball_window:
                 self._ball_window.hide()
             if self._main_window:
@@ -220,12 +222,21 @@ def main():
         frameless=True,
         transparent=True,
         on_top=True,
-        hidden=True,
         js_api=api,
         resizable=True
     )
 
     api._set_windows(main_win, ball_win)
+
+    def on_ball_shown():
+        # Keep hidden on startup until user switches to ball mode
+        if not getattr(api, '_in_ball_mode', False):
+            try:
+                ball_win.hide()
+            except Exception:
+                pass
+
+    ball_win.events.shown += on_ball_shown
 
     def on_main_closed():
         try:
