@@ -4,32 +4,43 @@ import webview
 from stock_data_provider import StockDataProvider
 from interval_calculator import IntervalCalculator
 
-def apply_win32_layered_transparency(window, alpha=215):
+def apply_win32_window_shape(window, mode="ball", alpha=225):
     try:
         import ctypes
         if not hasattr(window, 'native') or not window.native:
             return
         form = window.native
-        try:
-            import System.Drawing
-            form.BackColor = System.Drawing.Color.FromArgb(1, 2, 3)
-            form.TransparencyKey = System.Drawing.Color.FromArgb(1, 2, 3)
-        except Exception:
-            pass
         hwnd = form.Handle.ToInt32()
         user32 = ctypes.windll.user32
+        gdi32 = ctypes.windll.gdi32
+        
         GWL_EXSTYLE = -20
         WS_EX_LAYERED = 0x80000
-        LWA_COLORKEY = 1
         LWA_ALPHA = 2
         
+        # 1. Physical Window Region Shaping (Zero square border, hardware-clipped)
+        if mode == "ball":
+            # 68x68 canvas: perfect 60px circle from (4, 4) to (64, 64)
+            hrgn = gdi32.CreateEllipticRgn(4, 4, 64, 64)
+        elif mode == "drawer":
+            # 330x580 canvas: rounded rectangle with 20px radius
+            hrgn = gdi32.CreateRoundRectRgn(0, 0, 330, 580, 20, 20)
+        elif mode == "kline":
+            # 760x580 canvas: rounded rectangle with 20px radius
+            hrgn = gdi32.CreateRoundRectRgn(0, 0, 760, 580, 20, 20)
+        else:
+            hrgn = gdi32.CreateEllipticRgn(4, 4, 64, 64)
+            
+        user32.SetWindowRgn(hwnd, hrgn, True)
+        
+        # 2. Translucent Glass Opacity (No colorkey -> 100% reliable mouse hover & clicks!)
         exstyle = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
         user32.SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle | WS_EX_LAYERED)
-        # COLORREF for #010203 (R=1, G=2, B=3) -> 0x00030201
-        color_key = 0x00030201
-        user32.SetLayeredWindowAttributes(hwnd, color_key, int(alpha), LWA_COLORKEY | LWA_ALPHA)
+        user32.SetLayeredWindowAttributes(hwnd, 0, int(alpha), LWA_ALPHA)
     except Exception as e:
-        print("apply_win32_layered_transparency error:", e)
+        print("apply_win32_window_shape error:", e)
+
+apply_win32_layered_transparency = apply_win32_window_shape
 
 class StockApi:
     def __init__(self):
@@ -58,7 +69,7 @@ class StockApi:
             if self._main_window:
                 self._main_window.hide()
             if self._ball_window:
-                apply_win32_layered_transparency(self._ball_window, 215)
+                apply_win32_window_shape(self._ball_window, mode="ball", alpha=225)
                 self.expand_ball("ball")
                 self._ball_window.show()
                 try:
@@ -137,7 +148,7 @@ class StockApi:
 
             self._ball_window.move(int(new_x), int(new_y))
             self._ball_window.resize(int(w), int(h))
-            apply_win32_layered_transparency(self._ball_window, 215)
+            apply_win32_window_shape(self._ball_window, mode=mode, alpha=225)
             return True
         except Exception as e:
             print("expand_ball error:", e)
