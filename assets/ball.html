@@ -29,7 +29,7 @@
     }
 
     /* =========================================
-       1. FLOATING BALL VIEW (Idle State)
+       1. FLOATING BALL VIEW (White Frosted Glass)
        ========================================= */
     .ball-wrapper {
       position: absolute;
@@ -48,67 +48,72 @@
       width: 58px;
       height: 58px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-      border: 1.5px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.45);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1.5px solid rgba(255, 255, 255, 0.75);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       position: relative;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .floating-ball:hover {
-      transform: scale(1.05);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+      transform: scale(1.06);
+      background: rgba(255, 255, 255, 0.65);
+      border-color: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18), inset 0 1px 2px rgba(255, 255, 255, 1);
     }
 
     /* Dynamic Pulse for Signal */
     .floating-ball.has-signal-buy {
-      border-color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.85);
       animation: ballPulseBuy 1.8s infinite;
     }
 
     .floating-ball.has-signal-sell {
-      border-color: #10b981;
+      border-color: rgba(16, 185, 129, 0.85);
       animation: ballPulseSell 1.8s infinite;
     }
 
     @keyframes ballPulseBuy {
       0% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), 0 6px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6), 0 8px 24px rgba(0, 0, 0, 0.12);
       }
       70% {
-        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 0 9px rgba(239, 68, 68, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
       }
     }
 
     @keyframes ballPulseSell {
       0% {
-        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7), 0 6px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6), 0 8px 24px rgba(0, 0, 0, 0.12);
       }
       70% {
-        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 0 9px rgba(16, 185, 129, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 8px 24px rgba(0, 0, 0, 0.12);
       }
     }
 
     .ball-icon {
-      font-size: 18px;
+      font-size: 17px;
       line-height: 1;
       margin-bottom: 2px;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
     }
 
     .ball-label {
       font-size: 10px;
-      font-weight: 700;
-      color: #94a3b8;
+      font-weight: 800;
+      color: #1e293b;
       letter-spacing: -0.2px;
       line-height: 1;
     }
@@ -117,14 +122,14 @@
       position: absolute;
       top: -3px;
       right: -3px;
-      padding: 1px 5px;
+      padding: 1px 6px;
       border-radius: 10px;
       font-size: 9px;
       font-weight: 800;
       color: #ffffff;
       background: #ef4444;
-      border: 1px solid rgba(255, 255, 255, 0.5);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      border: 1.5px solid rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
       display: none;
       animation: badgeBounce 1.2s infinite;
     }
@@ -204,13 +209,12 @@
       padding: 2px 7px;
       border-radius: 10px;
       display: none;
-      cursor: pointer;
     }
 
     .drawer-actions {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
     }
 
     .icon-btn {
@@ -239,45 +243,12 @@
       color: #ffffff;
     }
 
-    /* Filter Bar */
-    .filter-tabs {
-      display: flex;
-      padding: 6px 10px;
-      gap: 6px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      background: rgba(15, 23, 42, 0.4);
-      flex-shrink: 0;
-    }
-
-    .filter-tab {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 6px;
-      color: #94a3b8;
-      background: transparent;
-      border: 1px solid transparent;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .filter-tab:hover {
-      color: #f1f5f9;
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .filter-tab.active {
-      color: #ffffff;
-      background: rgba(59, 130, 246, 0.25);
-      border-color: rgba(59, 130, 246, 0.4);
-      font-weight: 600;
-    }
-
     /* Stock List */
     .stock-list {
       flex: 1;
       overflow-y: auto;
       overflow-x: hidden;
-      padding: 4px 6px;
+      padding: 6px 8px;
     }
 
     .stock-list::-webkit-scrollbar {
@@ -293,7 +264,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 7px 8px;
+      padding: 8px 8px;
       margin-bottom: 3px;
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.02);
@@ -332,7 +303,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 82px;
+      max-width: 86px;
     }
 
     .t0-pill {
@@ -627,9 +598,9 @@
 <body>
   <div id="root" class="mode-ball">
     
-    <!-- 1. FLOATING BALL VIEW (Idle State) -->
+    <!-- 1. FLOATING BALL VIEW (White Frosted Glass) -->
     <div class="ball-wrapper" id="ballWrapper">
-      <div class="floating-ball pywebview-drag-region" id="floatingBall" title="摸鱼悬浮球：悬停展开观察池，双击恢复大窗，按住可任意拖拽">
+      <div class="floating-ball pywebview-drag-region" id="floatingBall" title="摸鱼悬浮球：鼠标移入展开观察池，双击恢复主窗口，按住可任意拖动位置">
         <div class="ball-icon" id="ballIcon">🎯</div>
         <div class="ball-label" id="ballLabel">23标</div>
         <div class="ball-badge" id="ballBadge">🚨4档</div>
@@ -646,25 +617,16 @@
           <div class="drawer-title-group">
             <span class="drawer-title">🎯 自选观察池</span>
             <span class="drawer-count" id="drawerCount">23</span>
-            <span class="signal-counter-pill" id="signalCounterPill" onclick="filterBySignal()">🚨 0信号</span>
+            <span class="signal-counter-pill" id="signalCounterPill">🚨 0信号</span>
           </div>
           <div class="drawer-actions">
             <button class="icon-btn" id="btnPin" onclick="togglePin(event)" title="固定窗口 (防止鼠标移出自动收起)">📌</button>
             <button class="icon-btn" onclick="refreshQuotes(event)" title="刷新行情">🔄</button>
             <button class="icon-btn" onclick="restoreMainWindow(event)" title="恢复完整大窗">🗖</button>
-            <button class="icon-btn" onclick="collapseToBall(event)" title="收回悬浮球">◀</button>
           </div>
         </div>
 
-        <!-- Filter Bar -->
-        <div class="filter-tabs">
-          <button class="filter-tab active" id="tabAll" onclick="setFilter('all')">全部</button>
-          <button class="filter-tab" id="tabSignal" onclick="setFilter('signal')">共振信号</button>
-          <button class="filter-tab" id="tabT0" onclick="setFilter('t0')">T+0</button>
-          <button class="filter-tab" id="tabPct" onclick="setFilter('pct')">涨幅</button>
-        </div>
-
-        <!-- Stock List -->
+        <!-- Stock List (Clean pure column without filter tabs) -->
         <div class="stock-list" id="stockList">
           <!-- Dynamically populated rows -->
         </div>
@@ -728,7 +690,6 @@
     let currentMode = 'ball'; // 'ball' | 'drawer' | 'kline'
     let isPinned = false;
     let collapseTimeout = null;
-    let currentFilter = 'all';
     let watchPoolData = [];
     let selectedStock = null;
     let currentPeriod = '60min';
@@ -1016,13 +977,14 @@
         }
       });
 
-      // Update Floating Ball View
+      // Update Floating Ball View (White Frosted Glass)
       floatingBall.classList.remove('has-signal-buy', 'has-signal-sell');
 
       if (highestBuyLevel >= 3) {
         floatingBall.classList.add('has-signal-buy');
         ballIcon.innerText = highestBuyLevel === 4 ? '🚨' : '⚡';
         ballLabel.innerText = highestBuyLevel === 4 ? '4档共振' : '3档共振';
+        ballLabel.style.color = '#dc2626';
         ballBadge.style.display = 'block';
         ballBadge.innerText = `🚨${highestBuyLevel}档`;
         ballBadge.style.background = '#ef4444';
@@ -1030,6 +992,7 @@
         floatingBall.classList.add('has-signal-sell');
         ballIcon.innerText = '⚠️';
         ballLabel.innerText = '卖出信号';
+        ballLabel.style.color = '#059669';
         ballBadge.style.display = 'block';
         ballBadge.innerText = '卖出';
         ballBadge.style.background = '#10b981';
@@ -1037,12 +1000,14 @@
         floatingBall.classList.add('has-signal-buy');
         ballIcon.innerText = '⚡';
         ballLabel.innerText = `${signalCount}信号`;
+        ballLabel.style.color = '#d97706';
         ballBadge.style.display = 'block';
         ballBadge.innerText = `${signalCount}`;
         ballBadge.style.background = '#f59e0b';
       } else {
         ballIcon.innerText = '🎯';
         ballLabel.innerText = `${watchPoolData.length || 23}标`;
+        ballLabel.style.color = '#1e293b';
         ballBadge.style.display = 'none';
       }
 
@@ -1056,26 +1021,8 @@
     }
 
     /* =========================================
-       WATCH POOL LIST FILTERING & RENDERING
+       WATCH POOL LIST RENDERING
        ========================================= */
-    function setFilter(type) {
-      currentFilter = type;
-      ['tabAll', 'tabSignal', 'tabT0', 'tabPct'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-      });
-      if (type === 'all') document.getElementById('tabAll').classList.add('active');
-      if (type === 'signal') document.getElementById('tabSignal').classList.add('active');
-      if (type === 't0') document.getElementById('tabT0').classList.add('active');
-      if (type === 'pct') document.getElementById('tabPct').classList.add('active');
-
-      renderStockRows();
-    }
-
-    function filterBySignal() {
-      setFilter('signal');
-    }
-
     function checkIsT0(stock) {
       if (stock.trade_rule === 'T+0') return true;
       const name = stock.name || stock.desc || '';
@@ -1087,22 +1034,11 @@
     }
 
     function renderStockRows() {
-      let list = [...watchPoolData];
-
-      if (currentFilter === 'signal') {
-        list = list.filter(item => {
-          const t = item.tag || '';
-          return t.includes('买入') || t.includes('共振') || t.includes('档') || t.includes('卖出') || item.is_triggered || (item.score >= 3);
-        });
-      } else if (currentFilter === 't0') {
-        list = list.filter(checkIsT0);
-      } else if (currentFilter === 'pct') {
-        list.sort((a, b) => (b.pct_change || 0) - (a.pct_change || 0));
-      }
+      const list = [...watchPoolData];
 
       stockList.innerHTML = '';
       if (list.length === 0) {
-        stockList.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b; font-size:12px;">暂无匹配标的</div>`;
+        stockList.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b; font-size:12px;">暂无标的数据</div>`;
         return;
       }
 
@@ -1244,7 +1180,7 @@
         }
       }));
 
-      // Collect signal marker points
+      // Collect signal marker points with compact neat pills (NO giant arrows)
       const markPoints = [];
       displayBars.forEach((k, idx) => {
         if (k.signal_type) {
@@ -1253,10 +1189,21 @@
             name: k.signal_name || k.signal_type,
             coord: [idx, isBuySig ? k.low : k.high],
             value: k.signal_type,
-            symbol: isBuySig ? 'pin' : 'arrow',
-            symbolSize: 22,
+            symbol: 'roundRect',
+            symbolSize: [22, 13],
+            symbolOffset: [0, isBuySig ? 10 : -10],
             itemStyle: {
-              color: isBuySig ? '#ef4444' : '#10b981'
+              color: isBuySig ? '#ef4444' : '#10b981',
+              borderRadius: 3,
+              shadowBlur: 4,
+              shadowColor: 'rgba(0,0,0,0.3)'
+            },
+            label: {
+              show: true,
+              formatter: k.signal_type,
+              fontSize: 9,
+              fontWeight: 'bold',
+              color: '#ffffff'
             }
           });
         }
