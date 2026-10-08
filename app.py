@@ -14,12 +14,12 @@ class StockApi:
     def _set_window(self, window):
         self._window = window
 
-    def set_mini_mode(self, is_mini=True, width=340, height=220, on_top=True):
+    def set_mini_mode(self, is_mini=True, width=960, height=68, on_top=True):
         if not self._window:
             return False
         try:
             if is_mini:
-                if self._window.width > 500:
+                if self._window.width > 500 and self._window.height > 300:
                     self._prev_width = self._window.width
                     self._prev_height = self._window.height
                 try:
@@ -118,7 +118,7 @@ def main():
         url=html_path,
         width=1340,
         height=920,
-        min_size=(280, 160),
+        min_size=(200, 48),
         js_api=api,
         resizable=True,
         text_select=False
