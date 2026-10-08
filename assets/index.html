@@ -1381,19 +1381,7 @@
        Mini 模式：单行长条全标的信号胶囊 (上班摸鱼盯盘神器)
        ========================================================================= */
     body.mini-mode {
-      overflow: hidden !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #0f172a !important;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    body.mini-mode > header,
-    body.mini-mode > .app-main-layout,
-    body.mini-mode > #hudDrawer,
-    body.mini-mode > #hudIndicator,
-    body.mini-mode > #hudDragHandle {
-      display: none !important;
+      /* Safe no-op */
     }
 
     #miniCardContainer {
@@ -1630,10 +1618,10 @@
         <span id="themeToggleText">黑夜</span>
       </button>
 
-      <!-- Mini Mode Floating Capsule Button -->
-      <button class="mini-toggle-btn" id="miniToggleBtn" onclick="toggleMiniMode(true)" title="切换为单行长条胶囊Mini模式 (上班摸鱼实时盯盘所有信号)">
-        <span>💊</span>
-        <span>信号胶囊</span>
+      <!-- Desktop Floating Ball Mode Button -->
+      <button class="mini-toggle-btn" id="miniToggleBtn" onclick="switchToBallMode()" title="切换为桌面摸鱼悬浮球模式 (平时为桌面边缘小球，一有信号提醒，鼠标悬停展开观察池，点击查看K线)">
+        <span>🔮</span>
+        <span>摸鱼悬浮球</span>
       </button>
     </div>
   </header>
@@ -6479,51 +6467,20 @@
       return list;
     }
 
-    async function toggleMiniMode(enable) {
-      isMiniMode = !!enable;
-      const body = document.body;
-      const btn = document.getElementById('btnMiniPin');
+    function switchToBallMode() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_to_ball_mode) {
+        window.pywebview.api.switch_to_ball_mode();
+      }
+    }
+    window.switchToBallMode = switchToBallMode;
 
-      if (isMiniMode) {
-        body.classList.add('mini-mode');
-        if (btn) btn.classList.toggle('active', isMiniPinned);
-        
-        // 调用后端将窗口缩放到单行长条胶囊尺寸 (960 x 68) 并置顶
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_mini_mode) {
-          try {
-            await window.pywebview.api.set_mini_mode(true, 960, 68, isMiniPinned);
-          } catch(e) {
-            console.error("set_mini_mode error:", e);
-          }
-        }
-        
-        renderMiniCapsules();
-        localStorage.setItem('stock_master_is_mini_mode', 'true');
+    async function toggleMiniMode(enable) {
+      if (enable) {
+        switchToBallMode();
       } else {
-        body.classList.remove('mini-mode');
-        body.classList.remove('stealth-mode');
-        isMiniStealth = false;
-        
-        // 调用后端恢复大窗 (1340 x 920) 并取消强制置顶
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_mini_mode) {
-          try {
-            await window.pywebview.api.set_mini_mode(false);
-          } catch(e) {
-            console.error("set_mini_mode false error:", e);
-          }
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_to_main_mode) {
+          window.pywebview.api.switch_to_main_mode();
         }
-        
-        localStorage.setItem('stock_master_is_mini_mode', 'false');
-        
-        // 恢复后让大图表自适应尺寸并加载当前选中标的
-        setTimeout(() => {
-          if (chartInstance) chartInstance.resize();
-          if (isT0Symbol(currentSymbol)) {
-            load30MinData(currentSymbol);
-          } else {
-            load60MinData(currentSymbol);
-          }
-        }, 120);
       }
     }
     window.toggleMiniMode = toggleMiniMode;

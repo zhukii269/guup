@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockBall</title>
+  <script src="echarts.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    /* Container Modes */
+    #root {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    /* =========================================
+       1. FLOATING BALL VIEW (Idle State)
+       ========================================= */
+    .ball-wrapper {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 100;
+    }
+
+    .floating-ball {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+    }
+
+    .floating-ball:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+    }
+
+    /* Dynamic Pulse for Signal */
+    .floating-ball.has-signal-buy {
+      border-color: #ef4444;
+      animation: ballPulseBuy 1.8s infinite;
+    }
+
+    .floating-ball.has-signal-sell {
+      border-color: #10b981;
+      animation: ballPulseSell 1.8s infinite;
+    }
+
+    @keyframes ballPulseBuy {
+      0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), 0 6px 20px rgba(0, 0, 0, 0.5);
+      }
+      70% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    @keyframes ballPulseSell {
+      0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7), 0 6px 20px rgba(0, 0, 0, 0.5);
+      }
+      70% {
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 6px 20px rgba(0, 0, 0, 0.5);
+      }
+    }
+
+    .ball-icon {
+      font-size: 18px;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    .ball-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #94a3b8;
+      letter-spacing: -0.2px;
+      line-height: 1;
+    }
+
+    .ball-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      padding: 1px 5px;
+      border-radius: 10px;
+      font-size: 9px;
+      font-weight: 800;
+      color: #ffffff;
+      background: #ef4444;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      display: none;
+      animation: badgeBounce 1.2s infinite;
+    }
+
+    @keyframes badgeBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
+    /* =========================================
+       2. EXPANDED PANELS CONTAINER
+       ========================================= */
+    .expanded-container {
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: row;
+      background: transparent;
+      padding: 4px;
+    }
+
+    /* Watch Pool Column Drawer */
+    .drawer-panel {
+      width: 320px;
+      height: calc(100% - 8px);
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    /* Drawer Header */
+    .drawer-header {
+      height: 46px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(30, 41, 59, 0.6);
+      flex-shrink: 0;
+    }
+
+    .drawer-title-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .drawer-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .drawer-count {
+      font-size: 11px;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 1px 6px;
+      border-radius: 8px;
+    }
+
+    .signal-counter-pill {
+      font-size: 10px;
+      font-weight: 700;
+      color: #ffffff;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      padding: 2px 7px;
+      border-radius: 10px;
+      display: none;
+      cursor: pointer;
+    }
+
+    .drawer-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .icon-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+    }
+
+    .icon-btn.active {
+      background: #3b82f6;
+      border-color: #60a5fa;
+      color: #ffffff;
+    }
+
+    /* Filter Bar */
+    .filter-tabs {
+      display: flex;
+      padding: 6px 10px;
+      gap: 6px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(15, 23, 42, 0.4);
+      flex-shrink: 0;
+    }
+
+    .filter-tab {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: #94a3b8;
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-tab:hover {
+      color: #f1f5f9;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .filter-tab.active {
+      color: #ffffff;
+      background: rgba(59, 130, 246, 0.25);
+      border-color: rgba(59, 130, 246, 0.4);
+      font-weight: 600;
+    }
+
+    /* Stock List */
+    .stock-list {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 4px 6px;
+    }
+
+    .stock-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .stock-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+
+    .stock-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 8px;
+      margin-bottom: 3px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .stock-row:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .stock-row.selected {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+
+    .stock-info-left {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 90px;
+    }
+
+    .stock-name-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stock-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 82px;
+    }
+
+    .t0-pill {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 0 3px;
+      border-radius: 3px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      line-height: 12px;
+    }
+
+    .stock-code {
+      font-size: 10px;
+      color: #64748b;
+      font-family: monospace;
+    }
+
+    .stock-tag-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 80px;
+    }
+
+    .stock-signal-tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .stock-price-col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+      min-width: 60px;
+    }
+
+    .stock-price {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: monospace;
+      color: #f8fafc;
+    }
+
+    .stock-pct {
+      font-size: 11px;
+      font-weight: 700;
+      font-family: monospace;
+    }
+
+    .up-red {
+      color: #ef4444;
+    }
+
+    .down-green {
+      color: #10b981;
+    }
+
+    .flat-gray {
+      color: #94a3b8;
+    }
+
+    /* =========================================
+       3. K-LINE INSPECTOR PANEL (Slide-out Card)
+       ========================================= */
+    .kline-panel {
+      width: 420px;
+      height: calc(100% - 8px);
+      margin-left: 8px;
+      background: rgba(15, 23, 42, 0.97);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    /* Kline Header */
+    .kline-header {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(30, 41, 59, 0.5);
+      flex-shrink: 0;
+    }
+
+    .kline-stock-meta {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .kline-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .kline-price-box {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .kline-cur-price {
+      font-size: 14px;
+      font-weight: 800;
+      font-family: monospace;
+    }
+
+    .kline-cur-pct {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: monospace;
+    }
+
+    .kline-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Period Tabs */
+    .period-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px;
+      background: rgba(15, 23, 42, 0.6);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      flex-shrink: 0;
+    }
+
+    .period-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .period-tab {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .period-tab.active {
+      color: #ffffff;
+      background: #3b82f6;
+      border-color: #60a5fa;
+    }
+
+    .btn-restore-main {
+      font-size: 10px;
+      font-weight: 600;
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-restore-main:hover {
+      background: rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+    }
+
+    /* Chart Container */
+    #klineChartContainer {
+      width: 100%;
+      height: 310px;
+      flex-shrink: 0;
+    }
+
+    /* Resonance Strategy Diagnostics */
+    .resonance-card {
+      flex: 1;
+      margin: 6px 10px 8px 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow-y: auto;
+    }
+
+    .resonance-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .resonance-tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: #ffffff;
+    }
+
+    .resonance-score {
+      font-size: 11px;
+      font-weight: 700;
+      color: #f59e0b;
+    }
+
+    .resonance-factors {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+
+    .factor-badge {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .factor-badge.pass {
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.25);
+    }
+
+    .resonance-reason {
+      font-size: 11px;
+      color: #cbd5e1;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Mode View Switches */
+    #root.mode-ball .ball-wrapper {
+      display: flex;
+    }
+    #root.mode-ball .expanded-container {
+      display: none;
+    }
+
+    #root.mode-drawer .ball-wrapper {
+      display: none;
+    }
+    #root.mode-drawer .expanded-container {
+      display: flex;
+    }
+    #root.mode-drawer .kline-panel {
+      display: none;
+    }
+
+    #root.mode-kline .ball-wrapper {
+      display: none;
+    }
+    #root.mode-kline .expanded-container {
+      display: flex;
+    }
+    #root.mode-kline .kline-panel {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+  <div id="root" class="mode-ball">
+    
+    <!-- 1. FLOATING BALL VIEW (Idle State) -->
+    <div class="ball-wrapper" id="ballWrapper">
+      <div class="floating-ball pywebview-drag-region" id="floatingBall" title="摸鱼悬浮球：悬停展开观察池，双击恢复大窗，按住可任意拖拽">
+        <div class="ball-icon" id="ballIcon">🎯</div>
+        <div class="ball-label" id="ballLabel">23标</div>
+        <div class="ball-badge" id="ballBadge">🚨4档</div>
+      </div>
+    </div>
+
+    <!-- 2. EXPANDED PANELS (Drawer + Kline Card) -->
+    <div class="expanded-container" id="expandedContainer">
+      
+      <!-- Left Watch Pool Column -->
+      <div class="drawer-panel" id="drawerPanel">
+        <!-- Drawer Header -->
+        <div class="drawer-header pywebview-drag-region">
+          <div class="drawer-title-group">
+            <span class="drawer-title">🎯 自选观察池</span>
+            <span class="drawer-count" id="drawerCount">23</span>
+            <span class="signal-counter-pill" id="signalCounterPill" onclick="filterBySignal()">🚨 0信号</span>
+          </div>
+          <div class="drawer-actions">
+            <button class="icon-btn" id="btnPin" onclick="togglePin(event)" title="固定窗口 (防止鼠标移出自动收起)">📌</button>
+            <button class="icon-btn" onclick="refreshQuotes(event)" title="刷新行情">🔄</button>
+            <button class="icon-btn" onclick="restoreMainWindow(event)" title="恢复完整大窗">🗖</button>
+            <button class="icon-btn" onclick="collapseToBall(event)" title="收回悬浮球">◀</button>
+          </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="filter-tabs">
+          <button class="filter-tab active" id="tabAll" onclick="setFilter('all')">全部</button>
+          <button class="filter-tab" id="tabSignal" onclick="setFilter('signal')">共振信号</button>
+          <button class="filter-tab" id="tabT0" onclick="setFilter('t0')">T+0</button>
+          <button class="filter-tab" id="tabPct" onclick="setFilter('pct')">涨幅</button>
+        </div>
+
+        <!-- Stock List -->
+        <div class="stock-list" id="stockList">
+          <!-- Dynamically populated rows -->
+        </div>
+      </div>
+
+      <!-- Right K-Line Inspector Panel -->
+      <div class="kline-panel" id="klinePanel">
+        <!-- Kline Header -->
+        <div class="kline-header pywebview-drag-region">
+          <div class="kline-stock-meta">
+            <span class="kline-title" id="klineTitle">--</span>
+            <div class="kline-price-box">
+              <span class="kline-cur-price" id="klineCurPrice">--</span>
+              <span class="kline-cur-pct" id="klineCurPct">--</span>
+            </div>
+          </div>
+          <div class="kline-actions">
+            <button class="btn-restore-main" onclick="openInMainWindow(event)">
+              <span>🗖</span>
+              <span>在大窗打开</span>
+            </button>
+            <button class="icon-btn" onclick="closeKlinePanel(event)" title="关闭K线面板">✕</button>
+          </div>
+        </div>
+
+        <!-- Period bar -->
+        <div class="period-bar">
+          <div class="period-tabs">
+            <button class="period-tab active" id="period60" onclick="switchPeriod('60min')">60分</button>
+            <button class="period-tab" id="period30" onclick="switchPeriod('30min')">30分</button>
+            <button class="period-tab" id="periodDay" onclick="switchPeriod('day')">日K</button>
+          </div>
+          <span style="font-size:10px; color:#64748b;" id="klinePeriodHint">推荐: 60分共振买卖模型</span>
+        </div>
+
+        <!-- ECharts Container -->
+        <div id="klineChartContainer"></div>
+
+        <!-- Resonance Analysis Diagnostic Card -->
+        <div class="resonance-card" id="resonanceCard">
+          <div class="resonance-header-row">
+            <span class="resonance-tag" id="resTag" style="background:#3b82f6;">共振诊断</span>
+            <span class="resonance-score" id="resScore">评分: --</span>
+          </div>
+          <div class="resonance-factors" id="resFactors">
+            <span class="factor-badge" id="fbMa5">MA5多头</span>
+            <span class="factor-badge" id="fbMacd">MACD红柱</span>
+            <span class="factor-badge" id="fbDif">DIF向上</span>
+            <span class="factor-badge" id="fbKdj">KDJ金叉</span>
+            <span class="factor-badge" id="fbVol">温和放量</span>
+          </div>
+          <div class="resonance-reason" id="resReason">正在同步标的多周期量化共振数据...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // State Variables
+    let currentMode = 'ball'; // 'ball' | 'drawer' | 'kline'
+    let isPinned = false;
+    let collapseTimeout = null;
+    let currentFilter = 'all';
+    let watchPoolData = [];
+    let selectedStock = null;
+    let currentPeriod = '60min';
+    let chartInstance = null;
+    let autoRefreshTimer = null;
+
+    // Elements
+    const rootEl = document.getElementById('root');
+    const ballWrapper = document.getElementById('ballWrapper');
+    const floatingBall = document.getElementById('floatingBall');
+    const ballIcon = document.getElementById('ballIcon');
+    const ballLabel = document.getElementById('ballLabel');
+    const ballBadge = document.getElementById('ballBadge');
+    const stockList = document.getElementById('stockList');
+    const drawerCount = document.getElementById('drawerCount');
+    const signalCounterPill = document.getElementById('signalCounterPill');
+    const btnPin = document.getElementById('btnPin');
+    const expandedContainer = document.getElementById('expandedContainer');
+
+    /* =========================================
+       INITIALIZATION & HOVER EXPANSION
+       ========================================= */
+    window.addEventListener('DOMContentLoaded', () => {
+      initEventListeners();
+      loadWatchPoolData();
+      startAutoRefresh();
+    });
+
+    function initEventListeners() {
+      // Hover over Ball -> Expand to Drawer
+      ballWrapper.addEventListener('mouseenter', () => {
+        if (currentMode === 'ball') {
+          expandToDrawer();
+        }
+      });
+
+      // Mouse leaves Expanded Container -> Debounce collapse back to ball
+      expandedContainer.addEventListener('mouseleave', () => {
+        if (!isPinned) {
+          clearTimeout(collapseTimeout);
+          collapseTimeout = setTimeout(() => {
+            collapseToBall();
+          }, 450);
+        }
+      });
+
+      // Mouse enters Expanded Container -> Cancel collapse
+      expandedContainer.addEventListener('mouseenter', () => {
+        if (collapseTimeout) {
+          clearTimeout(collapseTimeout);
+          collapseTimeout = null;
+        }
+      });
+
+      // Double-click ball -> Directly restore main window
+      floatingBall.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        restoreMainWindow();
+      });
+    }
+
+    // Called from Python when ball mode is activated
+    window.onBallModeActivated = function() {
+      currentMode = 'ball';
+      rootEl.className = 'mode-ball';
+      loadWatchPoolData();
+    };
+
+    /* =========================================
+       MODE SWITCHING & RESIZING
+       ========================================= */
+    async function expandToDrawer() {
+      clearTimeout(collapseTimeout);
+      currentMode = 'drawer';
+      rootEl.className = 'mode-drawer';
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.expand_ball) {
+        try {
+          await window.pywebview.api.expand_ball('drawer');
+        } catch(e) {
+          console.error("expand_ball drawer error:", e);
+        }
+      }
+    }
+
+    async function expandToKline(stock) {
+      clearTimeout(collapseTimeout);
+      selectedStock = stock;
+      currentMode = 'kline';
+      rootEl.className = 'mode-kline';
+      
+      // Update selected row style
+      renderStockRows();
+
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.expand_ball) {
+        try {
+          await window.pywebview.api.expand_ball('kline');
+        } catch(e) {
+          console.error("expand_ball kline error:", e);
+        }
+      }
+
+      // Recommend 30m for T+0, 60m for T+1
+      const isT0 = checkIsT0(stock);
+      currentPeriod = isT0 ? '30min' : '60min';
+      updatePeriodTabs();
+
+      // Load K-lines
+      loadKlineData(stock.code || stock.symbol);
+    }
+
+    async function closeKlinePanel(e) {
+      if (e) e.stopPropagation();
+      currentMode = 'drawer';
+      rootEl.className = 'mode-drawer';
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.expand_ball) {
+        try {
+          await window.pywebview.api.expand_ball('drawer');
+        } catch(e) {
+          console.error("expand_ball drawer error:", e);
+        }
+      }
+    }
+
+    async function collapseToBall(e) {
+      if (e) e.stopPropagation();
+      clearTimeout(collapseTimeout);
+      currentMode = 'ball';
+      rootEl.className = 'mode-ball';
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.expand_ball) {
+        try {
+          await window.pywebview.api.expand_ball('ball');
+        } catch(e) {
+          console.error("expand_ball ball error:", e);
+        }
+      }
+    }
+
+    function togglePin(e) {
+      if (e) e.stopPropagation();
+      isPinned = !isPinned;
+      btnPin.classList.toggle('active', isPinned);
+      btnPin.title = isPinned ? "已固定 (移出不会自动收起)" : "未固定 (移出后自动收回悬浮球)";
+    }
+
+    function restoreMainWindow(e) {
+      if (e) e.stopPropagation();
+      const sym = selectedStock ? (selectedStock.code || selectedStock.symbol) : null;
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_to_main_mode) {
+        window.pywebview.api.switch_to_main_mode(sym);
+      }
+    }
+
+    function openInMainWindow(e) {
+      if (e) e.stopPropagation();
+      restoreMainWindow(e);
+    }
+
+    /* =========================================
+       DATA LOADING & WATCH POOL RENDERING
+       ========================================= */
+    async function loadWatchPoolData() {
+      // 1. Instant Cache Fallback
+      try {
+        const cached = localStorage.getItem('stock_master_watch_pool_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            watchPoolData = parsed;
+            updateBallBadgeAndUI();
+            renderStockRows();
+          }
+        }
+      } catch(e) {}
+
+      // 2. Fast Batch Quotes (<300ms)
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_batch_realtime_quotes) {
+        try {
+          const quotes = await window.pywebview.api.get_batch_realtime_quotes();
+          if (quotes && typeof quotes === 'object') {
+            watchPoolData.forEach(item => {
+              const c = (item.code || item.symbol || '').toLowerCase();
+              if (quotes[c]) {
+                const q = quotes[c];
+                item.price = q.current || item.price;
+                item.close = q.close || item.close;
+                item.pct_change = q.pct_change;
+                item.change = q.change;
+              }
+            });
+            updateBallBadgeAndUI();
+            renderStockRows();
+          }
+        } catch(e) {}
+      }
+
+      // 3. Full Quantitative Watch Pool Scan
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool) {
+        try {
+          const fresh = await window.pywebview.api.get_watch_pool();
+          if (Array.isArray(fresh) && fresh.length > 0) {
+            watchPoolData = fresh;
+            updateBallBadgeAndUI();
+            renderStockRows();
+          }
+        } catch(e) {
+          console.error("get_watch_pool error:", e);
+        }
+      }
+    }
+
+    function refreshQuotes(e) {
+      if (e) e.stopPropagation();
+      loadWatchPoolData();
+    }
+
+    function startAutoRefresh() {
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      autoRefreshTimer = setInterval(() => {
+        // Fast batch quotes refresh every 5 seconds
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_batch_realtime_quotes) {
+          window.pywebview.api.get_batch_realtime_quotes().then(quotes => {
+            if (quotes && typeof quotes === 'object') {
+              let updated = false;
+              watchPoolData.forEach(item => {
+                const c = (item.code || item.symbol || '').toLowerCase();
+                if (quotes[c]) {
+                  const q = quotes[c];
+                  item.price = q.current || item.price;
+                  item.close = q.close || item.close;
+                  item.pct_change = q.pct_change;
+                  item.change = q.change;
+                  updated = true;
+                }
+              });
+              if (updated) {
+                updateBallBadgeAndUI();
+                renderStockRows();
+                if (selectedStock && currentMode === 'kline') {
+                  updateKlineHeader(selectedStock);
+                }
+              }
+            }
+          }).catch(() => {});
+        }
+      }, 5000);
+    }
+
+    /* =========================================
+       BALL BADGE & SIGNAL DETECTION
+       ========================================= */
+    function updateBallBadgeAndUI() {
+      drawerCount.innerText = watchPoolData.length || '23';
+
+      // Detect Signals
+      let signalCount = 0;
+      let highestBuyLevel = 0;
+      let hasSellSignal = false;
+      let topSignalStock = null;
+
+      watchPoolData.forEach(item => {
+        const tag = item.tag || '';
+        const isTrig = item.is_triggered || false;
+        const score = item.score || 0;
+
+        const isBuy = tag.includes('买入') || tag.includes('共振') || tag.includes('档') || isTrig;
+        const isSell = tag.includes('卖出') || tag.includes('止盈') || tag.includes('止损');
+
+        if (isBuy || isSell || score >= 3) {
+          signalCount++;
+        }
+
+        if (tag.includes('4档') || (score === 4)) {
+          highestBuyLevel = Math.max(highestBuyLevel, 4);
+          if (!topSignalStock) topSignalStock = item;
+        } else if (tag.includes('3档') || (score === 3)) {
+          highestBuyLevel = Math.max(highestBuyLevel, 3);
+          if (!topSignalStock) topSignalStock = item;
+        } else if (isBuy) {
+          highestBuyLevel = Math.max(highestBuyLevel, 2);
+          if (!topSignalStock) topSignalStock = item;
+        }
+
+        if (isSell) {
+          hasSellSignal = true;
+        }
+      });
+
+      // Update Floating Ball View
+      floatingBall.classList.remove('has-signal-buy', 'has-signal-sell');
+
+      if (highestBuyLevel >= 3) {
+        floatingBall.classList.add('has-signal-buy');
+        ballIcon.innerText = highestBuyLevel === 4 ? '🚨' : '⚡';
+        ballLabel.innerText = highestBuyLevel === 4 ? '4档共振' : '3档共振';
+        ballBadge.style.display = 'block';
+        ballBadge.innerText = `🚨${highestBuyLevel}档`;
+        ballBadge.style.background = '#ef4444';
+      } else if (hasSellSignal) {
+        floatingBall.classList.add('has-signal-sell');
+        ballIcon.innerText = '⚠️';
+        ballLabel.innerText = '卖出信号';
+        ballBadge.style.display = 'block';
+        ballBadge.innerText = '卖出';
+        ballBadge.style.background = '#10b981';
+      } else if (signalCount > 0) {
+        floatingBall.classList.add('has-signal-buy');
+        ballIcon.innerText = '⚡';
+        ballLabel.innerText = `${signalCount}信号`;
+        ballBadge.style.display = 'block';
+        ballBadge.innerText = `${signalCount}`;
+        ballBadge.style.background = '#f59e0b';
+      } else {
+        ballIcon.innerText = '🎯';
+        ballLabel.innerText = `${watchPoolData.length || 23}标`;
+        ballBadge.style.display = 'none';
+      }
+
+      // Update Signal Pill in Drawer Header
+      if (signalCount > 0) {
+        signalCounterPill.style.display = 'inline-block';
+        signalCounterPill.innerText = `🚨 ${signalCount}个信号`;
+      } else {
+        signalCounterPill.style.display = 'none';
+      }
+    }
+
+    /* =========================================
+       WATCH POOL LIST FILTERING & RENDERING
+       ========================================= */
+    function setFilter(type) {
+      currentFilter = type;
+      ['tabAll', 'tabSignal', 'tabT0', 'tabPct'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+      });
+      if (type === 'all') document.getElementById('tabAll').classList.add('active');
+      if (type === 'signal') document.getElementById('tabSignal').classList.add('active');
+      if (type === 't0') document.getElementById('tabT0').classList.add('active');
+      if (type === 'pct') document.getElementById('tabPct').classList.add('active');
+
+      renderStockRows();
+    }
+
+    function filterBySignal() {
+      setFilter('signal');
+    }
+
+    function checkIsT0(stock) {
+      if (stock.trade_rule === 'T+0') return true;
+      const name = stock.name || stock.desc || '';
+      const sym = (stock.code || stock.symbol || '').toLowerCase();
+      const t0Keywords = ['港股', '恒生', '中概', '纳指', '纳斯达克', '标普', '日经', '德国', '黄金', '白银', '商品', '海外'];
+      if (t0Keywords.some(k => name.includes(k))) return true;
+      if (sym.startsWith('sh') && sym.slice(2).startsWith('513')) return true;
+      return false;
+    }
+
+    function renderStockRows() {
+      let list = [...watchPoolData];
+
+      if (currentFilter === 'signal') {
+        list = list.filter(item => {
+          const t = item.tag || '';
+          return t.includes('买入') || t.includes('共振') || t.includes('档') || t.includes('卖出') || item.is_triggered || (item.score >= 3);
+        });
+      } else if (currentFilter === 't0') {
+        list = list.filter(checkIsT0);
+      } else if (currentFilter === 'pct') {
+        list.sort((a, b) => (b.pct_change || 0) - (a.pct_change || 0));
+      }
+
+      stockList.innerHTML = '';
+      if (list.length === 0) {
+        stockList.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b; font-size:12px;">暂无匹配标的</div>`;
+        return;
+      }
+
+      list.forEach(stock => {
+        const row = document.createElement('div');
+        const code = stock.code || stock.symbol || '';
+        const name = stock.name || stock.desc || code;
+        const price = (typeof stock.price === 'number') ? stock.price.toFixed(3) : (stock.close ? Number(stock.close).toFixed(3) : '--');
+        const pct = (typeof stock.pct_change === 'number') ? stock.pct_change : 0.0;
+        const isT0 = checkIsT0(stock);
+        const tag = stock.tag || '蓄势观察';
+        const tagColor = stock.tag_color || '#64748b';
+
+        const isSelected = selectedStock && (selectedStock.code || selectedStock.symbol) === code;
+        row.className = `stock-row ${isSelected ? 'selected' : ''}`;
+
+        const pctSign = pct > 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`;
+        const pctClass = pct > 0 ? 'up-red' : (pct < 0 ? 'down-green' : 'flat-gray');
+
+        row.innerHTML = `
+          <div class="stock-info-left">
+            <div class="stock-name-row">
+              <span class="stock-name" title="${name}">${name}</span>
+              ${isT0 ? '<span class="t0-pill">T+0</span>' : ''}
+            </div>
+            <span class="stock-code">${code.toUpperCase()}</span>
+          </div>
+          <div class="stock-tag-col">
+            <span class="stock-signal-tag" style="background:${tagColor}22; color:${tagColor}; border:1px solid ${tagColor}44;">
+              ${tag}
+            </span>
+          </div>
+          <div class="stock-price-col">
+            <span class="stock-price ${pctClass}">${price}</span>
+            <span class="stock-pct ${pctClass}">${pctSign}</span>
+          </div>
+        `;
+
+        row.addEventListener('click', () => {
+          expandToKline(stock);
+        });
+
+        stockList.appendChild(row);
+      });
+    }
+
+    /* =========================================
+       K-LINE CHART & RESONANCE DIAGNOSTICS
+       ========================================= */
+    function updatePeriodTabs() {
+      ['period60', 'period30', 'periodDay'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+      });
+      if (currentPeriod === '60min') document.getElementById('period60').classList.add('active');
+      if (currentPeriod === '30min') document.getElementById('period30').classList.add('active');
+      if (currentPeriod === 'day') document.getElementById('periodDay').classList.add('active');
+
+      const hintEl = document.getElementById('klinePeriodHint');
+      if (currentPeriod === '60min') hintEl.innerText = "核心周期: 60分多空共振模型";
+      else if (currentPeriod === '30min') hintEl.innerText = "灵敏周期: 30分T+0日内轮动";
+      else hintEl.innerText = "大势周期: 日K线长期生命线";
+    }
+
+    function switchPeriod(period) {
+      currentPeriod = period;
+      updatePeriodTabs();
+      if (selectedStock) {
+        loadKlineData(selectedStock.code || selectedStock.symbol);
+      }
+    }
+
+    function updateKlineHeader(stock) {
+      const name = stock.name || stock.desc || '';
+      const code = (stock.code || stock.symbol || '').toUpperCase();
+      const price = (typeof stock.price === 'number') ? stock.price.toFixed(3) : (stock.close ? Number(stock.close).toFixed(3) : '--');
+      const pct = (typeof stock.pct_change === 'number') ? stock.pct_change : 0.0;
+      const pctSign = pct > 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`;
+      const pctClass = pct > 0 ? 'up-red' : (pct < 0 ? 'down-green' : 'flat-gray');
+
+      document.getElementById('klineTitle').innerText = `${name} (${code})`;
+      const priceEl = document.getElementById('klineCurPrice');
+      priceEl.innerText = price;
+      priceEl.className = `kline-cur-price ${pctClass}`;
+
+      const pctEl = document.getElementById('klineCurPct');
+      pctEl.innerText = pctSign;
+      pctEl.className = `kline-cur-pct ${pctClass}`;
+    }
+
+    async function loadKlineData(symbol) {
+      if (!symbol) return;
+      updateKlineHeader(selectedStock);
+
+      let fetchPromise;
+      if (window.pywebview && window.pywebview.api) {
+        if (currentPeriod === '60min' && window.pywebview.api.get_60min_klines) {
+          fetchPromise = window.pywebview.api.get_60min_klines(symbol);
+        } else if (currentPeriod === '30min' && window.pywebview.api.get_30min_klines) {
+          fetchPromise = window.pywebview.api.get_30min_klines(symbol);
+        } else if (window.pywebview.api.get_stock_data) {
+          fetchPromise = window.pywebview.api.get_stock_data(symbol);
+        }
+      }
+
+      if (!fetchPromise) {
+        console.warn("No pywebview API available for K-lines");
+        return;
+      }
+
+      try {
+        const res = await fetchPromise;
+        if (res && res.klines && res.klines.length > 0) {
+          renderKlineChart(res.klines);
+          updateResonanceCard(res.klines);
+        }
+      } catch(e) {
+        console.error("loadKlineData error:", e);
+      }
+    }
+
+    function renderKlineChart(klines) {
+      const chartDom = document.getElementById('klineChartContainer');
+      if (!chartInstance) {
+        chartInstance = echarts.init(chartDom, 'dark', { renderer: 'canvas' });
+      }
+
+      // Take latest 60 bars for clean mini display
+      const displayBars = klines.slice(-60);
+      const dates = displayBars.map(k => (k.time || k.datetime || k.date || '').slice(-11));
+      const candleData = displayBars.map(k => [k.open, k.close, k.low, k.high]);
+      const ma5Data = displayBars.map(k => k.ma5);
+      const ma10Data = displayBars.map(k => k.ma10);
+      const ma20Data = displayBars.map(k => k.ma20);
+      const volData = displayBars.map(k => ({
+        value: k.volume || k.vol || 0,
+        itemStyle: {
+          color: k.close >= k.open ? '#ef4444' : '#10b981'
+        }
+      }));
+
+      // Collect signal marker points
+      const markPoints = [];
+      displayBars.forEach((k, idx) => {
+        if (k.signal_type) {
+          const isBuySig = k.signal_type.startsWith('B') || k.signal_type.includes('买');
+          markPoints.push({
+            name: k.signal_name || k.signal_type,
+            coord: [idx, isBuySig ? k.low : k.high],
+            value: k.signal_type,
+            symbol: isBuySig ? 'pin' : 'arrow',
+            symbolSize: 22,
+            itemStyle: {
+              color: isBuySig ? '#ef4444' : '#10b981'
+            }
+          });
+        }
+      });
+
+      const option = {
+        backgroundColor: 'transparent',
+        animation: false,
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'cross' },
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          borderColor: 'rgba(255, 255, 255, 0.2)',
+          textStyle: { color: '#f8fafc', fontSize: 11 },
+          formatter: function(params) {
+            if (!params || params.length === 0) return '';
+            const idx = params[0].dataIndex;
+            const bar = displayBars[idx];
+            if (!bar) return '';
+            const dateStr = bar.datetime || bar.date || '';
+            const cColor = bar.close >= bar.open ? '#ef4444' : '#10b981';
+            let res = `<div style="font-weight:700;margin-bottom:3px;">${dateStr}</div>`;
+            res += `收盘: <b style="color:${cColor}">${bar.close}</b> (${(bar.pct_change || 0).toFixed(2)}%)<br/>`;
+            res += `开: ${bar.open} 高: ${bar.high} 低: ${bar.low}<br/>`;
+            if (bar.signal_type) {
+              res += `<span style="color:#ef4444;font-weight:700;">🚨信号: ${bar.signal_type} (${bar.signal_name || ''})</span><br/>`;
+            }
+            return res;
+          }
+        },
+        grid: [
+          { left: 38, right: 12, top: 12, height: 180 },
+          { left: 38, right: 12, top: 206, height: 74 }
+        ],
+        xAxis: [
+          {
+            type: 'category',
+            data: dates,
+            scale: true,
+            boundaryGap: true,
+            axisLine: { lineStyle: { color: '#334155' } },
+            axisLabel: { show: false },
+            splitLine: { show: false }
+          },
+          {
+            type: 'category',
+            gridIndex: 1,
+            data: dates,
+            scale: true,
+            boundaryGap: true,
+            axisLine: { lineStyle: { color: '#334155' } },
+            axisLabel: { color: '#64748b', fontSize: 9 },
+            splitLine: { show: false }
+          }
+        ],
+        yAxis: [
+          {
+            scale: true,
+            splitArea: { show: false },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+            axisLabel: { color: '#94a3b8', fontSize: 9 }
+          },
+          {
+            scale: true,
+            gridIndex: 1,
+            splitNumber: 2,
+            axisLabel: { show: false },
+            axisLine: { show: false },
+            splitLine: { show: false }
+          }
+        ],
+        series: [
+          {
+            name: 'K线',
+            type: 'candlestick',
+            data: candleData,
+            itemStyle: {
+              color: '#ef4444',
+              color0: '#10b981',
+              borderColor: '#ef4444',
+              borderColor0: '#10b981'
+            },
+            markPoint: {
+              data: markPoints
+            }
+          },
+          {
+            name: 'MA5',
+            type: 'line',
+            data: ma5Data,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 1.2, color: '#f59e0b' }
+          },
+          {
+            name: 'MA10',
+            type: 'line',
+            data: ma10Data,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 1.2, color: '#3b82f6' }
+          },
+          {
+            name: 'MA20',
+            type: 'line',
+            data: ma20Data,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 1.2, color: '#ec4899' }
+          },
+          {
+            name: '成交量',
+            type: 'bar',
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            data: volData
+          }
+        ]
+      };
+
+      chartInstance.setOption(option, true);
+      chartInstance.resize();
+    }
+
+    function updateResonanceCard(klines) {
+      if (!klines || klines.length === 0) return;
+      const last = klines[klines.length - 1];
+      const prev = klines.length > 1 ? klines[klines.length - 2] : last;
+
+      // 5 Factors Evaluation
+      const ma5Up = (last.ma5 != null && prev.ma5 != null && last.ma5 >= prev.ma5);
+      const macdUp = (last.macd != null && prev.macd != null && last.macd >= prev.macd);
+      const difUp = (last.dif != null && prev.dif != null && last.dif >= prev.dif);
+      const kdjGold = (last.k != null && last.d != null && last.k >= last.d);
+      const volUp = (last.volume != null && prev.volume != null && last.volume >= prev.volume * 0.95);
+
+      const score = [ma5Up, macdUp, difUp, kdjGold, volUp].filter(Boolean).length;
+
+      const fbMa5 = document.getElementById('fbMa5');
+      const fbMacd = document.getElementById('fbMacd');
+      const fbDif = document.getElementById('fbDif');
+      const fbKdj = document.getElementById('fbKdj');
+      const fbVol = document.getElementById('fbVol');
+
+      fbMa5.className = `factor-badge ${ma5Up ? 'pass' : ''}`;
+      fbMacd.className = `factor-badge ${macdUp ? 'pass' : ''}`;
+      fbDif.className = `factor-badge ${difUp ? 'pass' : ''}`;
+      fbKdj.className = `factor-badge ${kdjGold ? 'pass' : ''}`;
+      fbVol.className = `factor-badge ${volUp ? 'pass' : ''}`;
+
+      const resTag = document.getElementById('resTag');
+      const resScore = document.getElementById('resScore');
+      const resReason = document.getElementById('resReason');
+
+      const tag = selectedStock ? (selectedStock.tag || '蓄势观察') : '蓄势观察';
+      const tagColor = selectedStock ? (selectedStock.tag_color || '#3b82f6') : '#3b82f6';
+      const reason = selectedStock ? (selectedStock.reason_summary || '多周期均线指标筑底中，等待突破确认') : '指标健康';
+
+      resTag.innerText = tag;
+      resTag.style.background = tagColor;
+      resScore.innerText = `共振评分: ${score}/5`;
+      resReason.innerText = reason;
+    }
+
+    // Auto-resize ECharts on window resize
+    window.addEventListener('resize', () => {
+      if (chartInstance && currentMode === 'kline') {
+        chartInstance.resize();
+      }
+    });
+  </script>
+</body>
+</html>
