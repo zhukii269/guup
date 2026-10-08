@@ -4,6 +4,33 @@ import webview
 from stock_data_provider import StockDataProvider
 from interval_calculator import IntervalCalculator
 
+def apply_win32_layered_transparency(window, alpha=215):
+    try:
+        import ctypes
+        if not hasattr(window, 'native') or not window.native:
+            return
+        form = window.native
+        try:
+            import System.Drawing
+            form.BackColor = System.Drawing.Color.FromArgb(1, 2, 3)
+            form.TransparencyKey = System.Drawing.Color.FromArgb(1, 2, 3)
+        except Exception:
+            pass
+        hwnd = form.Handle.ToInt32()
+        user32 = ctypes.windll.user32
+        GWL_EXSTYLE = -20
+        WS_EX_LAYERED = 0x80000
+        LWA_COLORKEY = 1
+        LWA_ALPHA = 2
+        
+        exstyle = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle | WS_EX_LAYERED)
+        # COLORREF for #010203 (R=1, G=2, B=3) -> 0x00030201
+        color_key = 0x00030201
+        user32.SetLayeredWindowAttributes(hwnd, color_key, int(alpha), LWA_COLORKEY | LWA_ALPHA)
+    except Exception as e:
+        print("apply_win32_layered_transparency error:", e)
+
 class StockApi:
     def __init__(self):
         self._dp = StockDataProvider()
@@ -12,6 +39,7 @@ class StockApi:
         self._ball_window = None
         self._ball_dock_x = None
         self._ball_dock_y = None
+        self._in_ball_mode = False
         self._prev_width = 1340
         self._prev_height = 920
 
@@ -30,6 +58,7 @@ class StockApi:
             if self._main_window:
                 self._main_window.hide()
             if self._ball_window:
+                apply_win32_layered_transparency(self._ball_window, 215)
                 self.expand_ball("ball")
                 self._ball_window.show()
                 try:
@@ -47,6 +76,10 @@ class StockApi:
             self._in_ball_mode = False
             if self._ball_window:
                 self._ball_window.hide()
+                try:
+                    self._ball_window.move(-5000, -5000)
+                except Exception:
+                    pass
             if self._main_window:
                 self._main_window.show()
                 try:
@@ -84,14 +117,14 @@ class StockApi:
             cur_y = self._ball_window.y
             cur_w = self._ball_window.width
 
-            if cur_w <= 90:
+            if cur_w <= 90 and cur_x > 0:
                 self._ball_dock_x = cur_x
                 self._ball_dock_y = cur_y
-            dock_x = getattr(self, '_ball_dock_x', cur_x)
-            dock_y = getattr(self, '_ball_dock_y', cur_y)
-            if dock_x is None:
+            dock_x = getattr(self, '_ball_dock_x', None)
+            dock_y = getattr(self, '_ball_dock_y', None)
+            if dock_x is None or dock_x < 0:
                 dock_x = max(10, screen_w - 90)
-            if dock_y is None:
+            if dock_y is None or dock_y < 0:
                 dock_y = 240
 
             if dock_x > screen_w / 2:
@@ -104,6 +137,7 @@ class StockApi:
 
             self._ball_window.move(int(new_x), int(new_y))
             self._ball_window.resize(int(w), int(h))
+            apply_win32_layered_transparency(self._ball_window, 215)
             return True
         except Exception as e:
             print("expand_ball error:", e)
@@ -216,11 +250,13 @@ def main():
         url=ball_html_path,
         width=68,
         height=68,
-        x=init_ball_x,
-        y=init_ball_y,
+        x=-5000,
+        y=-5000,
         min_size=(40, 40),
         frameless=True,
-        transparent=True,
+        transparent=False,
+        background_color="#010203",
+        hidden=True,
         on_top=True,
         js_api=api,
         resizable=True
@@ -229,10 +265,11 @@ def main():
     api._set_windows(main_win, ball_win)
 
     def on_ball_shown():
-        # Keep hidden on startup until user switches to ball mode
+        # Strictly keep hidden and offscreen on startup until user clicks floating ball mode
         if not getattr(api, '_in_ball_mode', False):
             try:
                 ball_win.hide()
+                ball_win.move(-5000, -5000)
             except Exception:
                 pass
 
