@@ -2414,6 +2414,12 @@
     let currentSymbol = "sh000001";
     let currentStockName = "上证指数";
     let chartInstance = null;
+    let currentChartType = '60min'; // '30min' | '60min' | 'kline'
+    let activeRenderedChartType = 'kline';
+    let isChartSwitching = false;
+    let kline30MinData = [];
+    let kline60MinData = [];
+    let klineDailyData = [];
     let klineData = [];
     let latestRealtimeQuote = null;
     let current5MinBarItems = [];
@@ -2422,6 +2428,18 @@
     let currentTimeSharePrevClose = 0;
     let currentTimeShareLatestMin = null;
     let lastHoveredIdx = -1;
+    let isRangeStatActive = false;
+    let rangeStatStartIdx = -1;
+    let rangeStatEndIdx = -1;
+    let rangePickStep = 0;
+    let isMouseDownOnChart = false;
+    let mouseDragStartIdx = -1;
+    let isMiniMode = false;
+    let isMiniPinned = true;
+    let isMiniStealth = false;
+    let isMiniSignalOnly = false;
+    let miniCurrentIndex = 0;
+    let miniOpacityIndex = 0;
 
     let zoomStart = 70;
     let zoomEnd = 100;
@@ -2525,31 +2543,32 @@
       { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" }
     ];
 
+    let userWatchList = [];
+    let currentWatchPool = [];
+    let isBatchDeleteMode = false;
+    let selectedCodeSet = new Set();
+
     function getUserWatchList() {
       try {
         const saved = localStorage.getItem('stock_master_watch_list');
         if (saved) {
           const arr = JSON.parse(saved);
-          if (Array.isArray(arr)) {
+          if (Array.isArray(arr) && arr.length > 0) {
             return arr;
           }
         }
       } catch(e) {}
-      saveUserWatchList(DEFAULT_SECTOR_ETFS);
       return [...DEFAULT_SECTOR_ETFS];
     }
 
-    let userWatchList = getUserWatchList();
-    let currentWatchPool = [];
-    let isBatchDeleteMode = false;
-    let selectedCodeSet = new Set();
-
     function saveUserWatchList(list) {
-      userWatchList = list;
+      userWatchList = Array.isArray(list) ? list : [];
       try {
-        localStorage.setItem('stock_master_watch_list', JSON.stringify(list));
+        localStorage.setItem('stock_master_watch_list', JSON.stringify(userWatchList));
       } catch(e) {}
     }
+
+    userWatchList = getUserWatchList();
 
     function restoreDefaultWatchPool() {
       userWatchList = [...DEFAULT_SECTOR_ETFS];
@@ -3160,9 +3179,6 @@
     function restoreHeaderToLatest() {
       restoreSubChartInfoToLatest();
     }
-
-    let activeRenderedChartType = 'kline';
-    let isChartSwitching = false;
 
     function restoreSubChartInfoToLatest() {
       lastHoveredIdx = -1;
@@ -4068,11 +4084,6 @@
         }
       }
     }
-
-    let currentChartType = '60min'; // '30min' | '60min' | 'kline'
-    let kline30MinData = [];
-    let kline60MinData = [];
-    let klineDailyData = [];
 
     function switchChartType(type) {
       isChartSwitching = true;
@@ -6095,12 +6106,12 @@
     // ==========================================
     // 同花顺风格区间统计 (Flush In-Chart Interval Statistics)
     // ==========================================
-    let isRangeStatActive = false;
-    let rangeStatStartIdx = -1;
-    let rangeStatEndIdx = -1;
-    let rangePickStep = 0; // 0: idle, 1: picked start, waiting for end
-    let isMouseDownOnChart = false;
-    let mouseDragStartIdx = -1;
+    isRangeStatActive = false;
+    rangeStatStartIdx = -1;
+    rangeStatEndIdx = -1;
+    rangePickStep = 0; // 0: idle, 1: picked start, waiting for end
+    isMouseDownOnChart = false;
+    mouseDragStartIdx = -1;
 
     function getXIndexFromPixel(offsetX) {
       if (!chartInstance || !klineData || klineData.length === 0) return -1;
@@ -6475,13 +6486,13 @@
     // =========================================================================
     // Mini 悬浮小卡片模式 (上班摸鱼盯盘优化)
     // =========================================================================
-    let isMiniMode = false;
-    let isMiniPinned = true;
-    let isMiniStealth = false;
-    let isMiniSignalOnly = false;
-    let miniCurrentIndex = 0;
+    isMiniMode = false;
+    isMiniPinned = true;
+    isMiniStealth = false;
+    isMiniSignalOnly = false;
+    miniCurrentIndex = 0;
     const miniOpacities = [1.0, 0.72, 0.45];
-    let miniOpacityIndex = 0;
+    miniOpacityIndex = 0;
 
     function getMiniActiveList() {
       let list = (typeof currentWatchPool !== 'undefined' && currentWatchPool && currentWatchPool.length > 0) ? currentWatchPool : DEFAULT_SECTOR_ETFS;
@@ -6706,26 +6717,29 @@
     }
     window.minimizeWindow = minimizeWindow;
 
-    const miniContainerEl = document.getElementById('miniCardContainer');
-    if (miniContainerEl) {
-      miniContainerEl.addEventListener('wheel', (e) => {
-        if (!isMiniMode) return;
-        e.preventDefault();
-        if (e.deltaY > 0) {
-          navigateMiniStock(1);
-        } else if (e.deltaY < 0) {
-          navigateMiniStock(-1);
-        }
-      }, { passive: false });
-    }
+    function initMiniCardEvents() {
+      const miniContainerEl = document.getElementById('miniCardContainer');
+      if (miniContainerEl) {
+        miniContainerEl.addEventListener('wheel', (e) => {
+          if (!isMiniMode) return;
+          e.preventDefault();
+          if (e.deltaY > 0) {
+            navigateMiniStock(1);
+          } else if (e.deltaY < 0) {
+            navigateMiniStock(-1);
+          }
+        }, { passive: false });
+      }
 
-    const miniTopbarEl = document.getElementById('miniTopbar');
-    if (miniTopbarEl) {
-      miniTopbarEl.addEventListener('dblclick', (e) => {
-        e.stopPropagation();
-        minimizeWindow();
-      });
+      const miniTopbarEl = document.getElementById('miniTopbar');
+      if (miniTopbarEl) {
+        miniTopbarEl.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          minimizeWindow();
+        });
+      }
     }
+    window.addEventListener('load', initMiniCardEvents);
   </script>
 
   <!-- Mini Mode Floating Card Container (上班摸鱼悬浮小卡片) -->
