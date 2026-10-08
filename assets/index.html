@@ -1343,6 +1343,297 @@
       border-color: #2563eb;
       color: #ffffff;
     }
+
+    /* 顶部Header Mini切换按钮 */
+    .mini-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #f1f5f9;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mini-toggle-btn:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+      border-color: #94a3b8;
+    }
+    body.dark-theme .mini-toggle-btn {
+      background: #1e222d;
+      border-color: #2e3342;
+      color: #94a3b8;
+    }
+    body.dark-theme .mini-toggle-btn:hover {
+      background: #2a3142;
+      color: #ffffff;
+      border-color: #475569;
+    }
+
+    /* =========================================================================
+       Mini 悬浮小卡片模式样式 (专门为上班摸鱼盯盘优化)
+       ========================================================================= */
+    body.mini-mode {
+      overflow: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #0f172a !important;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body.mini-mode > header,
+    body.mini-mode > .app-main-layout,
+    body.mini-mode > #hudDrawer,
+    body.mini-mode > #hudIndicator,
+    body.mini-mode > #hudDragHandle {
+      display: none !important;
+    }
+
+    #miniCardContainer {
+      display: none;
+    }
+    body.mini-mode #miniCardContainer {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      box-sizing: border-box;
+      background: #ffffff;
+      color: #0f172a;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      transition: opacity 0.2s ease, background 0.2s ease;
+    }
+    body.dark-theme.mini-mode #miniCardContainer {
+      background: #111827;
+      color: #f3f4f6;
+    }
+
+    /* 摸鱼低调模式 (Stealth Mode: 弱化色彩防路过) */
+    body.mini-mode.stealth-mode #miniCardContainer {
+      background: #f8fafc !important;
+      color: #334155 !important;
+    }
+    body.dark-theme.mini-mode.stealth-mode #miniCardContainer {
+      background: #0f172a !important;
+      color: #94a3b8 !important;
+    }
+    body.mini-mode.stealth-mode .mini-signal-tag,
+    body.mini-mode.stealth-mode .mini-cur-price,
+    body.mini-mode.stealth-mode .mini-pct-chg {
+      color: #64748b !important;
+      background: rgba(100, 116, 139, 0.12) !important;
+      border-color: #94a3b8 !important;
+    }
+
+    /* Mini Card Topbar */
+    .mini-topbar {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e2e8f0;
+      cursor: move;
+      -webkit-app-region: drag;
+    }
+    body.dark-theme .mini-topbar {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+    }
+    .mini-topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      -webkit-app-region: no-drag;
+    }
+    body.dark-theme .mini-topbar-left {
+      color: #cbd5e1;
+    }
+    .mini-filter-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(37, 99, 235, 0.12);
+      color: #2563eb;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mini-filter-pill:hover {
+      background: #2563eb;
+      color: #ffffff;
+    }
+    .mini-topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      -webkit-app-region: no-drag;
+    }
+    .mini-icon-btn {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: #64748b;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mini-icon-btn:hover {
+      background: rgba(0, 0, 0, 0.08);
+      color: #0f172a;
+    }
+    body.dark-theme .mini-icon-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+    }
+    .mini-icon-btn.active {
+      color: #f59e0b;
+      font-weight: 800;
+    }
+
+    /* Mini Card Content Body */
+    .mini-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .mini-stock-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .mini-stock-name-grp {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .mini-stock-name {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+    .mini-stock-code {
+      font-size: 11px;
+      font-family: monospace;
+      color: #64748b;
+    }
+    .mini-rule-tag {
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 0 4px;
+      border-radius: 3px;
+      background: #0284c7;
+      color: #ffffff;
+    }
+    .mini-price-grp {
+      text-align: right;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .mini-cur-price {
+      font-size: 16px;
+      font-weight: 900;
+      font-family: monospace;
+    }
+    .mini-pct-chg {
+      font-size: 12px;
+      font-weight: 800;
+      font-family: monospace;
+    }
+
+    /* Signal Capsule */
+    .mini-signal-box {
+      margin: 4px 0;
+      padding: 5px 8px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    body.dark-theme .mini-signal-box {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+    .mini-signal-tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .mini-signal-text {
+      font-size: 10.5px;
+      color: #64748b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      text-align: right;
+    }
+    body.dark-theme .mini-signal-text {
+      color: #94a3b8;
+    }
+
+    /* Bottom sparkline + nav row */
+    .mini-bottom-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 28px;
+    }
+    .mini-sparkline {
+      width: 140px;
+      height: 24px;
+    }
+    .mini-sparkline svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .mini-nav-hint {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .mini-key-btn {
+      padding: 1px 4px;
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+      background: #f1f5f9;
+      font-size: 9px;
+      font-weight: 700;
+      color: #475569;
+      cursor: pointer;
+    }
+    body.dark-theme .mini-key-btn {
+      border-color: #334155;
+      background: #1e293b;
+      color: #94a3b8;
+    }
   </style>
 </head>
 <body>
@@ -1367,6 +1658,12 @@
       <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换白天/黑夜模式">
         <span id="themeToggleIcon">🌙</span>
         <span id="themeToggleText">黑夜</span>
+      </button>
+
+      <!-- Mini Mode Floating Card Button -->
+      <button class="mini-toggle-btn" id="miniToggleBtn" onclick="toggleMiniMode(true)" title="切换为小悬浮卡片Mini模式 (方便上班盯盘)">
+        <span>🗗</span>
+        <span>Mini卡片</span>
       </button>
     </div>
   </header>
@@ -2643,6 +2940,9 @@
     }
 
     function renderWatchPool(pool) {
+      if (typeof isMiniMode !== 'undefined' && isMiniMode) {
+        renderMiniCard();
+      }
       const container = document.getElementById('watchPoolList');
       if (!container || !pool) return;
 
@@ -6143,12 +6443,333 @@
       document.getElementById('hudQuantSummary').innerText = `买点: ${buySignals}次 | 卖点: ${sellSignals}次`;
     }
 
-    // ESC 键退出区间统计
+    // ESC 键退出区间统计或在Mini模式下老板键隐藏
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isRangeStatActive) {
-        exitRangeStatMode();
+      if (e.key === 'Escape') {
+        if (isMiniMode) {
+          minimizeWindow();
+        } else if (typeof isRangeStatActive !== 'undefined' && isRangeStatActive) {
+          exitRangeStatMode();
+        }
+      } else if (isMiniMode) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          navigateMiniStock(-1);
+        } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          navigateMiniStock(1);
+        }
       }
     });
+
+    // =========================================================================
+    // Mini 悬浮小卡片模式 (上班摸鱼盯盘优化)
+    // =========================================================================
+    let isMiniMode = false;
+    let isMiniPinned = true;
+    let isMiniStealth = false;
+    let isMiniSignalOnly = false;
+    let miniCurrentIndex = 0;
+    const miniOpacities = [1.0, 0.72, 0.45];
+    let miniOpacityIndex = 0;
+
+    function getMiniActiveList() {
+      let list = (typeof currentWatchPool !== 'undefined' && currentWatchPool && currentWatchPool.length > 0) ? currentWatchPool : DEFAULT_SECTOR_ETFS;
+      if (isMiniSignalOnly) {
+        const filtered = list.filter(item => {
+          const t = item.tag || '';
+          const tg = item.tag_group || '';
+          return tg === '买入' || tg === '卖出' || tg === '减仓' || tg === '持有' || tg === '即将满足' || t.includes('买入') || t.includes('卖出') || t.includes('持仓');
+        });
+        if (filtered.length > 0) return filtered;
+      }
+      return list;
+    }
+
+    async function toggleMiniMode(enable) {
+      isMiniMode = !!enable;
+      const body = document.body;
+      const btn = document.getElementById('btnMiniPin');
+
+      if (isMiniMode) {
+        body.classList.add('mini-mode');
+        if (btn) btn.classList.toggle('active', isMiniPinned);
+        
+        // 调用后端将窗口缩放到小悬浮卡片尺寸 (340 x 220) 并置顶
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_mini_mode) {
+          try {
+            await window.pywebview.api.set_mini_mode(true, 340, 220, isMiniPinned);
+          } catch(e) {
+            console.error("set_mini_mode error:", e);
+          }
+        }
+        
+        // 定位当前选中的标的索引
+        const activeList = getMiniActiveList();
+        const foundIdx = activeList.findIndex(x => (x.code || x.symbol || '').toLowerCase().trim() === (currentSymbol || '').toLowerCase().trim());
+        miniCurrentIndex = foundIdx >= 0 ? foundIdx : 0;
+        
+        renderMiniCard();
+        localStorage.setItem('stock_master_is_mini_mode', 'true');
+      } else {
+        body.classList.remove('mini-mode');
+        body.classList.remove('stealth-mode');
+        isMiniStealth = false;
+        
+        // 调用后端恢复大窗 (1340 x 920) 并取消强制置顶
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_mini_mode) {
+          try {
+            await window.pywebview.api.set_mini_mode(false);
+          } catch(e) {
+            console.error("set_mini_mode false error:", e);
+          }
+        }
+        
+        localStorage.setItem('stock_master_is_mini_mode', 'false');
+        
+        // 恢复后让大图表自适应尺寸并加载当前选中标的
+        setTimeout(() => {
+          if (chartInstance) chartInstance.resize();
+          if (isT0Symbol(currentSymbol)) {
+            load30MinData(currentSymbol);
+          } else {
+            load60MinData(currentSymbol);
+          }
+        }, 120);
+      }
+    }
+    window.toggleMiniMode = toggleMiniMode;
+
+    function renderMiniCard() {
+      const activeList = getMiniActiveList();
+      if (!activeList || activeList.length === 0) return;
+      if (miniCurrentIndex >= activeList.length) miniCurrentIndex = 0;
+      if (miniCurrentIndex < 0) miniCurrentIndex = activeList.length - 1;
+
+      const item = activeList[miniCurrentIndex];
+      if (!item) return;
+
+      const code = item.code || item.symbol || '';
+      const name = item.desc || item.name || item.sector || code;
+      const isUp = (item.pct_change || 0) >= 0;
+      const chgColor = isUp ? 'var(--up-color, #ef4444)' : 'var(--down-color, #10b981)';
+      const sign = isUp ? '+' : '';
+
+      // 更新代码与名称
+      document.getElementById('miniStockName').textContent = name;
+      document.getElementById('miniStockCode').textContent = code.replace(/^(sh|sz)/i, '');
+      const isT0 = item.trade_rule === 'T+0' || isT0Symbol(code, name);
+      const ruleTag = document.getElementById('miniRuleTag');
+      if (ruleTag) {
+        ruleTag.textContent = isT0 ? 'T+0' : 'T+1';
+        ruleTag.style.background = isT0 ? '#0284c7' : '#64748b';
+      }
+
+      // 更新现价与涨跌幅
+      const priceEl = document.getElementById('miniCurPrice');
+      const pctEl = document.getElementById('miniPctChg');
+      const curPrice = (typeof item.current === 'number' && item.current > 0) ? item.current : (typeof item.close === 'number' ? item.close : 1.0);
+      priceEl.textContent = curPrice.toFixed(3);
+      priceEl.style.color = chgColor;
+      pctEl.textContent = `${sign}${(item.pct_change || 0).toFixed(2)}%`;
+      pctEl.style.color = chgColor;
+
+      // 更新买卖信号与原因
+      const sigTag = document.getElementById('miniSignalTag');
+      const sigText = document.getElementById('miniSignalText');
+      sigTag.textContent = item.tag || '蓄势观察';
+      const tagBg = item.tag_color || '#64748b';
+      sigTag.style.background = `${tagBg}22`;
+      sigTag.style.color = tagBg;
+      sigTag.style.border = `1px solid ${tagBg}`;
+      sigText.textContent = item.reason_summary || '多周期均线筑底，密切观察';
+
+      // 更新指示器
+      document.getElementById('miniCardCounter').textContent = `${miniCurrentIndex + 1}/${activeList.length}`;
+      const filterPill = document.getElementById('miniFilterPill');
+      if (filterPill) {
+        filterPill.textContent = isMiniSignalOnly ? `⚡ 信号池 (${activeList.length})` : `⚡ 全部 (${activeList.length})`;
+      }
+
+      // 渲染微型 Sparkline 走势微缩线
+      renderMiniSparkline(item);
+
+      // 同步当前选中的股票代码
+      currentSymbol = code;
+      updateHeaderWatchButton();
+    }
+
+    function renderMiniSparkline(item) {
+      const polyline = document.getElementById('miniSparkPolyline');
+      if (!polyline) return;
+
+      let prices = [];
+      if (currentSymbol === (item.code || item.symbol) && typeof klineData !== 'undefined' && klineData && klineData.length > 0) {
+        prices = klineData.slice(-16).map(k => k.close);
+      } else if (item.spark_prices && item.spark_prices.length > 0) {
+        prices = item.spark_prices;
+      } else {
+        const base = (typeof item.close === 'number') ? item.close : 1.0;
+        const pct = (item.pct_change || 0) / 100;
+        prices = [base * (1 - pct * 0.8), base * (1 - pct * 0.5), base * (1 - pct * 0.2), base * (1 + pct * 0.3), base];
+      }
+
+      if (prices.length < 2) return;
+      const minP = Math.min(...prices);
+      const maxP = Math.max(...prices);
+      const range = maxP - minP || 0.001;
+      const width = 140;
+      const height = 24;
+
+      const pts = prices.map((p, i) => {
+        const x = Math.round((i / (prices.length - 1)) * (width - 4)) + 2;
+        const y = Math.round(height - 2 - ((p - minP) / range) * (height - 6));
+        return `${x},${y}`;
+      }).join(' ');
+
+      polyline.setAttribute('points', pts);
+      const isUp = (item.pct_change || 0) >= 0;
+      polyline.setAttribute('stroke', isUp ? '#ef4444' : '#10b981');
+    }
+
+    function navigateMiniStock(step) {
+      const activeList = getMiniActiveList();
+      if (!activeList || activeList.length === 0) return;
+      miniCurrentIndex = (miniCurrentIndex + step + activeList.length) % activeList.length;
+      renderMiniCard();
+    }
+    window.navigateMiniStock = navigateMiniStock;
+
+    function toggleMiniPin() {
+      isMiniPinned = !isMiniPinned;
+      const btn = document.getElementById('btnMiniPin');
+      if (btn) btn.classList.toggle('active', isMiniPinned);
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.set_always_on_top) {
+        window.pywebview.api.set_always_on_top(isMiniPinned);
+      }
+      showOrderToast(isMiniPinned ? '📌 小卡片已置顶 (始终在最前)' : '小卡片已取消置顶');
+    }
+    window.toggleMiniPin = toggleMiniPin;
+
+    function cycleMiniOpacity() {
+      miniOpacityIndex = (miniOpacityIndex + 1) % miniOpacities.length;
+      const op = miniOpacities[miniOpacityIndex];
+      const container = document.getElementById('miniCardContainer');
+      const btn = document.getElementById('btnMiniGhost');
+      if (container) {
+        container.style.opacity = op;
+        if (op < 0.6) {
+          container.onmouseenter = () => { container.style.opacity = 0.95; };
+          container.onmouseleave = () => { container.style.opacity = op; };
+        } else {
+          container.onmouseenter = null;
+          container.onmouseleave = null;
+        }
+      }
+      if (btn) btn.classList.toggle('active', op < 1.0);
+      showOrderToast(`👻 透明度已切换至 ${(op * 100).toFixed(0)}%`);
+    }
+    window.cycleMiniOpacity = cycleMiniOpacity;
+
+    function toggleMiniStealth() {
+      isMiniStealth = !isMiniStealth;
+      document.body.classList.toggle('stealth-mode', isMiniStealth);
+      const btn = document.getElementById('btnMiniStealth');
+      if (btn) btn.classList.toggle('active', isMiniStealth);
+      showOrderToast(isMiniStealth ? '🕶️ 摸鱼低调模式已开启 (弱化鲜艳色彩)' : '摸鱼模式已关闭');
+    }
+    window.toggleMiniStealth = toggleMiniStealth;
+
+    function toggleMiniSignalFilter() {
+      isMiniSignalOnly = !isMiniSignalOnly;
+      miniCurrentIndex = 0;
+      renderMiniCard();
+      const activeList = getMiniActiveList();
+      showOrderToast(isMiniSignalOnly ? `⚡ 已切换至【重点信号池】(共 ${activeList.length} 只)` : `⚡ 已切换至【全部标的池】(共 ${activeList.length} 只)`);
+    }
+    window.toggleMiniSignalFilter = toggleMiniSignalFilter;
+
+    function minimizeWindow() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.minimize_window) {
+        window.pywebview.api.minimize_window();
+      }
+    }
+    window.minimizeWindow = minimizeWindow;
+
+    const miniContainerEl = document.getElementById('miniCardContainer');
+    if (miniContainerEl) {
+      miniContainerEl.addEventListener('wheel', (e) => {
+        if (!isMiniMode) return;
+        e.preventDefault();
+        if (e.deltaY > 0) {
+          navigateMiniStock(1);
+        } else if (e.deltaY < 0) {
+          navigateMiniStock(-1);
+        }
+      }, { passive: false });
+    }
+
+    const miniTopbarEl = document.getElementById('miniTopbar');
+    if (miniTopbarEl) {
+      miniTopbarEl.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        minimizeWindow();
+      });
+    }
   </script>
+
+  <!-- Mini Mode Floating Card Container (上班摸鱼悬浮小卡片) -->
+  <div id="miniCardContainer">
+    <!-- Topbar (Draggable with Controls) -->
+    <div class="mini-topbar" id="miniTopbar" title="按住拖拽移动 / 双击最小化隐藏">
+      <div class="mini-topbar-left">
+        <span id="miniCardCounter">1/23</span>
+        <span class="mini-filter-pill" id="miniFilterPill" onclick="toggleMiniSignalFilter()" title="点击切换：只看买卖/持仓标的">⚡ 全部标的</span>
+      </div>
+      <div class="mini-topbar-actions">
+        <button class="mini-icon-btn" id="btnMiniPrev" onclick="navigateMiniStock(-1)" title="上一只标的 (键盘 ←/↑ 或滚轮向下)">‹</button>
+        <button class="mini-icon-btn" id="btnMiniNext" onclick="navigateMiniStock(1)" title="下一只标的 (键盘 →/↓ 或滚轮向上)">›</button>
+        <button class="mini-icon-btn active" id="btnMiniPin" onclick="toggleMiniPin()" title="固定置顶 (Always on top)">📌</button>
+        <button class="mini-icon-btn" id="btnMiniGhost" onclick="cycleMiniOpacity()" title="调节透明度 (100% / 70% / 40%)">👻</button>
+        <button class="mini-icon-btn" id="btnMiniStealth" onclick="toggleMiniStealth()" title="摸鱼低调模式 (弱化鲜艳色彩防路过)">🕶️</button>
+        <button class="mini-icon-btn" id="btnMiniTheme" onclick="toggleTheme()" title="切换深浅主题">🌓</button>
+        <button class="mini-icon-btn" id="btnMiniExpand" onclick="toggleMiniMode(false)" title="恢复为完整大窗看盘 (双击卡片也可恢复)">🗖</button>
+        <button class="mini-icon-btn" id="btnMiniMinimize" onclick="minimizeWindow()" title="老板键：最小化隐藏 (按 Esc 也可瞬间隐藏)">🗕</button>
+      </div>
+    </div>
+
+    <!-- Content (Click to cycle, Double-click to expand) -->
+    <div class="mini-content" id="miniContent" ondblclick="toggleMiniMode(false)" title="双击恢复大窗 / 滚轮滚动切换标的">
+      <div class="mini-stock-header">
+        <div class="mini-stock-name-grp">
+          <span class="mini-stock-name" id="miniStockName">通信ETF</span>
+          <span class="mini-stock-code" id="miniStockCode">515880</span>
+          <span class="mini-rule-tag" id="miniRuleTag">T+1</span>
+        </div>
+        <div class="mini-price-grp">
+          <span class="mini-cur-price" id="miniCurPrice">0.677</span>
+          <span class="mini-pct-chg" id="miniPctChg">+1.85%</span>
+        </div>
+      </div>
+
+      <div class="mini-signal-box">
+        <span class="mini-signal-tag" id="miniSignalTag">60分4档买入</span>
+        <span class="mini-signal-text" id="miniSignalText">60分4档全仓共振，超跌反弹量价突破</span>
+      </div>
+
+      <div class="mini-bottom-row">
+        <div class="mini-sparkline" id="miniSparkline">
+          <svg viewBox="0 0 140 24" preserveAspectRatio="none">
+            <polyline id="miniSparkPolyline" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="0,12 140,12"/>
+          </svg>
+        </div>
+        <div class="mini-nav-hint">
+          <span class="mini-key-btn" onclick="navigateMiniStock(-1)">‹</span>
+          <span class="mini-key-btn" onclick="navigateMiniStock(1)">›</span>
+          <span style="font-size:9.5px; opacity:0.8;">滚轮切股</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

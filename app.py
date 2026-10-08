@@ -7,6 +7,57 @@ from interval_calculator import IntervalCalculator
 class StockApi:
     def __init__(self):
         self.dp = StockDataProvider()
+        self.window = None
+        self.prev_width = 1340
+        self.prev_height = 920
+
+    def set_window(self, window):
+        self.window = window
+
+    def set_mini_mode(self, is_mini=True, width=340, height=220, on_top=True):
+        if not self.window:
+            return False
+        try:
+            if is_mini:
+                if self.window.width > 500:
+                    self.prev_width = self.window.width
+                    self.prev_height = self.window.height
+                try:
+                    self.window.on_top = bool(on_top)
+                except Exception as e:
+                    print("set on_top error:", e)
+                self.window.resize(int(width), int(height))
+            else:
+                try:
+                    self.window.on_top = False
+                except Exception as e:
+                    print("set on_top error:", e)
+                w = max(1120, getattr(self, 'prev_width', 1340))
+                h = max(720, getattr(self, 'prev_height', 920))
+                self.window.resize(int(w), int(h))
+            return True
+        except Exception as e:
+            print("set_mini_mode error:", e)
+            return False
+
+    def set_always_on_top(self, on_top=True):
+        if not self.window:
+            return False
+        try:
+            self.window.on_top = bool(on_top)
+            return True
+        except Exception as e:
+            print("set_always_on_top error:", e)
+            return False
+
+    def minimize_window(self):
+        if self.window:
+            try:
+                self.window.minimize()
+                return True
+            except Exception as e:
+                print("minimize_window error:", e)
+        return False
 
     def get_stock_data(self, symbol="sh000001"):
         return self.dp.get_daily_klines(symbol)
@@ -67,11 +118,12 @@ def main():
         url=html_path,
         width=1340,
         height=920,
-        min_size=(1120, 720),
+        min_size=(280, 160),
         js_api=api,
         resizable=True,
         text_select=False
     )
+    api.set_window(window)
     
     webview.start(debug=False)
 
