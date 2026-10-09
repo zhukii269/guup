@@ -1219,22 +1219,31 @@ class StockDataProvider:
                     s3_triggered = False
                     continue
 
-                # S4: 指标止损 (MACD绿柱重新放大>0.001 OR 破位10日线且MA5下拐)
+                # S4: 指标止损 (MACD翻绿/绿柱放大 OR 破位10日线且MA5下拐/中大阴破位)
+                cond_macd_flip_green = (macd_bar <= -0.001) and (prev_macd >= 0)
                 cond_macd_re_expand = (macd_bar < 0) and (prev_macd < 0) and (abs(macd_bar) - abs(prev_macd) > 0.001)
+                cond_macd_bad = cond_macd_flip_green or cond_macd_re_expand
 
-                # 优化均线离场逻辑：改为跌破10日线(MA10)防守，过滤5日线附近微弱震荡，且在 MACD 红柱扩张(多头)时保护不卖出
+                # 优化均线离场逻辑：跌破10日线(MA10)防守，过滤5日线附近微弱震荡，但在 MACD 红柱扩张(多头)时保护不卖出
                 ma10 = bar.get("ma10", ma5)
                 ma5_drop_ratio = (prev_ma5 - ma5) / prev_ma5 if (ma5 and prev_ma5 and prev_ma5 > 0) else 0
                 macd_bull_expanding = (macd_bar > 0) and (macd_bar >= prev_macd)
                 ma_break_down = (ma10 is not None) and (bar["close"] < ma10)
-                ma5_significant_down = (ma5_drop_ratio >= 0.005 and ma_break_down) or (ma5 < prev_ma5 * 0.995 and ma_break_down)
-                cond_ma_turn_down = (ma5 is not None) and (prev_ma5 is not None) and ma5_significant_down and (not macd_bull_expanding)
+                ma5_down = (ma5_drop_ratio >= 0.004 and ma_break_down) or (bar.get("pct_change", 0) <= -0.8 and ma_break_down) or (ma5 < prev_ma5 * 0.995 and ma_break_down)
+                cond_ma_turn_down = (ma5 is not None) and (prev_ma5 is not None) and ma5_down and (not macd_bull_expanding)
 
-                if cond_macd_re_expand or cond_ma_turn_down:
+                if cond_macd_bad or cond_ma_turn_down:
                     bar["signal_type"] = "S4"
                     bar["signal_name"] = "止损: 指标走坏"
                     bar["signal_position"] = "100% 严格止损"
-                    reason_detail = "MACD绿柱重新放大(>0.001)" if cond_macd_re_expand else "破位10日线且MA5下拐"
+                    if cond_macd_flip_green:
+                        reason_detail = "MACD柱翻绿转弱"
+                    elif cond_macd_re_expand:
+                        reason_detail = "MACD绿柱放大(>0.001)"
+                    elif bar.get("pct_change", 0) <= -0.8:
+                        reason_detail = "中大阴线破位MA10"
+                    else:
+                        reason_detail = "破位10日线且MA5下拐"
                     bar["signal_reason"] = f"触发指标止损({reason_detail})，必须严格离场防范套牢"
                     in_position = False
                     s3_triggered = False
