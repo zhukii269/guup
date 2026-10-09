@@ -866,7 +866,7 @@
     window.onBallModeActivated = function() {
       currentMode = 'ball';
       rootEl.className = 'mode-ball';
-      loadWatchPoolData();
+      loadWatchPoolData(true);
     };
 
     /* =========================================
@@ -884,6 +884,7 @@
           console.error("expand_ball drawer error:", e);
         }
       }
+      loadWatchPoolData(true);
     }
 
     async function expandToKline(stock) {
@@ -963,16 +964,65 @@
     /* =========================================
        DATA LOADING & WATCH POOL RENDERING
        ========================================= */
-    async function loadWatchPoolData() {
+    let isQuantScanning = false;
+    let quantRefreshTimer = null;
+
+    function getUserWatchList() {
+      try {
+        const saved = localStorage.getItem('stock_master_watch_list');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch(e) {}
+      return null;
+    }
+
+    function applyWatchPoolData(fresh) {
+      if (!Array.isArray(fresh) || fresh.length === 0) return;
+      watchPoolData = fresh;
+      try {
+        localStorage.setItem('stock_master_watch_pool_cache', JSON.stringify(watchPoolData));
+      } catch(e) {}
+      updateBallBadgeAndUI();
+      renderStockRows();
+      if (selectedStock && currentMode === 'kline') {
+        const selCode = (selectedStock.code || selectedStock.symbol || '').toLowerCase();
+        const matched = watchPoolData.find(s => (s.code || s.symbol || '').toLowerCase() === selCode);
+        if (matched) {
+          selectedStock = matched;
+          updateKlineHeader(matched);
+        }
+      }
+    }
+
+    // Direct push receiver from Python API (switch_to_ball_mode, broadcast_watch_pool, etc.)
+    window.onWatchPoolUpdated = function(fresh) {
+      if (Array.isArray(fresh) && fresh.length > 0) {
+        applyWatchPoolData(fresh);
+      }
+    };
+
+    // Cross-window local storage sync from main window
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'stock_master_watch_pool_cache' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            applyWatchPoolData(parsed);
+          }
+        } catch(err) {}
+      }
+    });
+
+    async function loadWatchPoolData(forceQuant = false) {
       // 1. Instant Cache Fallback
       try {
         const cached = localStorage.getItem('stock_master_watch_pool_cache');
-        if (cached) {
+        if (cached && (!watchPoolData || watchPoolData.length === 0)) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            watchPoolData = parsed;
-            updateBallBadgeAndUI();
-            renderStockRows();
+            applyWatchPoolData(parsed);
           }
         }
       } catch(e) {}
@@ -982,6 +1032,7 @@
         try {
           const quotes = await window.pywebview.api.get_batch_realtime_quotes();
           if (quotes && typeof quotes === 'object') {
+            let updated = false;
             watchPoolData.forEach(item => {
               const c = (item.code || item.symbol || '').toLowerCase();
               if (quotes[c]) {
@@ -990,24 +1041,29 @@
                 item.close = q.close || item.close;
                 item.pct_change = q.pct_change;
                 item.change = q.change;
+                updated = true;
               }
             });
-            updateBallBadgeAndUI();
-            renderStockRows();
+            if (updated) {
+              updateBallBadgeAndUI();
+              renderStockRows();
+            }
           }
         } catch(e) {}
       }
 
-      // 3. Full Quantitative Watch Pool Scan
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool) {
+      // 3. Full Quantitative Watch Pool Scan (Sync buy/sell signals, tags, scores, resonance)
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool && !isQuantScanning) {
         try {
-          const fresh = await window.pywebview.api.get_watch_pool();
+          isQuantScanning = true;
+          const userList = getUserWatchList();
+          const fresh = await window.pywebview.api.get_watch_pool(userList);
+          isQuantScanning = false;
           if (Array.isArray(fresh) && fresh.length > 0) {
-            watchPoolData = fresh;
-            updateBallBadgeAndUI();
-            renderStockRows();
+            applyWatchPoolData(fresh);
           }
         } catch(e) {
+          isQuantScanning = false;
           console.error("get_watch_pool error:", e);
         }
       }
@@ -1015,13 +1071,15 @@
 
     function refreshQuotes(e) {
       if (e) e.stopPropagation();
-      loadWatchPoolData();
+      loadWatchPoolData(true);
     }
 
     function startAutoRefresh() {
       if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      if (quantRefreshTimer) clearInterval(quantRefreshTimer);
+
+      // Track 1: Fast quotes update every 3.5s
       autoRefreshTimer = setInterval(() => {
-        // Fast batch quotes refresh every 5 seconds
         if (window.pywebview && window.pywebview.api && window.pywebview.api.get_batch_realtime_quotes) {
           window.pywebview.api.get_batch_realtime_quotes().then(quotes => {
             if (quotes && typeof quotes === 'object') {
@@ -1047,7 +1105,23 @@
             }
           }).catch(() => {});
         }
-      }, 5000);
+      }, 3500);
+
+      // Track 2: Full quant scan every 14s (signals, buy tiers 1-4, tags, scores)
+      quantRefreshTimer = setInterval(() => {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool && !isQuantScanning) {
+          const userList = getUserWatchList();
+          isQuantScanning = true;
+          window.pywebview.api.get_watch_pool(userList).then(fresh => {
+            isQuantScanning = false;
+            if (Array.isArray(fresh) && fresh.length > 0) {
+              applyWatchPoolData(fresh);
+            }
+          }).catch(() => {
+            isQuantScanning = false;
+          });
+        }
+      }, 14000);
     }
 
     /* =========================================
@@ -1066,22 +1140,26 @@
         const tag = item.tag || '';
         const isTrig = item.is_triggered || false;
         const score = item.score || 0;
+        const sigType = item.signal_type || '';
 
-        const isBuy = tag.includes('买入') || tag.includes('共振') || tag.includes('档') || isTrig;
-        const isSell = tag.includes('卖出') || tag.includes('止盈') || tag.includes('止损');
+        const isBuy = tag.includes('买入') || tag.includes('共振') || tag.includes('档') || isTrig || sigType.startsWith('B');
+        const isSell = tag.includes('卖出') || tag.includes('止盈') || tag.includes('止损') || sigType.startsWith('S');
 
         if (isBuy || isSell || score >= 3) {
           signalCount++;
         }
 
-        if (tag.includes('4档') || (score === 4)) {
+        if (tag.includes('4档') || sigType === 'B4' || score === 4) {
           highestBuyLevel = Math.max(highestBuyLevel, 4);
           if (!topSignalStock) topSignalStock = item;
-        } else if (tag.includes('3档') || (score === 3)) {
+        } else if (tag.includes('3档') || sigType === 'B3' || score === 3) {
           highestBuyLevel = Math.max(highestBuyLevel, 3);
           if (!topSignalStock) topSignalStock = item;
-        } else if (isBuy) {
+        } else if (tag.includes('2档') || sigType === 'B2') {
           highestBuyLevel = Math.max(highestBuyLevel, 2);
+          if (!topSignalStock) topSignalStock = item;
+        } else if (tag.includes('1档') || sigType === 'B1' || isBuy) {
+          highestBuyLevel = Math.max(highestBuyLevel, 1);
           if (!topSignalStock) topSignalStock = item;
         }
 
@@ -1101,6 +1179,14 @@
         ballBadge.style.display = 'block';
         ballBadge.innerText = `${highestBuyLevel}档`;
         ballBadge.style.background = '#ef4444';
+      } else if (highestBuyLevel >= 1) {
+        floatingBall.classList.add('has-signal-buy');
+        ballIcon.innerText = '🎯';
+        ballLabel.innerText = `${highestBuyLevel}档买`;
+        ballLabel.style.color = '#f87171';
+        ballBadge.style.display = 'block';
+        ballBadge.innerText = `${highestBuyLevel}档`;
+        ballBadge.style.background = '#ea580c';
       } else if (hasSellSignal) {
         floatingBall.classList.add('has-signal-sell');
         ballIcon.innerText = '🎯';
@@ -1147,7 +1233,17 @@
     }
 
     function renderStockRows() {
-      const list = [...watchPoolData];
+      const list = [...watchPoolData].sort((a, b) => {
+        const pa = typeof a.sort_priority === 'number' ? a.sort_priority : 0;
+        const pb = typeof b.sort_priority === 'number' ? b.sort_priority : 0;
+        if (pb !== pa) return pb - pa;
+        const sa = typeof a.score === 'number' ? a.score : 0;
+        const sb = typeof b.score === 'number' ? b.score : 0;
+        if (sb !== sa) return sb - sa;
+        const pca = typeof a.pct_change === 'number' ? a.pct_change : 0;
+        const pcb = typeof b.pct_change === 'number' ? b.pct_change : 0;
+        return pcb - pca;
+      });
 
       stockList.innerHTML = '';
       if (list.length === 0) {

@@ -2647,6 +2647,9 @@
             } catch(e) {}
             renderWatchPool(currentWatchPool);
             if (isMiniMode && typeof renderMiniCapsules === 'function') renderMiniCapsules();
+            if (window.pywebview && window.pywebview.api && window.pywebview.api.broadcast_watch_pool) {
+              window.pywebview.api.broadcast_watch_pool(currentWatchPool);
+            }
           }
         } catch (e) {
           console.error("Failed to load watch pool:", e);

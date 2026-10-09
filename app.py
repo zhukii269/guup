@@ -102,13 +102,19 @@ class StockApi:
             if self._main_window:
                 self._main_window.hide()
             if self._ball_window:
-                apply_win32_window_shape(self._ball_window, mode="ball", alpha=225)
                 self.expand_ball("ball")
                 self._ball_window.show()
                 try:
                     self._ball_window.on_top = True
                 except Exception:
                     pass
+                if getattr(self, '_latest_watch_pool', None):
+                    try:
+                        import json
+                        pool_json = json.dumps(self._latest_watch_pool)
+                        self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
+                    except Exception:
+                        pass
                 self._ball_window.evaluate_js("window.onBallModeActivated && window.onBallModeActivated()")
             return True
         except Exception as e:
@@ -267,7 +273,32 @@ class StockApi:
         return self._dp.search_stock(keyword)
 
     def get_watch_pool(self, custom_list=None):
-        return self._dp.get_watch_pool(custom_list)
+        res = self._dp.get_watch_pool(custom_list)
+        if res and isinstance(res, list):
+            self._latest_watch_pool = res
+            try:
+                import json
+                pool_json = json.dumps(res)
+                if self._ball_window:
+                    self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
+            except Exception:
+                pass
+        return res
+
+    def broadcast_watch_pool(self, pool_data):
+        try:
+            import json
+            if isinstance(pool_data, list) and len(pool_data) > 0:
+                self._latest_watch_pool = pool_data
+                pool_json = json.dumps(pool_data)
+                if self._ball_window:
+                    self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
+                if self._main_window:
+                    self._main_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
+            return True
+        except Exception as e:
+            print("broadcast_watch_pool error:", e)
+            return False
 
     def get_minute_data(self, symbol="sh000001"):
         return self._dp.get_minute_data(symbol)
