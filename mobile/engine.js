@@ -15,9 +15,9 @@ const MobileQuantEngine = (function() {
     { sector: "通信技术", code: "sh515880", desc: "通信ETF", close: 0.626, prev_close: 0.627, change: -0.001, pct_change: -0.16, tag: "60分2档买入", tag_color: "#ea580c", reason_summary: "60分2档标准共振(三指标金叉)，建议50%半仓稳健建仓", trade_rule: "T+1", optimal_period: "60min" },
     { sector: "国防军工", code: "sh512660", desc: "军工ETF", close: 1.160, prev_close: 1.142, change: 0.018, pct_change: 1.58, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
     { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF", close: 1.249, prev_close: 1.258, change: -0.009, pct_change: -0.72, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "医药生物", code: "sh512010", desc: "医药ETF", close: 0.373, prev_close: 0.372, change: 0.001, pct_change: 0.27, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
+    { sector: "创业板", code: "sz159915", desc: "创业板ETF", close: 3.064, prev_close: 3.053, change: 0.011, pct_change: 0.36, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
     { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, change: -0.002, pct_change: -0.14, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "恒生互联网", code: "sh513330", desc: "恒生互联网ETF", close: 0.341, prev_close: 0.341, change: 0.0, pct_change: 0.0, tag: "30分3档买入", tag_color: "#dc2626", reason_summary: "30分3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+0", optimal_period: "30min" },
+    { sector: "港股互联网", code: "sz159792", desc: "港股通互联网ETF", close: 0.532, prev_close: 0.516, change: 0.016, pct_change: 3.10, tag: "30分3档买入", tag_color: "#dc2626", reason_summary: "30分3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+0", optimal_period: "30min" },
     { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF", close: 0.682, prev_close: 0.680, change: 0.002, pct_change: 0.29, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "30min" },
     { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "60分多头趋势保持良好，继续持有观察", trade_rule: "T+1", optimal_period: "60min" },
     { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF", close: 0.571, prev_close: 0.565, change: 0.006, pct_change: 1.06, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "30min" },
@@ -819,8 +819,39 @@ const MobileQuantEngine = (function() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_WATCHLIST);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        let parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          let changed = false;
+          const beforeLen = parsed.length;
+          parsed = parsed.filter(item => {
+            const c = (typeof item === 'string' ? item : item?.code || item?.symbol || '');
+            return !c.includes('512010');
+          });
+          if (parsed.length !== beforeLen) changed = true;
+
+          parsed = parsed.map(item => {
+            const c = (typeof item === 'string' ? item : item?.code || item?.symbol || '');
+            if (c.includes('513330')) {
+              changed = true;
+              return typeof item === 'string' ? 'sz159792' : { ...item, sector: "港股互联网", code: "sz159792", desc: "港股通互联网ETF", trade_rule: "T+0", optimal_period: "30min" };
+            }
+            return item;
+          });
+
+          const has159915 = parsed.some(item => {
+            const c = (typeof item === 'string' ? item : item?.code || item?.symbol || '');
+            return c.includes('159915');
+          });
+          if (!has159915) {
+            const default159915 = DEFAULT_SECTOR_ETFS.find(x => x.code === 'sz159915');
+            if (default159915) {
+              parsed.push(typeof parsed[0] === 'string' ? 'sz159915' : default159915);
+              changed = true;
+            }
+          }
+          if (changed) {
+            saveWatchList(parsed);
+          }
           return parsed;
         }
       }
