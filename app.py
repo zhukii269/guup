@@ -4,7 +4,7 @@ import webview
 from stock_data_provider import StockDataProvider
 from interval_calculator import IntervalCalculator
 
-def apply_win32_window_shape(window, mode="ball", alpha=225):
+def apply_win32_window_shape(window, mode="ball", alpha=255):
     try:
         import ctypes
         if not hasattr(window, 'native') or not window.native:
@@ -13,10 +13,7 @@ def apply_win32_window_shape(window, mode="ball", alpha=225):
         hwnd = form.Handle.ToInt32()
         user32 = ctypes.windll.user32
         gdi32 = ctypes.windll.gdi32
-        
-        GWL_EXSTYLE = -20
-        WS_EX_LAYERED = 0x80000
-        LWA_ALPHA = 2
+        dwmapi = ctypes.windll.dwmapi
         
         # 1. Physical Window Region Shaping (Zero square border, hardware-clipped)
         if mode == "ball":
@@ -33,10 +30,46 @@ def apply_win32_window_shape(window, mode="ball", alpha=225):
             
         user32.SetWindowRgn(hwnd, hrgn, True)
         
-        # 2. Translucent Glass Opacity (No colorkey -> 100% reliable mouse hover & clicks!)
+        # 2. Native DWM Desktop Glass Transparency
+        class MARGINS(ctypes.Structure):
+            _fields_ = [
+                ("cxLeftWidth", ctypes.c_int),
+                ("cxRightWidth", ctypes.c_int),
+                ("cyTopHeight", ctypes.c_int),
+                ("cyBottomHeight", ctypes.c_int),
+            ]
+        margins = MARGINS(-1, -1, -1, -1)
+        dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(margins))
+        
+        # 3. Ensure WinForms Form is Black and WebView2 is Transparent on UI thread
+        try:
+            import clr
+            clr.AddReference('System.Drawing')
+            from System.Drawing import Color
+            import System
+
+            def set_dwm_colors():
+                try:
+                    form.BackColor = Color.Black
+                except Exception:
+                    pass
+                try:
+                    if hasattr(form, 'browser') and hasattr(form.browser, 'webview'):
+                        form.browser.webview.DefaultBackgroundColor = Color.Transparent
+                except Exception:
+                    pass
+
+            form.BeginInvoke(System.Action(set_dwm_colors))
+        except Exception:
+            pass
+
+        # 4. Remove dark WS_EX_LAYERED tint so DWM renders pure crystalline desktop glass
+        GWL_EXSTYLE = -20
+        WS_EX_LAYERED = 0x80000
         exstyle = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle | WS_EX_LAYERED)
-        user32.SetLayeredWindowAttributes(hwnd, 0, int(alpha), LWA_ALPHA)
+        if exstyle & WS_EX_LAYERED:
+            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle & ~WS_EX_LAYERED)
+
     except Exception as e:
         print("apply_win32_window_shape error:", e)
 
@@ -105,6 +138,32 @@ class StockApi:
             print("switch_to_main_mode error:", e)
             return False
 
+    def on_ball_drag_end(self):
+        if not self._ball_window:
+            return False
+        try:
+            screen_w = 1920
+            if webview.screens and len(webview.screens) > 0:
+                screen_w = webview.screens[0].width
+
+            cur_x = self._ball_window.x
+            cur_y = self._ball_window.y
+            cur_w = self._ball_window.width
+
+            if cur_w <= 90:
+                self._ball_dock_x = cur_x
+                self._ball_dock_y = cur_y
+            else:
+                if cur_x > screen_w / 2:
+                    self._ball_dock_x = cur_x + cur_w - 68
+                else:
+                    self._ball_dock_x = cur_x
+                self._ball_dock_y = cur_y
+            return True
+        except Exception as e:
+            print("on_ball_drag_end error:", e)
+            return False
+
     def expand_ball(self, mode="ball"):
         if not self._ball_window:
             return False
@@ -131,6 +190,13 @@ class StockApi:
             if cur_w <= 90 and cur_x > 0:
                 self._ball_dock_x = cur_x
                 self._ball_dock_y = cur_y
+            elif cur_w > 90 and cur_x > 0 and getattr(self, '_ball_dock_x', None) is None:
+                if cur_x > screen_w / 2:
+                    self._ball_dock_x = cur_x + cur_w - 68
+                else:
+                    self._ball_dock_x = cur_x
+                self._ball_dock_y = cur_y
+
             dock_x = getattr(self, '_ball_dock_x', None)
             dock_y = getattr(self, '_ball_dock_y', None)
             if dock_x is None or dock_x < 0:
@@ -138,17 +204,22 @@ class StockApi:
             if dock_y is None or dock_y < 0:
                 dock_y = 240
 
-            if dock_x > screen_w / 2:
-                right_edge = min(screen_w - 6, dock_x + 68)
-                new_x = max(10, right_edge - w)
+            if mode == "ball":
+                # In ball mode, stay EXACTLY at dock position!
+                new_x = max(0, min(screen_w - 68, dock_x))
+                new_y = max(0, min(screen_h - 68, dock_y))
             else:
-                new_x = max(10, dock_x)
-
-            new_y = min(max(10, dock_y), screen_h - h - 40)
+                # In drawer / kline mode, expand outwards from dock position
+                if dock_x > screen_w / 2:
+                    right_edge = min(screen_w - 6, dock_x + 68)
+                    new_x = max(10, right_edge - w)
+                else:
+                    new_x = max(10, dock_x)
+                new_y = min(max(10, dock_y), screen_h - h - 40)
 
             self._ball_window.move(int(new_x), int(new_y))
             self._ball_window.resize(int(w), int(h))
-            apply_win32_window_shape(self._ball_window, mode=mode, alpha=225)
+            apply_win32_window_shape(self._ball_window, mode=mode)
             return True
         except Exception as e:
             print("expand_ball error:", e)
@@ -265,8 +336,7 @@ def main():
         y=-5000,
         min_size=(40, 40),
         frameless=True,
-        transparent=False,
-        background_color="#010203",
+        transparent=True,
         hidden=True,
         on_top=True,
         js_api=api,
@@ -274,6 +344,24 @@ def main():
     )
 
     api._set_windows(main_win, ball_win)
+
+    def on_ball_moved(x, y):
+        if getattr(api, '_in_ball_mode', False) and x > 0 and y > 0:
+            screen_w = 1920
+            if webview.screens and len(webview.screens) > 0:
+                screen_w = webview.screens[0].width
+            cur_w = ball_win.width
+            if cur_w <= 90:
+                api._ball_dock_x = x
+                api._ball_dock_y = y
+            else:
+                if x > screen_w / 2:
+                    api._ball_dock_x = x + cur_w - 68
+                else:
+                    api._ball_dock_x = x
+                api._ball_dock_y = y
+
+    ball_win.events.moved += on_ball_moved
 
     def on_ball_shown():
         # Strictly keep hidden and offscreen on startup until user clicks floating ball mode
