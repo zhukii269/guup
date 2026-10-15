@@ -2478,7 +2478,7 @@
     const DEFAULT_SECTOR_ETFS = [
       { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF", close: 0.647, prev_close: 0.648, change: -0.001, pct_change: -0.15, tag: "30分4档买入", tag_color: "#b91c1c", reason_summary: "30分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+0", optimal_period: "30min" },
       { sector: "大金融证券", code: "sh512880", desc: "证券ETF", close: 1.039, prev_close: 1.034, change: 0.005, pct_change: 0.48, tag: "日K3档买入", tag_color: "#dc2626", reason_summary: "日K3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+1", optimal_period: "day" },
-      { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF", close: 1.080, prev_close: 1.071, change: 0.009, pct_change: 0.84, tag: "日K3档买入", tag_color: "#dc2626", reason_summary: "日K3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+1", optimal_period: "day" },
+      { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF", close: 1.080, prev_close: 1.071, change: 0.009, pct_change: 0.84, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "日K持仓观望中，等待后续卖点", trade_rule: "T+1", optimal_period: "day" },
       { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, change: 0.014, pct_change: 2.38, tag: "日K卖出", tag_color: "#16a34a", reason_summary: "日K触发分级止盈/止损卖点，建议平仓", trade_rule: "T+1", optimal_period: "day" },
       { sector: "新能源车", code: "sh515030", desc: "新能源车ETF", close: 1.503, prev_close: 1.483, change: 0.020, pct_change: 1.35, tag: "日K卖出", tag_color: "#16a34a", reason_summary: "日K触发分级止盈/止损卖点，建议平仓", trade_rule: "T+1", optimal_period: "day" },
       { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF", close: 1.249, prev_close: 1.258, change: -0.009, pct_change: -0.72, tag: "日K卖出", tag_color: "#16a34a", reason_summary: "日K触发分级止盈/止损卖点，建议平仓", trade_rule: "T+1", optimal_period: "day" },
@@ -4613,29 +4613,6 @@
         }
       ];
 
-      const refCostPrice = watchItem?.buy_cost_price || watchItem?.cost_price || 0;
-      if (refCostPrice > 0) {
-        const pnlPct = ((latestMin.price - refCostPrice) / refCostPrice * 100);
-        const pnlSign = pnlPct >= 0 ? '+' : '';
-        timeShareMarkLines.push({
-          yAxis: refCostPrice,
-          lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
-          label: {
-            show: true,
-            position: 'insideEndTop',
-            formatter: `参考成本: ${refCostPrice.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
-            fontSize: 10,
-            fontWeight: 'bold',
-            color: '#f59e0b',
-            backgroundColor: isDark ? 'rgba(30, 41, 59, 0.92)' : 'rgba(254, 243, 199, 0.95)',
-            borderColor: '#f59e0b',
-            borderWidth: 1,
-            padding: [2, 5],
-            borderRadius: 3
-          }
-        });
-      }
-
       const option = {
         animation: false,
         title: [
@@ -5029,30 +5006,6 @@
             }
           });
         }
-      }
-
-      const refCostPrice5m = watchItem?.buy_cost_price || watchItem?.cost_price || 0;
-      if (refCostPrice5m > 0) {
-        const lastClose = lastActiveBar ? lastActiveBar.close : refCostPrice5m;
-        const pnlPct = ((lastClose - refCostPrice5m) / refCostPrice5m * 100);
-        const pnlSign = pnlPct >= 0 ? '+' : '';
-        fiveMinMarkLines.push({
-          yAxis: refCostPrice5m,
-          lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
-          label: {
-            show: true,
-            position: 'insideEndTop',
-            formatter: `参考成本: ${refCostPrice5m.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
-            fontSize: 10,
-            fontWeight: 'bold',
-            color: '#f59e0b',
-            backgroundColor: isDark ? 'rgba(30, 41, 59, 0.92)' : 'rgba(254, 243, 199, 0.95)',
-            borderColor: '#f59e0b',
-            borderWidth: 1,
-            padding: [2, 5],
-            borderRadius: 3
-          }
-        });
       }
 
       const totalLen = dates.length;
@@ -5801,31 +5754,6 @@
                   { xAxis: klineData[Math.min(rangeStatStartIdx, rangeStatEndIdx)].date, name: '起始: ' + klineData[Math.min(rangeStatStartIdx, rangeStatEndIdx)].date },
                   { xAxis: klineData[Math.max(rangeStatStartIdx, rangeStatEndIdx)].date, name: '终止: ' + klineData[Math.max(rangeStatStartIdx, rangeStatEndIdx)].date }
                 );
-              }
-              const key = (currentSymbol || '').toLowerCase().replace(/^(sh|sz)/i, '');
-              const watchItem = (currentWatchPool || []).find(x => (x.code || x.symbol || '').toLowerCase().replace(/^(sh|sz)/i, '') === key);
-              const refCostPrice = watchItem?.buy_cost_price || watchItem?.cost_price || 0;
-              if (refCostPrice > 0) {
-                const lastClose = latestBar ? latestBar.close : refCostPrice;
-                const pnlPct = ((lastClose - refCostPrice) / refCostPrice * 100);
-                const pnlSign = pnlPct >= 0 ? '+' : '';
-                lines.push({
-                  yAxis: refCostPrice,
-                  lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
-                  label: {
-                    show: true,
-                    position: 'insideEndTop',
-                    formatter: `参考成本: ${refCostPrice.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
-                    fontSize: 10,
-                    fontWeight: 'bold',
-                    color: '#f59e0b',
-                    backgroundColor: isDark ? 'rgba(30, 41, 59, 0.92)' : 'rgba(254, 243, 199, 0.95)',
-                    borderColor: '#f59e0b',
-                    borderWidth: 1,
-                    padding: [2, 5],
-                    borderRadius: 3
-                  }
-                });
               }
               if (lines.length === 0) return undefined;
               return {

@@ -884,13 +884,10 @@
       currentMode = 'drawer';
       rootEl.className = 'mode-drawer';
 
-      // 1. Instant sync from Python in-memory pool (0ms)
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_current_watch_pool) {
-        window.pywebview.api.get_current_watch_pool().then(cur => {
-          if (Array.isArray(cur) && cur.length > 0) {
-            applyWatchPoolData(cur);
-          }
-        }).catch(() => {});
+      // 1. Immediately render current watch pool from memory (0ms)
+      if (watchPoolData && watchPoolData.length > 0) {
+        renderStockRows();
+        updateBallBadgeAndUI();
       }
 
       // 2. Expand window size to drawer
@@ -902,13 +899,7 @@
         }
       }
 
-      // 3. Immediately render current watch pool
-      if (watchPoolData && watchPoolData.length > 0) {
-        renderStockRows();
-        updateBallBadgeAndUI();
-      }
-
-      // 4. Smooth background refresh of batch quotes (do not block or wipe with 4s heavy quant scan)
+      // 3. Smooth background refresh of batch quotes (do not block or wipe with 4s heavy quant scan)
       loadWatchPoolData(false);
     }
 

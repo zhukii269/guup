@@ -1523,17 +1523,18 @@ class StockDataProvider:
                 score = sum([c1, c2, c3, c4])
 
                 # 检查今日 (最新交易日 对应周期) 是否刚触发买卖信号
-                today_date = bar.get("day_date") or bar.get("datetime", "")[:10]
-                today_bars = [k for k in klines[-tf_check_bars:] if (k.get("day_date") == today_date or k.get("datetime", "").startswith(today_date))]
-                if not today_bars:
-                    today_bars = [bar]
-
-                today_sig = bar.get("signal_type")
-                if not today_sig:
-                    for tb in reversed(today_bars[:-1]):
-                        if tb.get("signal_type"):
-                            today_sig = tb.get("signal_type")
-                            break
+                if is_t0:
+                    curr_cal_day = (bar.get("day_date") or bar.get("date") or bar.get("datetime") or "")[:10]
+                    today_bars = [k for k in klines[-tf_check_bars:] if curr_cal_day and (k.get("day_date") == curr_cal_day or k.get("date", "").startswith(curr_cal_day) or k.get("datetime", "").startswith(curr_cal_day))]
+                    today_sig = bar.get("signal_type")
+                    if not today_sig and today_bars:
+                        for tb in reversed(today_bars[:-1]):
+                            if tb.get("signal_type"):
+                                today_sig = tb.get("signal_type")
+                                break
+                else:
+                    # 日K线：每日仅有一根K线，今日信号严格仅取决于最新日K柱 bar，绝不能将历史前几日的买点当做今日买点！
+                    today_sig = bar.get("signal_type")
 
                 # 评估股票当前是否处于持仓状态 (S3减仓50%后依然保持持仓，唯有S1/S2/S4/S7完全清仓)
                 in_pos = False
