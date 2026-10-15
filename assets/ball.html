@@ -866,7 +866,13 @@
     window.onBallModeActivated = function() {
       currentMode = 'ball';
       rootEl.className = 'mode-ball';
-      loadWatchPoolData(true);
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_current_watch_pool) {
+        window.pywebview.api.get_current_watch_pool().then(cur => {
+          if (Array.isArray(cur) && cur.length > 0) {
+            applyWatchPoolData(cur);
+          }
+        }).catch(() => {});
+      }
     };
 
     /* =========================================
@@ -877,6 +883,17 @@
       clearTimeout(collapseTimeout);
       currentMode = 'drawer';
       rootEl.className = 'mode-drawer';
+
+      // 1. Instant sync from Python in-memory pool (0ms)
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_current_watch_pool) {
+        window.pywebview.api.get_current_watch_pool().then(cur => {
+          if (Array.isArray(cur) && cur.length > 0) {
+            applyWatchPoolData(cur);
+          }
+        }).catch(() => {});
+      }
+
+      // 2. Expand window size to drawer
       if (window.pywebview && window.pywebview.api && window.pywebview.api.expand_ball) {
         try {
           await window.pywebview.api.expand_ball('drawer');
@@ -884,7 +901,15 @@
           console.error("expand_ball drawer error:", e);
         }
       }
-      loadWatchPoolData(true);
+
+      // 3. Immediately render current watch pool
+      if (watchPoolData && watchPoolData.length > 0) {
+        renderStockRows();
+        updateBallBadgeAndUI();
+      }
+
+      // 4. Smooth background refresh of batch quotes (do not block or wipe with 4s heavy quant scan)
+      loadWatchPoolData(false);
     }
 
     async function expandToKline(stock) {
@@ -1003,6 +1028,8 @@
       }
     };
 
+    const WATCH_POOL_CACHE_VER = '20261015_sync_v2';
+
     // Cross-window local storage sync from main window
     window.addEventListener('storage', (e) => {
       if (e.key === 'stock_master_watch_pool_cache' && e.newValue) {
@@ -1016,7 +1043,16 @@
     });
 
     async function loadWatchPoolData(forceQuant = false) {
-      // 1. Instant Cache Fallback
+      // 1. Instant Cache Fallback: Python memory API or LocalStorage (0ms)
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_current_watch_pool) {
+        try {
+          const cur = await window.pywebview.api.get_current_watch_pool();
+          if (Array.isArray(cur) && cur.length > 0) {
+            applyWatchPoolData(cur);
+          }
+        } catch(e) {}
+      }
+
       try {
         const cached = localStorage.getItem('stock_master_watch_pool_cache');
         if (cached && (!watchPoolData || watchPoolData.length === 0)) {
@@ -1053,7 +1089,8 @@
       }
 
       // 3. Full Quantitative Watch Pool Scan (Sync buy/sell signals, tags, scores, resonance)
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool && !isQuantScanning) {
+      // Only run when explicitly requested (forceQuant=true) or when watchPoolData is empty
+      if ((forceQuant || !watchPoolData || watchPoolData.length === 0) && window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool && !isQuantScanning) {
         try {
           isQuantScanning = true;
           const userList = getUserWatchList();
@@ -1130,79 +1167,65 @@
     function updateBallBadgeAndUI() {
       drawerCount.innerText = watchPoolData.length || '23';
 
-      // Detect Signals
-      let signalCount = 0;
+      let buySignalCount = 0;
+      let sellSignalCount = 0;
+      let holdingCount = 0;
+      let preSatisfyCount = 0;
       let highestBuyLevel = 0;
-      let hasSellSignal = false;
-      let topSignalStock = null;
+      let topBuyStock = null;
+      let topSellStock = null;
 
       watchPoolData.forEach(item => {
         const tag = item.tag || '';
-        const isTrig = item.is_triggered || false;
-        const score = item.score || 0;
         const sigType = item.signal_type || '';
 
-        const isBuy = tag.includes('买入') || tag.includes('共振') || tag.includes('档') || isTrig || sigType.startsWith('B');
-        const isSell = tag.includes('卖出') || tag.includes('止盈') || tag.includes('止损') || sigType.startsWith('S');
+        // 严格以真实买卖信号判定，杜绝“观望持仓”或单纯 score 冒充买入
+        const isBuy = tag.includes('买入') || (Boolean(sigType) && sigType.startsWith('B'));
+        const isSell = tag.includes('卖出') || tag.includes('止盈') || tag.includes('止损') || (Boolean(sigType) && sigType.startsWith('S'));
+        const isHolding = tag.includes('持仓');
+        const isPre = tag.includes('即将满足');
 
-        if (isBuy || isSell || score >= 3) {
-          signalCount++;
-        }
+        if (isBuy) {
+          buySignalCount++;
+          let level = 1;
+          if (tag.includes('4档') || sigType === 'B4') level = 4;
+          else if (tag.includes('3档') || sigType === 'B3') level = 3;
+          else if (tag.includes('2档') || sigType === 'B2') level = 2;
+          else if (tag.includes('1档') || sigType === 'B1') level = 1;
 
-        if (tag.includes('4档') || sigType === 'B4' || score === 4) {
-          highestBuyLevel = Math.max(highestBuyLevel, 4);
-          if (!topSignalStock) topSignalStock = item;
-        } else if (tag.includes('3档') || sigType === 'B3' || score === 3) {
-          highestBuyLevel = Math.max(highestBuyLevel, 3);
-          if (!topSignalStock) topSignalStock = item;
-        } else if (tag.includes('2档') || sigType === 'B2') {
-          highestBuyLevel = Math.max(highestBuyLevel, 2);
-          if (!topSignalStock) topSignalStock = item;
-        } else if (tag.includes('1档') || sigType === 'B1' || isBuy) {
-          highestBuyLevel = Math.max(highestBuyLevel, 1);
-          if (!topSignalStock) topSignalStock = item;
-        }
-
-        if (isSell) {
-          hasSellSignal = true;
+          if (level > highestBuyLevel) {
+            highestBuyLevel = level;
+            topBuyStock = item;
+          }
+        } else if (isSell) {
+          sellSignalCount++;
+          if (!topSellStock) topSellStock = item;
+        } else if (isHolding) {
+          holdingCount++;
+        } else if (isPre) {
+          preSatisfyCount++;
         }
       });
 
       // Update Floating Ball View (Clean Transparent White Glass)
       floatingBall.classList.remove('has-signal-buy', 'has-signal-sell');
 
-      if (highestBuyLevel >= 3) {
-        floatingBall.classList.add('has-signal-buy');
-        ballIcon.innerText = '🎯';
-        ballLabel.innerText = highestBuyLevel === 4 ? '4档买' : '3档买';
-        ballLabel.style.color = '#f87171';
-        ballBadge.style.display = 'block';
-        ballBadge.innerText = `${highestBuyLevel}档`;
-        ballBadge.style.background = '#ef4444';
-      } else if (highestBuyLevel >= 1) {
+      if (buySignalCount > 0) {
         floatingBall.classList.add('has-signal-buy');
         ballIcon.innerText = '🎯';
         ballLabel.innerText = `${highestBuyLevel}档买`;
         ballLabel.style.color = '#f87171';
         ballBadge.style.display = 'block';
         ballBadge.innerText = `${highestBuyLevel}档`;
-        ballBadge.style.background = '#ea580c';
-      } else if (hasSellSignal) {
+        ballBadge.style.background = (highestBuyLevel >= 3) ? '#ef4444' : '#ea580c';
+      } else if (sellSignalCount > 0) {
         floatingBall.classList.add('has-signal-sell');
         ballIcon.innerText = '🎯';
-        ballLabel.innerText = '卖出';
+        ballLabel.innerText = sellSignalCount > 1 ? `${sellSignalCount}卖` : '卖出';
         ballLabel.style.color = '#34d399';
         ballBadge.style.display = 'block';
-        ballBadge.innerText = signalCount > 1 ? `${signalCount}` : '卖';
+        ballBadge.innerText = '卖';
         ballBadge.style.background = '#10b981';
-      } else if (signalCount > 0) {
-        floatingBall.classList.add('has-signal-buy');
-        ballIcon.innerText = '🎯';
-        ballLabel.innerText = `${signalCount}信`;
-        ballLabel.style.color = '#fbbf24';
-        ballBadge.style.display = 'block';
-        ballBadge.innerText = `${signalCount}`;
-        ballBadge.style.background = '#f59e0b';
       } else {
         ballIcon.innerText = '🎯';
         ballLabel.innerText = `${watchPoolData.length || 23}标`;
@@ -1211,9 +1234,21 @@
       }
 
       // Update Signal Pill in Drawer Header
-      if (signalCount > 0) {
+      if (buySignalCount > 0 && sellSignalCount > 0) {
         signalCounterPill.style.display = 'inline-block';
-        signalCounterPill.innerText = `🚨 ${signalCount}个信号`;
+        signalCounterPill.innerText = `🚨 ${buySignalCount}买 / ${sellSignalCount}卖`;
+      } else if (buySignalCount > 0) {
+        signalCounterPill.style.display = 'inline-block';
+        signalCounterPill.innerText = `🚨 ${buySignalCount}个买入信号`;
+      } else if (sellSignalCount > 0) {
+        signalCounterPill.style.display = 'inline-block';
+        signalCounterPill.innerText = `🚨 ${sellSignalCount}个卖出信号`;
+      } else if (preSatisfyCount > 0) {
+        signalCounterPill.style.display = 'inline-block';
+        signalCounterPill.innerText = `👀 ${preSatisfyCount}个即将满足`;
+      } else if (holdingCount > 0) {
+        signalCounterPill.style.display = 'inline-block';
+        signalCounterPill.innerText = `持仓中(${holdingCount})`;
       } else {
         signalCounterPill.style.display = 'none';
       }
@@ -1226,9 +1261,11 @@
       if (stock.trade_rule === 'T+0') return true;
       const name = stock.name || stock.desc || '';
       const sym = (stock.code || stock.symbol || '').toLowerCase();
+      const code = sym.startsWith('sh') || sym.startsWith('sz') ? sym.slice(2) : sym;
       const t0Keywords = ['港股', '恒生', '中概', '纳指', '纳斯达克', '标普', '日经', '德国', '黄金', '白银', '商品', '海外'];
       if (t0Keywords.some(k => name.includes(k))) return true;
       if (sym.startsWith('sh') && sym.slice(2).startsWith('513')) return true;
+      if (['159567', '159792', '159740', '159920', '159941'].includes(code)) return true;
       return false;
     }
 

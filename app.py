@@ -86,6 +86,7 @@ class StockApi:
         self._in_ball_mode = False
         self._prev_width = 1340
         self._prev_height = 920
+        self._latest_watch_pool = self._dp._load_disk_watch_pool_cache() or []
 
     def _set_window(self, window):
         self._window = window
@@ -226,6 +227,13 @@ class StockApi:
             self._ball_window.move(int(new_x), int(new_y))
             self._ball_window.resize(int(w), int(h))
             apply_win32_window_shape(self._ball_window, mode=mode)
+            if mode in ("drawer", "kline") and getattr(self, '_latest_watch_pool', None) and len(self._latest_watch_pool) > 0:
+                try:
+                    import json
+                    pool_json = json.dumps(self._latest_watch_pool)
+                    self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
+                except Exception:
+                    pass
             return True
         except Exception as e:
             print("expand_ball error:", e)
@@ -285,11 +293,21 @@ class StockApi:
                 pass
         return res
 
+    def get_current_watch_pool(self):
+        if getattr(self, '_latest_watch_pool', None) and len(self._latest_watch_pool) > 0:
+            return self._latest_watch_pool
+        disk_pool = self._dp._load_disk_watch_pool_cache()
+        if disk_pool and len(disk_pool) > 0:
+            self._latest_watch_pool = disk_pool
+            return disk_pool
+        return []
+
     def broadcast_watch_pool(self, pool_data):
         try:
             import json
             if isinstance(pool_data, list) and len(pool_data) > 0:
                 self._latest_watch_pool = pool_data
+                self._dp._save_disk_watch_pool_cache(pool_data)
                 pool_json = json.dumps(pool_data)
                 if self._ball_window:
                     self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
