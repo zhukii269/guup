@@ -13,18 +13,18 @@
     "change": -0.003,
     "pct_change": -0.29,
     "score": 3,
-    "tag": "60分4档买入",
+    "tag": "日K4档买入",
     "tag_color": "#b91c1c",
     "buy_cost_price": 1.038,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 110,
     "is_triggered": true,
-    "reason_summary": "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
+    "reason_summary": "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
     "signal_type": "B4",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "A股创新药",
@@ -40,18 +40,18 @@
     "change": 0.0,
     "pct_change": 0.0,
     "score": 3,
-    "tag": "60分4档买入",
+    "tag": "日K4档买入",
     "tag_color": "#b91c1c",
     "buy_cost_price": 0.872,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 110,
     "is_triggered": true,
-    "reason_summary": "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
+    "reason_summary": "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
     "signal_type": "B4",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "大金融证券",
@@ -67,18 +67,18 @@
     "change": 0.0,
     "pct_change": 0.0,
     "score": 3,
-    "tag": "60分4档买入",
+    "tag": "日K4档买入",
     "tag_color": "#b91c1c",
     "buy_cost_price": 1.029,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 110,
     "is_triggered": true,
-    "reason_summary": "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
+    "reason_summary": "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
     "signal_type": "B4",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "国防军工",
@@ -94,18 +94,18 @@
     "change": 0.0,
     "pct_change": 0.0,
     "score": 3,
-    "tag": "60分4档买入",
+    "tag": "日K4档买入",
     "tag_color": "#b91c1c",
     "buy_cost_price": 1.101,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 110,
     "is_triggered": true,
-    "reason_summary": "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
+    "reason_summary": "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
     "signal_type": "B4",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "煤炭周期",
@@ -121,18 +121,18 @@
     "change": 0.001,
     "pct_change": 0.08,
     "score": 3,
-    "tag": "60分4档买入",
+    "tag": "日K4档买入",
     "tag_color": "#b91c1c",
     "buy_cost_price": 1.256,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 110,
     "is_triggered": true,
-    "reason_summary": "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
+    "reason_summary": "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
     "signal_type": "B4",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "红利低波",
@@ -148,18 +148,18 @@
     "change": 0.0,
     "pct_change": 0.0,
     "score": 2,
-    "tag": "60分4档买入",
+    "tag": "日K4档买入",
     "tag_color": "#b91c1c",
     "buy_cost_price": 1.417,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 110,
     "is_triggered": true,
-    "reason_summary": "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
+    "reason_summary": "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
     "signal_type": "B4",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "新能源车",
@@ -175,18 +175,18 @@
     "change": -0.002,
     "pct_change": -0.14,
     "score": 4,
-    "tag": "60分3档买入",
+    "tag": "日K3档买入",
     "tag_color": "#dc2626",
     "buy_cost_price": 1.456,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 105,
     "is_triggered": true,
-    "reason_summary": "60分3档重仓共振(站上MA5收红)，建议75%重仓建仓",
+    "reason_summary": "日K3档重仓共振(站上MA5收红)，建议75%重仓建仓",
     "signal_type": "B3",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "光伏新能源",
@@ -202,18 +202,18 @@
     "change": -0.002,
     "pct_change": -0.26,
     "score": 3,
-    "tag": "60分3档买入",
+    "tag": "日K3档买入",
     "tag_color": "#dc2626",
     "buy_cost_price": 0.776,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 105,
     "is_triggered": true,
-    "reason_summary": "60分3档重仓共振(站上MA5收红)，建议75%重仓建仓",
+    "reason_summary": "日K3档重仓共振(站上MA5收红)，建议75%重仓建仓",
     "signal_type": "B3",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "创业板",
@@ -224,23 +224,23 @@
     "price": 3.064,
     "open": 3.053,
     "high": 3.085,
-    "low": 3.040,
+    "low": 3.04,
     "prev_close": 3.053,
     "change": 0.011,
     "pct_change": 0.36,
     "score": 4,
-    "tag": "60分4档买入",
+    "tag": "日K4档买入",
     "tag_color": "#b91c1c",
     "buy_cost_price": 3.064,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 105,
     "is_triggered": true,
-    "reason_summary": "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
+    "reason_summary": "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击",
     "signal_type": "B4",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "港股互联网",
@@ -250,11 +250,11 @@
     "close": 0.532,
     "price": 0.532,
     "open": 0.516,
-    "high": 0.540,
+    "high": 0.54,
     "low": 0.515,
     "prev_close": 0.516,
     "change": 0.016,
-    "pct_change": 3.10,
+    "pct_change": 3.1,
     "score": 2,
     "tag": "30分3档买入",
     "tag_color": "#dc2626",
@@ -283,18 +283,18 @@
     "change": -0.001,
     "pct_change": -0.16,
     "score": 4,
-    "tag": "60分2档买入",
+    "tag": "日K2档买入",
     "tag_color": "#ea580c",
     "buy_cost_price": 0.626,
     "buy_date": "2026-09-30 15:00",
     "sort_priority": 100,
     "is_triggered": true,
-    "reason_summary": "60分2档标准共振(三指标金叉)，建议50%半仓稳健建仓",
+    "reason_summary": "日K2档标准共振(三指标金叉)，建议50%半仓稳健建仓",
     "signal_type": "B2",
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "有色金属",
@@ -316,12 +316,12 @@
     "buy_date": "2026-09-29 15:00",
     "sort_priority": 70,
     "is_triggered": true,
-    "reason_summary": "60分持仓观望中，等待后续卖点",
+    "reason_summary": "日K持仓观望中，等待后续卖点",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "港股创新药",
@@ -402,7 +402,7 @@
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "计算机软件",
@@ -424,12 +424,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "电力绿电",
@@ -451,12 +451,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "人工智能",
@@ -478,12 +478,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "半导体芯片",
@@ -505,12 +505,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "半导体设备",
@@ -532,12 +532,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "消费电子",
@@ -559,12 +559,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "科创50",
@@ -586,12 +586,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   },
   {
     "sector": "金融科技",
@@ -613,11 +613,11 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "60分寻支撑，密切观察",
+    "reason_summary": "日K寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+1",
-    "optimal_period": "60min"
+    "optimal_period": "day"
   }
 ]

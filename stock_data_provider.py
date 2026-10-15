@@ -1422,8 +1422,8 @@ class StockDataProvider:
             code = item["code"]
             name_hint = item.get("desc", item.get("name", ""))
             is_t0 = is_t0_etf(code, name_hint)
-            tf_name = "30分" if is_t0 else "60分"
-            tf_check_bars = 8 if is_t0 else 4
+            tf_name = "30分" if is_t0 else "日K"
+            tf_check_bars = 8 if is_t0 else 3
 
             try:
                 if is_t0:
@@ -1434,16 +1434,16 @@ class StockDataProvider:
                         data = self.get_30min_klines(code)
                         klines = data.get("klines", [])
                 else:
-                    data = self.get_60min_klines(code)
+                    data = self.get_daily_klines(code)
                     klines = data.get("klines", [])
                     if not klines:
                         time.sleep(0.15)
-                        data = self.get_60min_klines(code)
+                        data = self.get_daily_klines(code)
                         klines = data.get("klines", [])
 
                 if not klines:
-                    # 备选回退日K
-                    data = self.get_daily_klines(code)
+                    # 备选回退60分
+                    data = self.get_60min_klines(code)
                     klines = data.get("klines", [])
 
                 if not klines:
@@ -1480,7 +1480,7 @@ class StockDataProvider:
                         "is_triggered": False,
                         "reason_summary": p_reason,
                         "trade_rule": "T+0" if is_t0 else "T+1",
-                        "optimal_period": "30min" if is_t0 else "60min"
+                        "optimal_period": "30min" if is_t0 else "day"
                     }
                 
                 bar = klines[-1]
@@ -1654,7 +1654,7 @@ class StockDataProvider:
                     "is_s3_today": (today_sig == "S3"),
                     "has_s3_holding": has_s3_holding,
                     "trade_rule": "T+0" if is_t0 else "T+1",
-                    "optimal_period": "30min" if is_t0 else "60min"
+                    "optimal_period": "30min" if is_t0 else "day"
                 }
                 if not hasattr(self, "_item_data_cache"):
                     self._item_data_cache = {}

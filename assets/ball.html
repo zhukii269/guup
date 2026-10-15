@@ -674,11 +674,11 @@
         <!-- Period bar -->
         <div class="period-bar">
           <div class="period-tabs">
-            <button class="period-tab active" id="period60" onclick="switchPeriod('60min')">60分</button>
+            <button class="period-tab active" id="periodDay" onclick="switchPeriod('day')">日K</button>
             <button class="period-tab" id="period30" onclick="switchPeriod('30min')">30分</button>
-            <button class="period-tab" id="periodDay" onclick="switchPeriod('day')">日K</button>
+            <button class="period-tab" id="period60" onclick="switchPeriod('60min')">60分</button>
           </div>
-          <span style="font-size:10px; color:#94a3b8; text-shadow:0 1px 2px rgba(0,0,0,0.8);" id="klinePeriodHint">推荐: 60分共振买卖模型</span>
+          <span style="font-size:10px; color:#94a3b8; text-shadow:0 1px 2px rgba(0,0,0,0.8);" id="klinePeriodHint">推荐: T+1日K共振模型</span>
         </div>
 
         <!-- ECharts Container -->
@@ -711,7 +711,7 @@
     let collapseTimeout = null;
     let watchPoolData = [];
     let selectedStock = null;
-    let currentPeriod = '60min';
+    let currentPeriod = 'day';
     let chartInstance = null;
     let autoRefreshTimer = null;
 
@@ -904,9 +904,9 @@
         }
       }
 
-      // Recommend 30m for T+0, 60m for T+1
+      // Recommend 30m for T+0, day for T+1
       const isT0 = checkIsT0(stock);
-      currentPeriod = isT0 ? '30min' : '60min';
+      currentPeriod = isT0 ? '30min' : 'day';
       updatePeriodTabs();
 
       // Load K-lines
@@ -1307,9 +1307,9 @@
       if (currentPeriod === 'day') document.getElementById('periodDay').classList.add('active');
 
       const hintEl = document.getElementById('klinePeriodHint');
-      if (currentPeriod === '60min') hintEl.innerText = "核心周期: 60分多空共振模型";
-      else if (currentPeriod === '30min') hintEl.innerText = "灵敏周期: 30分T+0日内轮动";
-      else hintEl.innerText = "大势周期: 日K线长期生命线";
+      if (currentPeriod === 'day') hintEl.innerText = "核心基准: 日K线共振模型 (T+1推荐)";
+      else if (currentPeriod === '30min') hintEl.innerText = "灵敏基准: 30分T+0日内轮动模型";
+      else hintEl.innerText = "辅助周期: 60分多空细化观察";
     }
 
     function switchPeriod(period) {

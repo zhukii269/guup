@@ -7,29 +7,29 @@
 const MobileQuantEngine = (function() {
   // 默认 23 只主流行业/主题 ETF 观察池 (4档量化共振分级)
   const DEFAULT_SECTOR_ETFS = [
-    { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF", close: 1.038, prev_close: 1.041, change: -0.003, pct_change: -0.29, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "A股创新药", code: "sz159992", desc: "创新药ETF", close: 0.872, prev_close: 0.872, change: 0.0, pct_change: 0.0, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "大金融证券", code: "sh512880", desc: "证券ETF", close: 1.029, prev_close: 1.031, change: -0.002, pct_change: -0.19, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "新能源车", code: "sh515030", desc: "新能源车ETF", close: 1.456, prev_close: 1.458, change: -0.002, pct_change: -0.14, tag: "60分3档买入", tag_color: "#dc2626", reason_summary: "60分3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "光伏新能源", code: "sh515790", desc: "光伏ETF", close: 0.776, prev_close: 0.778, change: -0.002, pct_change: -0.26, tag: "60分3档买入", tag_color: "#dc2626", reason_summary: "60分3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "通信技术", code: "sh515880", desc: "通信ETF", close: 0.626, prev_close: 0.627, change: -0.001, pct_change: -0.16, tag: "60分2档买入", tag_color: "#ea580c", reason_summary: "60分2档标准共振(三指标金叉)，建议50%半仓稳健建仓", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "国防军工", code: "sh512660", desc: "军工ETF", close: 1.160, prev_close: 1.142, change: 0.018, pct_change: 1.58, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF", close: 1.249, prev_close: 1.258, change: -0.009, pct_change: -0.72, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "创业板", code: "sz159915", desc: "创业板ETF", close: 3.064, prev_close: 3.053, change: 0.011, pct_change: 0.36, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, change: -0.002, pct_change: -0.14, tag: "60分4档买入", tag_color: "#b91c1c", reason_summary: "60分4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "港股互联网", code: "sz159792", desc: "港股通互联网ETF", close: 0.532, prev_close: 0.516, change: 0.016, pct_change: 3.10, tag: "30分3档买入", tag_color: "#dc2626", reason_summary: "30分3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+0", optimal_period: "30min" },
-    { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF", close: 0.682, prev_close: 0.680, change: 0.002, pct_change: 0.29, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "30min" },
-    { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "60分多头趋势保持良好，继续持有观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF", close: 0.571, prev_close: 0.565, change: 0.006, pct_change: 1.06, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "30min" },
-    { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, change: 0.018, pct_change: 1.97, tag: "即将满足", tag_color: "#2563eb", reason_summary: "60分关键指标转多，密切留意共振", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "计算机软件", code: "sh512720", desc: "计算机ETF", close: 1.134, prev_close: 1.114, change: 0.020, pct_change: 1.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "电力绿电", code: "sz159611", desc: "电力ETF", close: 1.040, prev_close: 1.037, change: 0.003, pct_change: 0.29, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "人工智能", code: "sz159819", desc: "人工智能ETF", close: 1.762, prev_close: 1.714, change: 0.048, pct_change: 2.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "半导体芯片", code: "sz159995", desc: "芯片ETF", close: 1.152, prev_close: 1.114, change: 0.038, pct_change: 3.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "半导体设备", code: "sz159516", desc: "半导体设备ETF", close: 0.729, prev_close: 0.703, change: 0.026, pct_change: 3.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "消费电子", code: "sz159997", desc: "电子ETF", close: 2.114, prev_close: 2.059, change: 0.055, pct_change: 2.67, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, change: 0.014, pct_change: 2.38, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" },
-    { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "60min" }
+    { sector: "动漫游戏", code: "sz159869", desc: "游戏ETF", close: 1.038, prev_close: 1.041, change: -0.003, pct_change: -0.29, tag: "日K4档买入", tag_color: "#b91c1c", reason_summary: "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "A股创新药", code: "sz159992", desc: "创新药ETF", close: 0.872, prev_close: 0.872, change: 0.0, pct_change: 0.0, tag: "日K4档买入", tag_color: "#b91c1c", reason_summary: "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "大金融证券", code: "sh512880", desc: "证券ETF", close: 1.029, prev_close: 1.031, change: -0.002, pct_change: -0.19, tag: "日K4档买入", tag_color: "#b91c1c", reason_summary: "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "新能源车", code: "sh515030", desc: "新能源车ETF", close: 1.456, prev_close: 1.458, change: -0.002, pct_change: -0.14, tag: "日K3档买入", tag_color: "#dc2626", reason_summary: "日K3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "光伏新能源", code: "sh515790", desc: "光伏ETF", close: 0.776, prev_close: 0.778, change: -0.002, pct_change: -0.26, tag: "日K3档买入", tag_color: "#dc2626", reason_summary: "日K3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "通信技术", code: "sh515880", desc: "通信ETF", close: 0.626, prev_close: 0.627, change: -0.001, pct_change: -0.16, tag: "日K2档买入", tag_color: "#ea580c", reason_summary: "日K2档标准共振(三指标金叉)，建议50%半仓稳健建仓", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "国防军工", code: "sh512660", desc: "军工ETF", close: 1.160, prev_close: 1.142, change: 0.018, pct_change: 1.58, tag: "日K4档买入", tag_color: "#b91c1c", reason_summary: "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "煤炭周期", code: "sh515220", desc: "煤炭ETF", close: 1.249, prev_close: 1.258, change: -0.009, pct_change: -0.72, tag: "日K4档买入", tag_color: "#b91c1c", reason_summary: "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "创业板", code: "sz159915", desc: "创业板ETF", close: 3.064, prev_close: 3.053, change: 0.011, pct_change: 0.36, tag: "日K4档买入", tag_color: "#b91c1c", reason_summary: "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "红利低波", code: "sh515180", desc: "红利ETF", close: 1.409, prev_close: 1.411, change: -0.002, pct_change: -0.14, tag: "日K4档买入", tag_color: "#b91c1c", reason_summary: "日K4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "港股互联网", code: "sz159792", desc: "港股通互联网ETF", close: 0.532, prev_close: 0.516, change: 0.016, pct_change: 3.10, tag: "30分3档买入", tag_color: "#dc2626", reason_summary: "30分3档重仓共振(站上MA5收红)，建议75%重仓建仓", trade_rule: "T+0", optimal_period: "m30" },
+    { sector: "港股创新药", code: "sz159567", desc: "港股创新药ETF", close: 0.682, prev_close: 0.680, change: 0.002, pct_change: 0.29, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "m30" },
+    { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "日K多头趋势保持良好，继续持有观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "恒生医疗", code: "sh513060", desc: "恒生医疗ETF", close: 0.571, prev_close: 0.565, change: 0.006, pct_change: 1.06, tag: "观望持仓", tag_color: "#ea580c", reason_summary: "30分多头趋势保持良好，继续持有观察", trade_rule: "T+0", optimal_period: "m30" },
+    { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, change: 0.018, pct_change: 1.97, tag: "即将满足", tag_color: "#2563eb", reason_summary: "日K关键指标转多，密切留意共振", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "计算机软件", code: "sh512720", desc: "计算机ETF", close: 1.134, prev_close: 1.114, change: 0.020, pct_change: 1.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "电力绿电", code: "sz159611", desc: "电力ETF", close: 1.040, prev_close: 1.037, change: 0.003, pct_change: 0.29, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "人工智能", code: "sz159819", desc: "人工智能ETF", close: 1.762, prev_close: 1.714, change: 0.048, pct_change: 2.80, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "半导体芯片", code: "sz159995", desc: "芯片ETF", close: 1.152, prev_close: 1.114, change: 0.038, pct_change: 3.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "半导体设备", code: "sz159516", desc: "半导体设备ETF", close: 0.729, prev_close: 0.703, change: 0.026, pct_change: 3.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "消费电子", code: "sz159997", desc: "电子ETF", close: 2.114, prev_close: 2.059, change: 0.055, pct_change: 2.67, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "金融科技", code: "sz159851", desc: "金融科技ETF", close: 0.603, prev_close: 0.589, change: 0.014, pct_change: 2.38, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" }
   ];
 
   const STORAGE_KEY_WATCHLIST = "stock_master_mobile_watchlist";
@@ -880,7 +880,7 @@ const MobileQuantEngine = (function() {
         symbol: fullSym,
         desc: name,
         trade_rule: isT0 ? "T+0" : "T+1",
-        optimal_period: isT0 ? "m30" : "m60"
+        optimal_period: isT0 ? "m30" : "day"
       });
       saveWatchList(list);
       return true;
@@ -914,14 +914,14 @@ const MobileQuantEngine = (function() {
     const listToLoad = getWatchList();
     if (!listToLoad || listToLoad.length === 0) return [];
 
-    // 并发拉取各标的的 K 线数据 (T+0 标的自动匹配 30分钟，T+1 标的自动匹配 60分钟)
+    // 并发拉取各标的的 K 线数据 (T+0 标的自动匹配 30分钟，T+1 标的自动匹配 日K线)
     const promises = listToLoad.map(async (item) => {
       const code = item.code || item.symbol;
       const isT0 = isT0Symbol(code, item.desc || item.name);
-      const tfLabel = isT0 ? "30分" : "60分";
-      const checkBarsCount = isT0 ? 8 : 4;
+      const tfLabel = isT0 ? "30分" : "日K";
+      const checkBarsCount = isT0 ? 8 : 3;
 
-      const data = isT0 ? await get30MinKlines(code, 320) : await get60MinKlines(code, 320);
+      const data = isT0 ? await get30MinKlines(code, 320) : await getDailyKlines(code, 600);
       const klines = data.klines || [];
       const quote = await getRealtimeQuote(code);
 
@@ -950,7 +950,7 @@ const MobileQuantEngine = (function() {
           sort_priority: 10,
           reason_summary: `等待更多 ${tfLabel} 交易数据确认`,
           trade_rule: isT0 ? "T+0" : "T+1",
-          optimal_period: isT0 ? "m30" : "m60",
+          optimal_period: isT0 ? "m30" : "day",
           latest_bar: null
         };
       }
@@ -1100,7 +1100,7 @@ const MobileQuantEngine = (function() {
         sort_priority: sortPriority,
         reason_summary: reasonSummary,
         trade_rule: isT0 ? "T+0" : "T+1",
-        optimal_period: isT0 ? "m30" : "m60",
+        optimal_period: isT0 ? "m30" : "day",
         cost_price: inPos ? buyCostPrice : 0,
         buy_cost_price: inPos ? buyCostPrice : 0,
         buy_date: buyDate,
