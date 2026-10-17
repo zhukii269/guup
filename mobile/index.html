@@ -862,8 +862,8 @@
             </div>
             <div class="kline-period-group">
               <button class="kline-period-btn" id="btnPeriod30m" onclick="switchKlinePeriod('m30')">30分</button>
-              <button class="kline-period-btn active" id="btnPeriod60m" onclick="switchKlinePeriod('m60')">60分</button>
-              <button class="kline-period-btn" id="btnPeriodDay" onclick="switchKlinePeriod('day')">日K</button>
+              <button class="kline-period-btn" id="btnPeriod60m" onclick="switchKlinePeriod('m60')">60分</button>
+              <button class="kline-period-btn active" id="btnPeriodDay" onclick="switchKlinePeriod('day')">日K</button>
             </div>
           </div>
 
@@ -931,7 +931,7 @@
       </div>
       <div class="nav-item" data-tab="kline">
         <span class="nav-icon">📊</span>
-        <span class="nav-label">60分K线</span>
+        <span class="nav-label">量化K线</span>
       </div>
     </nav>
 
@@ -1324,7 +1324,7 @@
         }
       }
 
-      let currentPeriod = 'm60';
+      let currentPeriod = 'day';
 
       function switchKlinePeriod(period) {
         currentPeriod = period;
@@ -1344,14 +1344,10 @@
         try {
           if (symbol) currentSymbol = symbol;
           updateKlineStarButton();
-          // 若未明确传周期，根据交易制度智能选择: T+0 -> 30分, T+1 -> 60分 (若当前在日K则保持日K)
+          // 若未明确传周期，根据交易制度智能选择: T+0 -> 30分, T+1 -> 日K
           if (!period) {
-            if (currentPeriod === 'day') {
-              period = 'day';
-            } else {
-              const isT0 = window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(symbol);
-              period = isT0 ? 'm30' : 'm60';
-            }
+            const isT0 = window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(symbol);
+            period = isT0 ? 'm30' : 'day';
           }
           currentPeriod = period;
           const b30 = document.getElementById('btnPeriod30m');
@@ -1467,36 +1463,7 @@
           }
         });
 
-        // 参考成本线 (若观察池有买入参考价)
         const markLines = [];
-        let costPrice = null;
-        const clean = (currentSymbol || '').toLowerCase().replace(/^(sh|sz)/i, '');
-        const poolItem = (watchPoolData || []).find(w => (w.symbol || '').toLowerCase() === (currentSymbol || '').toLowerCase() || (w.code || '').toLowerCase() === clean);
-        if (poolItem && (poolItem.buy_cost_price > 0 || poolItem.cost_price > 0)) {
-          costPrice = poolItem.buy_cost_price || poolItem.cost_price;
-        }
-        if (costPrice && costPrice > 0) {
-          const lastC = klines[klines.length - 1].close;
-          const pnlPct = ((lastC - costPrice) / costPrice * 100);
-          const pnlSign = pnlPct >= 0 ? '+' : '';
-          markLines.push({
-            yAxis: costPrice,
-            lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.5 },
-            label: {
-              show: true,
-              position: 'insideEndTop',
-              formatter: `参考成本: ${costPrice.toFixed(3)} (${pnlSign}${pnlPct.toFixed(2)}%)`,
-              fontSize: 9.5,
-              fontWeight: 'bold',
-              color: '#f59e0b',
-              backgroundColor: isDark ? 'rgba(30, 41, 59, 0.92)' : 'rgba(254, 243, 199, 0.95)',
-              borderColor: '#f59e0b',
-              borderWidth: 1,
-              padding: [1, 4],
-              borderRadius: 3
-            }
-          });
-        }
 
         // 默认显示近 60 根K线
         const total = dates.length;
@@ -1605,11 +1572,11 @@
                 borderColor0: '#10b981'
               },
               markPoint: { data: markPoints },
-              markLine: {
+              markLine: markLines.length > 0 ? {
                 symbol: ['none', 'none'],
                 silent: true,
                 data: markLines
-              }
+              } : undefined
             },
             { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#eab308' } },
             { name: 'MA10', type: 'line', data: ma10, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#06b6d4' } },
