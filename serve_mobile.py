@@ -6,13 +6,29 @@ import sys
 
 def get_local_ip():
     try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if ip.startswith("192.168.") or ip.startswith("10."):
+                return ip
+            if ip.startswith("172."):
+                try:
+                    second = int(ip.split(".")[1])
+                    if 16 <= second <= 31:
+                        return ip
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
+        s.connect(("223.5.5.5", 80))
         ip = s.getsockname()[0]
         s.close()
-        return ip
+        if not ip.startswith("198.18.") and not ip.startswith("169.254."):
+            return ip
     except Exception:
-        return "127.0.0.1"
+        pass
+    return "127.0.0.1"
 
 class MobileHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
