@@ -10,27 +10,11 @@ def apply_win32_window_shape(window, mode="ball", alpha=255):
         if not hasattr(window, 'native') or not window.native:
             return
         form = window.native
-        hwnd = form.Handle.ToInt32()
-        user32 = ctypes.windll.user32
-        gdi32 = ctypes.windll.gdi32
+        # Safe conversion of IntPtr to int across 32-bit and 64-bit platforms
+        hwnd = form.Handle.ToInt64() if hasattr(form.Handle, 'ToInt64') else int(form.Handle)
         dwmapi = ctypes.windll.dwmapi
         
-        # 1. Physical Window Region Shaping (Zero square border, hardware-clipped)
-        if mode == "ball":
-            # 68x68 canvas: perfect 60px circle from (4, 4) to (64, 64)
-            hrgn = gdi32.CreateEllipticRgn(4, 4, 64, 64)
-        elif mode == "drawer":
-            # 330x580 canvas: rounded rectangle with 20px radius
-            hrgn = gdi32.CreateRoundRectRgn(0, 0, 330, 580, 20, 20)
-        elif mode == "kline":
-            # 760x580 canvas: rounded rectangle with 20px radius
-            hrgn = gdi32.CreateRoundRectRgn(0, 0, 760, 580, 20, 20)
-        else:
-            hrgn = gdi32.CreateEllipticRgn(4, 4, 64, 64)
-            
-        user32.SetWindowRgn(hwnd, hrgn, True)
-        
-        # 2. Native DWM Desktop Glass Transparency
+        # Native DWM Desktop Glass Transparency
         class MARGINS(ctypes.Structure):
             _fields_ = [
                 ("cxLeftWidth", ctypes.c_int),
@@ -41,7 +25,7 @@ def apply_win32_window_shape(window, mode="ball", alpha=255):
         margins = MARGINS(-1, -1, -1, -1)
         dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(margins))
         
-        # 3. Ensure WinForms Form is Black and WebView2 is Transparent on UI thread
+        # Ensure WinForms Form is Black and WebView2 is Transparent on UI thread
         try:
             import clr
             clr.AddReference('System.Drawing')
@@ -59,16 +43,12 @@ def apply_win32_window_shape(window, mode="ball", alpha=255):
                 except Exception:
                     pass
 
-            form.BeginInvoke(System.Action(set_dwm_colors))
+            if hasattr(form, 'InvokeRequired') and form.InvokeRequired:
+                form.BeginInvoke(System.Action(set_dwm_colors))
+            else:
+                set_dwm_colors()
         except Exception:
             pass
-
-        # 4. Remove dark WS_EX_LAYERED tint so DWM renders pure crystalline desktop glass
-        GWL_EXSTYLE = -20
-        WS_EX_LAYERED = 0x80000
-        exstyle = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        if exstyle & WS_EX_LAYERED:
-            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, exstyle & ~WS_EX_LAYERED)
 
     except Exception as e:
         print("apply_win32_window_shape error:", e)
@@ -109,14 +89,6 @@ class StockApi:
                     self._ball_window.on_top = True
                 except Exception:
                     pass
-                if getattr(self, '_latest_watch_pool', None):
-                    try:
-                        import json
-                        pool_json = json.dumps(self._latest_watch_pool)
-                        self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
-                    except Exception:
-                        pass
-                self._ball_window.evaluate_js("window.onBallModeActivated && window.onBallModeActivated()")
             return True
         except Exception as e:
             print("switch_to_ball_mode error:", e)
@@ -139,7 +111,10 @@ class StockApi:
                     pass
                 if symbol:
                     clean_sym = str(symbol).strip()
-                    self._main_window.evaluate_js(f"window.switchStock && window.switchStock('{clean_sym}')")
+                    try:
+                        self._main_window.evaluate_js(f"window.switchStock && window.switchStock('{clean_sym}')")
+                    except Exception:
+                        pass
             return True
         except Exception as e:
             print("switch_to_main_mode error:", e)
@@ -277,13 +252,7 @@ class StockApi:
         res = self._dp.get_watch_pool(custom_list)
         if res and isinstance(res, list):
             self._latest_watch_pool = res
-            try:
-                import json
-                pool_json = json.dumps(res)
-                if self._ball_window:
-                    self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
-            except Exception:
-                pass
+            self._dp._save_disk_watch_pool_cache(res)
         return res
 
     def get_current_watch_pool(self):
@@ -297,15 +266,9 @@ class StockApi:
 
     def broadcast_watch_pool(self, pool_data):
         try:
-            import json
             if isinstance(pool_data, list) and len(pool_data) > 0:
                 self._latest_watch_pool = pool_data
                 self._dp._save_disk_watch_pool_cache(pool_data)
-                pool_json = json.dumps(pool_data)
-                if self._ball_window:
-                    self._ball_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
-                if self._main_window:
-                    self._main_window.evaluate_js(f"window.onWatchPoolUpdated && window.onWatchPoolUpdated({pool_json})")
             return True
         except Exception as e:
             print("broadcast_watch_pool error:", e)
@@ -389,18 +352,9 @@ def main():
 
     def on_ball_moved(x, y):
         if getattr(api, '_in_ball_mode', False) and x > 0 and y > 0:
-            screen_w = 1920
-            if webview.screens and len(webview.screens) > 0:
-                screen_w = webview.screens[0].width
             cur_w = ball_win.width
             if cur_w <= 90:
                 api._ball_dock_x = x
-                api._ball_dock_y = y
-            else:
-                if x > screen_w / 2:
-                    api._ball_dock_x = x + cur_w - 68
-                else:
-                    api._ball_dock_x = x
                 api._ball_dock_y = y
 
     ball_win.events.moved += on_ball_moved

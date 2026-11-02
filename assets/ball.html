@@ -642,6 +642,7 @@
             <button class="icon-btn" id="btnPin" onclick="togglePin(event)" title="固定窗口 (防止鼠标移出自动收起)">📌</button>
             <button class="icon-btn" onclick="refreshQuotes(event)" title="刷新行情">🔄</button>
             <button class="icon-btn" onclick="restoreMainWindow(event)" title="恢复完整大窗">🗖</button>
+            <button class="icon-btn" onclick="collapseToBall(event)" title="收起为小悬浮球">◀</button>
           </div>
         </div>
 
@@ -742,6 +743,8 @@
     let dragStartScreenX = 0;
     let dragStartScreenY = 0;
     let hasMovedMouse = false;
+    let isSwitchingMode = false;
+    let lastCollapseTime = 0;
 
     function cancelHoverTimer() {
       if (hoverTimer) {
@@ -751,25 +754,20 @@
     }
 
     function initEventListeners() {
-      // 1. Hover Expansion with 180ms debounce so dragging doesn't immediately open drawer
+      // 1. Deliberate hover expansion (350ms hover with 1000ms cooldown after collapse to avoid jitter)
       function scheduleHoverExpand() {
-        if (currentMode !== 'ball' || isMouseDown) return;
+        if (currentMode !== 'ball' || isMouseDown || isSwitchingMode) return;
+        if (Date.now() - lastCollapseTime < 1000) return;
         cancelHoverTimer();
         hoverTimer = setTimeout(() => {
-          if (!isMouseDown && currentMode === 'ball') {
+          if (!isMouseDown && currentMode === 'ball' && !isSwitchingMode && (Date.now() - lastCollapseTime >= 1000)) {
             expandToDrawer();
           }
-        }, 180);
+        }, 350);
       }
 
       floatingBall.addEventListener('mouseenter', scheduleHoverExpand);
       ballWrapper.addEventListener('mouseenter', scheduleHoverExpand);
-
-      floatingBall.addEventListener('mousemove', () => {
-        if (currentMode === 'ball' && !isMouseDown && !hoverTimer) {
-          scheduleHoverExpand();
-        }
-      });
 
       floatingBall.addEventListener('mouseleave', () => {
         cancelHoverTimer();
@@ -806,14 +804,14 @@
       window.addEventListener('mousemove', (e) => {
         if (isMouseDown) {
           const dist = Math.hypot(e.screenX - dragStartScreenX, e.screenY - dragStartScreenY);
-          if (dist > 4) {
+          if (dist > 5) {
             hasMovedMouse = true;
             cancelHoverTimer();
           }
         }
       });
 
-      // Mouseup ends drag and notifies Python to save dock position
+      // Mouseup ends drag or triggers click toggle
       window.addEventListener('mouseup', (e) => {
         if (isMouseDown) {
           const wasDragging = hasMovedMouse;
@@ -834,15 +832,15 @@
         }
       });
 
-      // Mouse leaves Expanded Container -> Debounce collapse back to ball
+      // Mouse leaves Expanded Container -> Generous debounce collapse back to ball
       expandedContainer.addEventListener('mouseleave', () => {
-        if (!isPinned && !isMouseDown) {
+        if (!isPinned && !isMouseDown && !isSwitchingMode && currentMode !== 'ball') {
           clearTimeout(collapseTimeout);
           collapseTimeout = setTimeout(() => {
-            if (!isMouseDown) {
+            if (!isMouseDown && !isPinned && !isSwitchingMode && currentMode !== 'ball') {
               collapseToBall();
             }
-          }, 350);
+          }, 600);
         }
       });
 
@@ -866,19 +864,16 @@
     window.onBallModeActivated = function() {
       currentMode = 'ball';
       rootEl.className = 'mode-ball';
-      if (window.pywebview && window.pywebview.api && window.pywebview.api.get_current_watch_pool) {
-        window.pywebview.api.get_current_watch_pool().then(cur => {
-          if (Array.isArray(cur) && cur.length > 0) {
-            applyWatchPoolData(cur);
-          }
-        }).catch(() => {});
-      }
+      loadWatchPoolData(false);
     };
 
     /* =========================================
        MODE SWITCHING & RESIZING
        ========================================= */
     async function expandToDrawer() {
+      if (isSwitchingMode) return;
+      if (currentMode === 'drawer') return;
+      isSwitchingMode = true;
       cancelHoverTimer();
       clearTimeout(collapseTimeout);
       currentMode = 'drawer';
@@ -899,11 +894,17 @@
         }
       }
 
-      // 3. Smooth background refresh of batch quotes (do not block or wipe with 4s heavy quant scan)
+      // 3. Smooth background refresh of batch quotes
       loadWatchPoolData(false);
+
+      setTimeout(() => {
+        isSwitchingMode = false;
+      }, 350);
     }
 
     async function expandToKline(stock) {
+      if (isSwitchingMode) return;
+      isSwitchingMode = true;
       clearTimeout(collapseTimeout);
       selectedStock = stock;
       currentMode = 'kline';
@@ -927,10 +928,16 @@
 
       // Load K-lines
       loadKlineData(stock.code || stock.symbol);
+
+      setTimeout(() => {
+        isSwitchingMode = false;
+      }, 350);
     }
 
     async function closeKlinePanel(e) {
       if (e) e.stopPropagation();
+      if (isSwitchingMode) return;
+      isSwitchingMode = true;
       currentMode = 'drawer';
       rootEl.className = 'mode-drawer';
       if (window.pywebview && window.pywebview.api && window.pywebview.api.expand_ball) {
@@ -940,10 +947,17 @@
           console.error("expand_ball drawer error:", e);
         }
       }
+      setTimeout(() => {
+        isSwitchingMode = false;
+      }, 350);
     }
 
     async function collapseToBall(e) {
       if (e) e.stopPropagation();
+      if (isSwitchingMode) return;
+      if (currentMode === 'ball') return;
+      isSwitchingMode = true;
+      lastCollapseTime = Date.now();
       cancelHoverTimer();
       clearTimeout(collapseTimeout);
       currentMode = 'ball';
@@ -955,6 +969,9 @@
           console.error("expand_ball ball error:", e);
         }
       }
+      setTimeout(() => {
+        isSwitchingMode = false;
+      }, 350);
     }
 
     function togglePin(e) {
@@ -1031,6 +1048,10 @@
           }
         } catch(err) {}
       }
+    });
+
+    window.addEventListener('focus', () => {
+      loadWatchPoolData(false);
     });
 
     async function loadWatchPoolData(forceQuant = false) {
