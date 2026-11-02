@@ -29,7 +29,10 @@ const MobileQuantEngine = (function() {
     { sector: "国防军工", code: "sh512660", desc: "军工ETF", close: 1.160, prev_close: 1.142, change: 0.018, pct_change: 1.58, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
     { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, change: 0.018, pct_change: 1.97, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
     { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
-    { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" }
+    { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "纳指100", code: "sh513390", desc: "纳指100ETF", close: 2.425, prev_close: 2.420, change: 0.005, pct_change: 0.21, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "30分探底寻支撑，密切观察", trade_rule: "T+0", optimal_period: "m30" },
+    { sector: "传媒娱乐", code: "sh512980", desc: "传媒ETF", close: 0.797, prev_close: 0.740, change: 0.057, pct_change: 7.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
+    { sector: "商业航天", code: "sh563530", desc: "卫星ETF", close: 0.926, prev_close: 0.909, change: 0.017, pct_change: 1.87, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" }
   ];
 
   const STORAGE_KEY_WATCHLIST = "stock_master_mobile_watchlist";
@@ -862,6 +865,21 @@ const MobileQuantEngine = (function() {
               changed = true;
             }
           }
+          // 自动迁移：增加 513390, 512980, 563530
+          const codesToAdd = ['sh513390', 'sh512980', 'sh563530'];
+          codesToAdd.forEach(targetCode => {
+            const hasCode = parsed.some(item => {
+              const c = (typeof item === 'string' ? item : item?.code || item?.symbol || '');
+              return c.includes(targetCode.slice(2));
+            });
+            if (!hasCode) {
+              const defItem = DEFAULT_SECTOR_ETFS.find(x => x.code === targetCode);
+              if (defItem) {
+                parsed.push(typeof parsed[0] === 'string' ? targetCode : defItem);
+                changed = true;
+              }
+            }
+          });
           if (changed) {
             saveWatchList(parsed);
           }

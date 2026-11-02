@@ -822,10 +822,10 @@
       <div class="view-page active" id="view-watchpool">
         <div class="watch-pool-subbar">
           <div class="watch-subbar-info">
-            观察池 (<span id="watchPoolCountText" style="color:var(--color-primary); font-weight:800;">23</span>只)
+            观察池 (<span id="watchPoolCountText" style="color:var(--color-primary); font-weight:800;">26</span>只)
           </div>
           <div class="watch-subbar-actions">
-            <button class="subbar-btn" id="btnResetMobileWatch" title="恢复预设的全部23只主流板块ETF">恢复默认</button>
+            <button class="subbar-btn" id="btnResetMobileWatch" title="恢复预设的全部26只主流板块ETF">恢复默认</button>
             <button class="subbar-btn primary" id="btnManageMobileWatch" title="管理/删除自选标的">⚙️ 管理</button>
           </div>
         </div>
@@ -1088,7 +1088,7 @@
         btnResetMobileWatch.addEventListener('click', () => {
           if (confirm('确定恢复预设的 23 只主流板块 ETF 观察池吗？')) {
             MobileQuantEngine.resetWatchListToDefault();
-            showMobileToast('已恢复预设 23 只 ETF');
+            showMobileToast('已恢复预设 26 只 ETF');
             loadWatchPool();
           }
         });

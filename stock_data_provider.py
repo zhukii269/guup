@@ -1396,7 +1396,10 @@ class StockDataProvider:
                 {"sector": "煤炭周期", "code": "sh515220", "desc": "煤炭ETF"},
                 {"sector": "电力绿电", "code": "sz159611", "desc": "电力ETF"},
                 {"sector": "红利低波", "code": "sh515180", "desc": "红利ETF"},
-                {"sector": "科创50", "code": "sh588000", "desc": "科创50ETF"}
+                {"sector": "科创50", "code": "sh588000", "desc": "科创50ETF"},
+                {"sector": "纳指100", "code": "sh513390", "desc": "纳指100ETF"},
+                {"sector": "传媒娱乐", "code": "sh512980", "desc": "传媒ETF"},
+                {"sector": "商业航天", "code": "sh563530", "desc": "卫星ETF"}
             ]
 
         cache_key = tuple(sorted([x.get("code", "") for x in sector_etfs]))
@@ -2091,7 +2094,10 @@ class StockDataProvider:
                 {"sector": "煤炭周期", "code": "sh515220", "desc": "煤炭ETF"},
                 {"sector": "电力绿电", "code": "sz159611", "desc": "电力ETF"},
                 {"sector": "红利低波", "code": "sh515180", "desc": "红利ETF"},
-                {"sector": "科创50", "code": "sh588000", "desc": "科创50ETF"}
+                {"sector": "科创50", "code": "sh588000", "desc": "科创50ETF"},
+                {"sector": "纳指100", "code": "sh513390", "desc": "纳指100ETF"},
+                {"sector": "传媒娱乐", "code": "sh512980", "desc": "传媒ETF"},
+                {"sector": "商业航天", "code": "sh563530", "desc": "卫星ETF"}
             ]
 
         try:

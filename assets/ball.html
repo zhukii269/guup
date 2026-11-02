@@ -621,7 +621,7 @@
     <div class="ball-wrapper" id="ballWrapper">
       <div class="floating-ball pywebview-drag-region" id="floatingBall" title="摸鱼悬浮球：鼠标移入展开观察池，双击恢复主窗口，按住可任意拖动位置">
         <div class="ball-icon" id="ballIcon">🎯</div>
-        <div class="ball-label" id="ballLabel">23标</div>
+        <div class="ball-label" id="ballLabel">26标</div>
         <div class="ball-badge" id="ballBadge">🚨4档</div>
       </div>
     </div>
@@ -635,7 +635,7 @@
         <div class="drawer-header pywebview-drag-region">
           <div class="drawer-title-group">
             <span class="drawer-title">🎯 自选观察池</span>
-            <span class="drawer-count" id="drawerCount">23</span>
+            <span class="drawer-count" id="drawerCount">26</span>
             <span class="signal-counter-pill" id="signalCounterPill">🚨 0信号</span>
           </div>
           <div class="drawer-actions">
@@ -1177,7 +1177,7 @@
        BALL BADGE & SIGNAL DETECTION
        ========================================= */
     function updateBallBadgeAndUI() {
-      drawerCount.innerText = watchPoolData.length || '23';
+      drawerCount.innerText = watchPoolData.length || '26';
 
       let buySignalCount = 0;
       let sellSignalCount = 0;
@@ -1240,7 +1240,7 @@
         ballBadge.style.background = '#10b981';
       } else {
         ballIcon.innerText = '🎯';
-        ballLabel.innerText = `${watchPoolData.length || 23}标`;
+        ballLabel.innerText = `${watchPoolData.length || 26}标`;
         ballLabel.style.color = '#ffffff';
         ballBadge.style.display = 'none';
       }
