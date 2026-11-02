@@ -921,9 +921,11 @@
         }
       }
 
-      // Recommend 30m for T+0, day for T+1
+      // Recommend 60m for 513390, 30m for other T+0, day for T+1
+      const c = stock.code || stock.symbol || '';
+      const is60m = c.includes('513390');
       const isT0 = checkIsT0(stock);
-      currentPeriod = isT0 ? '30min' : 'day';
+      currentPeriod = is60m ? '60min' : (isT0 ? '30min' : 'day');
       updatePeriodTabs();
 
       // Load K-lines
@@ -1357,8 +1359,9 @@
 
       const hintEl = document.getElementById('klinePeriodHint');
       if (currentPeriod === 'day') hintEl.innerText = "核心基准: 日K线共振模型 (T+1推荐)";
+      else if (currentPeriod === '60min') hintEl.innerText = "稳健基准: 60分抗噪共振模型 (纳指等海外ETF推荐)";
       else if (currentPeriod === '30min') hintEl.innerText = "灵敏基准: 30分T+0日内轮动模型";
-      else hintEl.innerText = "辅助周期: 60分多空细化观察";
+      else hintEl.innerText = "辅助周期: 多空细化观察";
     }
 
     function switchPeriod(period) {

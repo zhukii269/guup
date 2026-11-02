@@ -1344,10 +1344,11 @@
         try {
           if (symbol) currentSymbol = symbol;
           updateKlineStarButton();
-          // 若未明确传周期，根据交易制度智能选择: T+0 -> 30分, T+1 -> 日K
+          // 若未明确传周期，根据交易制度智能选择: 513390 -> 60分, 其他T+0 -> 30分, T+1 -> 日K
           if (!period) {
+            const is60m = symbol && symbol.includes('513390');
             const isT0 = window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(symbol);
-            period = isT0 ? 'm30' : 'day';
+            period = is60m ? 'm60' : (isT0 ? 'm30' : 'day');
           }
           currentPeriod = period;
           const b30 = document.getElementById('btnPeriod30m');

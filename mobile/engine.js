@@ -30,7 +30,7 @@ const MobileQuantEngine = (function() {
     { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, change: 0.018, pct_change: 1.97, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
     { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
     { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
-    { sector: "纳指100", code: "sh513390", desc: "纳指100ETF", close: 2.425, prev_close: 2.420, change: 0.005, pct_change: 0.21, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "30分探底寻支撑，密切观察", trade_rule: "T+0", optimal_period: "m30" },
+    { sector: "纳指100", code: "sh513390", desc: "纳指100ETF", close: 2.425, prev_close: 2.420, change: 0.005, pct_change: 0.21, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分寻支撑，密切观察", trade_rule: "T+0", optimal_period: "m60" },
     { sector: "传媒娱乐", code: "sh512980", desc: "传媒ETF", close: 0.797, prev_close: 0.740, change: 0.057, pct_change: 7.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
     { sector: "商业航天", code: "sh563530", desc: "卫星ETF", close: 0.926, prev_close: 0.909, change: 0.017, pct_change: 1.87, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" }
   ];
@@ -851,6 +851,15 @@ const MobileQuantEngine = (function() {
               changed = true;
               return typeof item === 'string' ? 'sz159792' : { ...item, sector: "港股互联网", code: "sz159792", desc: "港股通互联网ETF", trade_rule: "T+0", optimal_period: "30min" };
             }
+            if (typeof item === 'object' && item) {
+              const is60m = c.includes('513390');
+              const isT0 = item.trade_rule === 'T+0' || isT0Symbol(c, item.desc || item.name);
+              const desired = is60m ? 'm60' : (isT0 ? 'm30' : 'day');
+              if (item.optimal_period !== desired) {
+                item.optimal_period = desired;
+                changed = true;
+              }
+            }
             return item;
           });
 
@@ -904,6 +913,7 @@ const MobileQuantEngine = (function() {
     const exists = list.some(x => normalizeSymbol(x.code || x.symbol) === fullSym);
     if (!exists) {
       const name = item.desc || item.name || item.sector || fullSym;
+      const is60m = fullSym.includes("513390");
       const isT0 = isT0Symbol(fullSym, name);
       list.push({
         sector: item.sector || name || "自选标的",
@@ -911,7 +921,7 @@ const MobileQuantEngine = (function() {
         symbol: fullSym,
         desc: name,
         trade_rule: isT0 ? "T+0" : "T+1",
-        optimal_period: isT0 ? "m30" : "day"
+        optimal_period: is60m ? "m60" : (isT0 ? "m30" : "day")
       });
       saveWatchList(list);
       return true;
@@ -945,14 +955,16 @@ const MobileQuantEngine = (function() {
     const listToLoad = getWatchList();
     if (!listToLoad || listToLoad.length === 0) return [];
 
-    // 并发拉取各标的的 K 线数据 (T+0 标的自动匹配 30分钟，T+1 标的自动匹配 日K线)
+    // 并发拉取各标的的 K 线数据 (513390匹配60分，其他T+0匹配30分，T+1匹配日K)
     const promises = listToLoad.map(async (item) => {
       const code = item.code || item.symbol;
+      const is60m = String(code).includes("513390");
       const isT0 = isT0Symbol(code, item.desc || item.name);
-      const tfLabel = isT0 ? "30分" : "日K";
-      const checkBarsCount = isT0 ? 8 : 3;
+      const tfLabel = is60m ? "60分" : (isT0 ? "30分" : "日K");
+      const checkBarsCount = is60m ? 4 : (isT0 ? 8 : 3);
+      const optimalPeriod = is60m ? "m60" : (isT0 ? "m30" : "day");
 
-      const data = isT0 ? await get30MinKlines(code, 320) : await getDailyKlines(code, 600);
+      const data = is60m ? await get60MinKlines(code, 320) : (isT0 ? await get30MinKlines(code, 320) : await getDailyKlines(code, 600));
       const klines = data.klines || [];
       const quote = await getRealtimeQuote(code);
 
@@ -981,7 +993,7 @@ const MobileQuantEngine = (function() {
           sort_priority: 10,
           reason_summary: `等待更多 ${tfLabel} 交易数据确认`,
           trade_rule: isT0 ? "T+0" : "T+1",
-          optimal_period: isT0 ? "m30" : "day",
+          optimal_period: optimalPeriod,
           latest_bar: null
         };
       }
@@ -1030,9 +1042,9 @@ const MobileQuantEngine = (function() {
 
       // 检查今日 (最新交易日 对应周期) 是否刚触发买卖信号
       let todaySig = bar.signal_type;
-      if (isT0) {
+      if (isT0 || is60m) {
         const currCalDay = (bar.day_date || bar.date || bar.datetime || "").slice(0, 10);
-        const tfCheckBars = 8;
+        const tfCheckBars = is60m ? 4 : 8;
         const recentBars = klines.slice(-tfCheckBars);
         const todayBars = recentBars.filter(k => currCalDay && ((k.day_date === currCalDay) || (k.date && k.date.startsWith(currCalDay)) || (k.datetime && k.datetime.startsWith(currCalDay))));
         if (!todaySig && todayBars.length > 1) {
@@ -1185,7 +1197,7 @@ const MobileQuantEngine = (function() {
         sort_priority: sortPriority,
         reason_summary: reasonSummary,
         trade_rule: isT0 ? "T+0" : "T+1",
-        optimal_period: isT0 ? "m30" : "day",
+        optimal_period: optimalPeriod,
         cost_price: inPos ? buyCostPrice : 0,
         buy_cost_price: inPos ? buyCostPrice : 0,
         buy_date: buyDate,

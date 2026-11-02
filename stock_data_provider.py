@@ -1425,11 +1425,29 @@ class StockDataProvider:
             code = item["code"]
             name_hint = item.get("desc", item.get("name", ""))
             is_t0 = is_t0_etf(code, name_hint)
-            tf_name = "30分" if is_t0 else "日K"
-            tf_check_bars = 8 if is_t0 else 3
+            is_60m = str(code).lower().endswith("513390")
+            if is_60m:
+                tf_name = "60分"
+                tf_check_bars = 4
+                optimal_period = "60min"
+            elif is_t0:
+                tf_name = "30分"
+                tf_check_bars = 8
+                optimal_period = "30min"
+            else:
+                tf_name = "日K"
+                tf_check_bars = 3
+                optimal_period = "day"
 
             try:
-                if is_t0:
+                if is_60m:
+                    data = self.get_60min_klines(code)
+                    klines = data.get("klines", [])
+                    if not klines:
+                        time.sleep(0.15)
+                        data = self.get_60min_klines(code)
+                        klines = data.get("klines", [])
+                elif is_t0:
                     data = self.get_30min_klines(code)
                     klines = data.get("klines", [])
                     if not klines:
@@ -1483,7 +1501,7 @@ class StockDataProvider:
                         "is_triggered": False,
                         "reason_summary": p_reason,
                         "trade_rule": "T+0" if is_t0 else "T+1",
-                        "optimal_period": "30min" if is_t0 else "day"
+                        "optimal_period": optimal_period
                     }
                 
                 bar = klines[-1]
@@ -1526,7 +1544,7 @@ class StockDataProvider:
                 score = sum([c1, c2, c3, c4])
 
                 # 检查今日 (最新交易日 对应周期) 是否刚触发买卖信号
-                if is_t0:
+                if is_t0 or is_60m:
                     curr_cal_day = (bar.get("day_date") or bar.get("date") or bar.get("datetime") or "")[:10]
                     today_bars = [k for k in klines[-tf_check_bars:] if curr_cal_day and (k.get("day_date") == curr_cal_day or k.get("date", "").startswith(curr_cal_day) or k.get("datetime", "").startswith(curr_cal_day))]
                     today_sig = bar.get("signal_type")
@@ -1658,7 +1676,7 @@ class StockDataProvider:
                     "is_s3_today": (today_sig == "S3"),
                     "has_s3_holding": has_s3_holding,
                     "trade_rule": "T+0" if is_t0 else "T+1",
-                    "optimal_period": "30min" if is_t0 else "day"
+                    "optimal_period": optimal_period
                 }
                 if not hasattr(self, "_item_data_cache"):
                     self._item_data_cache = {}

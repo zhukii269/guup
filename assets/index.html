@@ -2499,7 +2499,7 @@
       { sector: "人形机器人", code: "sh562500", desc: "机器人ETF", close: 0.934, prev_close: 0.916, change: 0.018, pct_change: 1.97, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
       { sector: "有色金属", code: "sh512400", desc: "有色金属ETF", close: 1.732, prev_close: 1.708, change: 0.024, pct_change: 1.41, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
       { sector: "科创50", code: "sh588000", desc: "科创50ETF", close: 1.616, prev_close: 1.617, change: -0.001, pct_change: -0.06, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
-      { sector: "纳指100", code: "sh513390", desc: "纳指100ETF", close: 2.425, prev_close: 2.420, change: 0.005, pct_change: 0.21, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "30分探底寻支撑，密切观察", trade_rule: "T+0", optimal_period: "30min" },
+      { sector: "纳指100", code: "sh513390", desc: "纳指100ETF", close: 2.425, prev_close: 2.420, change: 0.005, pct_change: 0.21, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "60分寻支撑，密切观察", trade_rule: "T+0", optimal_period: "60min" },
       { sector: "传媒娱乐", code: "sh512980", desc: "传媒ETF", close: 0.797, prev_close: 0.740, change: 0.057, pct_change: 7.70, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" },
       { sector: "商业航天", code: "sh563530", desc: "卫星ETF", close: 0.926, prev_close: 0.909, change: 0.017, pct_change: 1.87, tag: "蓄势回调", tag_color: "#94a3b8", reason_summary: "日K探底寻支撑，密切观察", trade_rule: "T+1", optimal_period: "day" }
     ];
@@ -2532,8 +2532,10 @@
               }
               // 自动将现有 T+1 标的基准更新为 day
               if (typeof item === 'object' && item) {
+                const c = (typeof item === 'string' ? item : item?.code || '');
+                const is60m = c.includes('513390');
                 const isT0 = item.trade_rule === 'T+0' || isT0Symbol(item.code, item.name || item.desc);
-                const desiredPeriod = isT0 ? '30min' : 'day';
+                const desiredPeriod = is60m ? '60min' : (isT0 ? '30min' : 'day');
                 if (item.optimal_period !== desiredPeriod) {
                   item.optimal_period = desiredPeriod;
                   changed = true;
@@ -6026,9 +6028,10 @@
     function switchStock(symbol) {
       currentSymbol = symbol;
       updateHeaderWatchButton();
+      const is60m = symbol.includes('513390');
       const isT0 = isT0Symbol(symbol);
-      // 根据标的类型（T+0用30分，T+1用日K）自动匹配最优推荐基准周期
-      const targetType = isT0 ? '30min' : 'kline';
+      // 513390 纳指100 自动匹配 60min，其他 T+0 匹配 30min，T+1 匹配 日K
+      const targetType = is60m ? '60min' : (isT0 ? '30min' : 'kline');
       if (currentChartType === targetType) {
         if (targetType === 'kline') loadStockData(symbol);
         else if (targetType === '30min') load30MinData(symbol);

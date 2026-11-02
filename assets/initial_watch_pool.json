@@ -640,12 +640,12 @@
     "buy_date": "",
     "sort_priority": 10,
     "is_triggered": false,
-    "reason_summary": "30分寻支撑，密切观察",
+    "reason_summary": "60分寻支撑，密切观察",
     "signal_type": null,
     "is_s3_today": false,
     "has_s3_holding": false,
     "trade_rule": "T+0",
-    "optimal_period": "30min"
+    "optimal_period": "60min"
   },
   {
     "sector": "传媒娱乐",
