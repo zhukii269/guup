@@ -1313,11 +1313,76 @@
         }
       });
 
+      let lastMobileHoveredIdx = -1;
+
+      function getMobileMaTitle(bar) {
+        const periodLabel = currentPeriod === 'm30' ? '30分均线' : (currentPeriod === 'm60' ? '60分均线' : '日K均线');
+        if (!bar) return `{lbl|${periodLabel}}`;
+        const m5 = bar.ma5 ? bar.ma5.toFixed(3) : '--';
+        const m10 = bar.ma10 ? bar.ma10.toFixed(3) : '--';
+        const m20 = bar.ma20 ? bar.ma20.toFixed(3) : '--';
+        const m30 = bar.ma30 ? bar.ma30.toFixed(3) : '--';
+        return `{lbl|${periodLabel}}  {m5|MA5:${m5}}  {m10|MA10:${m10}}  {m20|MA20:${m20}}  {m30|MA30:${m30}}`;
+      }
+
+      function getMobileVolTitle(bar) {
+        if (!bar) return '{lbl|VOL}';
+        const v = bar.volume ? (bar.volume >= 100000000 ? (bar.volume/100000000).toFixed(2)+'亿' : (bar.volume >= 10000 ? (bar.volume/10000).toFixed(1)+'万' : bar.volume)) : '--';
+        const v5 = bar.vol_ma5 ? (bar.vol_ma5 >= 100000000 ? (bar.vol_ma5/100000000).toFixed(2)+'亿' : (bar.vol_ma5 >= 10000 ? (bar.vol_ma5/10000).toFixed(1)+'万' : bar.vol_ma5)) : '--';
+        return `{lbl|VOL}  {v|量:${v}}  {v5|MA5:${v5}}`;
+      }
+
+      function getMobileMacdTitle(bar) {
+        if (!bar) return '{lbl|MACD(12,26,9)}';
+        const m = (bar.macd !== undefined && bar.macd !== null) ? bar.macd.toFixed(3) : '--';
+        const dif = (bar.dif !== undefined && bar.dif !== null) ? bar.dif.toFixed(3) : '--';
+        const dea = (bar.dea !== undefined && bar.dea !== null) ? bar.dea.toFixed(3) : '--';
+        const isMDown = (bar.macd !== undefined && bar.macd < 0);
+        return `{lbl|MACD(12,26,9)}  {${isMDown ? 'mDown' : 'mUp'}|MACD:${m}}  {dif|DIF:${dif}}  {dea|DEA:${dea}}`;
+      }
+
+      function getMobileKdjTitle(bar) {
+        if (!bar) return '{lbl|KDJ(9,3,3)}';
+        const k = (bar.k !== undefined && bar.k !== null) ? bar.k.toFixed(2) : '--';
+        const d = (bar.d !== undefined && bar.d !== null) ? bar.d.toFixed(2) : '--';
+        const j = (bar.j !== undefined && bar.j !== null) ? bar.j.toFixed(2) : '--';
+        return `{lbl|KDJ(9,3,3)}  {k|K:${k}}  {d|D:${d}}  {j|J:${j}}`;
+      }
+
+      function updateMobileSubTitles(b, idx) {
+        if (!chartInstance || !b) return;
+        if (idx !== undefined && idx === lastMobileHoveredIdx) return;
+        if (idx !== undefined) lastMobileHoveredIdx = idx;
+        chartInstance.setOption({
+          title: [
+            { id: 'mobile_title_ma', text: getMobileMaTitle(b) },
+            { id: 'mobile_title_vol', text: getMobileVolTitle(b) },
+            { id: 'mobile_title_macd', text: getMobileMacdTitle(b) },
+            { id: 'mobile_title_kdj', text: getMobileKdjTitle(b) }
+          ]
+        }, false, false);
+      }
+
+      function restoreMobileSubTitles() {
+        lastMobileHoveredIdx = -1;
+        if (!chartInstance || !currentKlines || currentKlines.length === 0) return;
+        const lb = currentKlines[currentKlines.length - 1];
+        chartInstance.setOption({
+          title: [
+            { id: 'mobile_title_ma', text: getMobileMaTitle(lb) },
+            { id: 'mobile_title_vol', text: getMobileVolTitle(lb) },
+            { id: 'mobile_title_macd', text: getMobileMacdTitle(lb) },
+            { id: 'mobile_title_kdj', text: getMobileKdjTitle(lb) }
+          ]
+        }, false, false);
+      }
+
       function restoreLatestQuote() {
         if (currentKlines && currentKlines.length > 0) {
           const lastBar = currentKlines[currentKlines.length - 1];
           const prevBar = currentKlines.length > 1 ? currentKlines[currentKlines.length - 2] : null;
           updateHeaderQuote(lastBar, false, prevBar);
+          restoreMobileSubTitles();
           if (chartInstance) {
             chartInstance.dispatchAction({ type: 'hideTip' });
           }
@@ -1406,8 +1471,24 @@
               chartInstance.resize();
             }
           });
-          // 监听缩放事件，动态联动更新底部统计指标
           chartInstance.on('dataZoom', updateVisibleStats);
+          chartInstance.on('updateAxisPointer', (event) => {
+            let idx = -1;
+            if (event && event.axesInfo && event.axesInfo.length > 0) {
+              const xAxisInfo = event.axesInfo.find(a => a.axisDim === 'x') || event.axesInfo[0];
+              if (xAxisInfo && typeof xAxisInfo.value === 'number') {
+                idx = xAxisInfo.value;
+              }
+            }
+            if (idx >= 0 && currentKlines && currentKlines[idx]) {
+              const prevBar = idx > 0 ? currentKlines[idx - 1] : null;
+              updateHeaderQuote(currentKlines[idx], true, prevBar);
+              updateMobileSubTitles(currentKlines[idx], idx);
+            }
+          });
+          chartInstance.on('globalout', () => {
+            restoreLatestQuote();
+          });
           // 初始化自定义温和双指缩放手势与浮动栏控制
           initCustomPinchZoom();
           initFloatToolActions();
@@ -1428,13 +1509,7 @@
         const jVals = klines.map(k => k.j);
 
         const lastBar = klines[klines.length - 1] || {};
-        const ma5Str = lastBar.ma5 ? lastBar.ma5.toFixed(3) : '--';
-        const ma10Str = lastBar.ma10 ? lastBar.ma10.toFixed(3) : '--';
-        const ma20Str = lastBar.ma20 ? lastBar.ma20.toFixed(3) : '--';
-        const periodLabel = currentPeriod === 'm30' ? '30分K线' : (currentPeriod === 'm60' ? '60分K线' : '日K线');
-        const maTitle = `${periodLabel}  MA5:${ma5Str}  MA10:${ma10Str}  MA20:${ma20Str}`;
 
-        // 买卖信号标记
         const markPoints = [];
         klines.forEach(b => {
           if (b.signal_type) {
@@ -1480,10 +1555,71 @@
             { left: '46', right: '16', top: '84%', height: '12%' }  // KDJ
           ],
           title: [
-            { text: maTitle, left: 48, top: 4, textStyle: { fontSize: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-            { text: 'VOL', left: 48, top: '49%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } },
-            { text: 'MACD', left: 48, top: '65%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } },
-            { text: 'KDJ', left: 48, top: '82%', textStyle: { fontSize: 9.5, color: isDark ? '#94a3b8' : '#64748b' } }
+            {
+              id: 'mobile_title_ma',
+              text: getMobileMaTitle(lastBar),
+              left: 48,
+              top: 4,
+              textStyle: {
+                fontSize: 9.5,
+                fontWeight: 'normal',
+                rich: {
+                  lbl: { color: isDark ? '#94a3b8' : '#64748b', fontSize: 9.5 },
+                  m5: { color: '#eab308', fontSize: 9.5, fontWeight: 'bold' },
+                  m10: { color: '#06b6d4', fontSize: 9.5, fontWeight: 'bold' },
+                  m20: { color: '#a855f7', fontSize: 9.5, fontWeight: 'bold' },
+                  m30: { color: '#10b981', fontSize: 9.5, fontWeight: 'bold' }
+                }
+              }
+            },
+            {
+              id: 'mobile_title_vol',
+              text: getMobileVolTitle(lastBar),
+              left: 48,
+              top: '49%',
+              textStyle: {
+                fontSize: 9.5,
+                fontWeight: 'normal',
+                rich: {
+                  lbl: { color: isDark ? '#94a3b8' : '#64748b', fontSize: 9.5 },
+                  v: { color: isDark ? '#f1f5f9' : '#1e293b', fontSize: 9.5, fontWeight: 'bold' },
+                  v5: { color: '#eab308', fontSize: 9.5, fontWeight: 'bold' }
+                }
+              }
+            },
+            {
+              id: 'mobile_title_macd',
+              text: getMobileMacdTitle(lastBar),
+              left: 48,
+              top: '65%',
+              textStyle: {
+                fontSize: 9.5,
+                fontWeight: 'normal',
+                rich: {
+                  lbl: { color: isDark ? '#94a3b8' : '#64748b', fontSize: 9.5 },
+                  mUp: { color: '#ef4444', fontSize: 9.5, fontWeight: 'bold' },
+                  mDown: { color: '#10b981', fontSize: 9.5, fontWeight: 'bold' },
+                  dif: { color: '#eab308', fontSize: 9.5, fontWeight: 'bold' },
+                  dea: { color: '#06b6d4', fontSize: 9.5, fontWeight: 'bold' }
+                }
+              }
+            },
+            {
+              id: 'mobile_title_kdj',
+              text: getMobileKdjTitle(lastBar),
+              left: 48,
+              top: '82%',
+              textStyle: {
+                fontSize: 9.5,
+                fontWeight: 'normal',
+                rich: {
+                  lbl: { color: isDark ? '#94a3b8' : '#64748b', fontSize: 9.5 },
+                  k: { color: '#eab308', fontSize: 9.5, fontWeight: 'bold' },
+                  d: { color: '#06b6d4', fontSize: 9.5, fontWeight: 'bold' },
+                  j: { color: '#a855f7', fontSize: 9.5, fontWeight: 'bold' }
+                }
+              }
+            }
           ],
           tooltip: {
             trigger: 'axis',
@@ -1522,9 +1658,10 @@
               const bar = klines[idx];
               if (!bar) return '';
 
-              // 同花顺核心体验：单指左右拖动十字线时，顶部指标看板实时联动更新
+              // 同花顺核心体验：单指左右拖动十字线时，顶部看板及各副图指标实时联动更新
               const prevBar = idx > 0 ? klines[idx - 1] : null;
               updateHeaderQuote(bar, true, prevBar);
+              updateMobileSubTitles(bar, idx);
 
               if (bar.signal_type) {
                 const isB = bar.signal_type.startsWith('B');

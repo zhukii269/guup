@@ -3209,7 +3209,10 @@
 
     function restoreSubChartInfoToLatest() {
       lastHoveredIdx = -1;
-      if (!chartInstance || isChartSwitching || activeRenderedChartType !== currentChartType) return;
+      const isKline = (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min');
+      const isActiveKline = (activeRenderedChartType === 'kline' || activeRenderedChartType === '60min' || activeRenderedChartType === '30min');
+      if (!chartInstance || isChartSwitching) return;
+      if (isKline ? !isActiveKline : activeRenderedChartType !== currentChartType) return;
 
       if (latestRealtimeQuote) {
         updateRealtimeUI(latestRealtimeQuote);
@@ -3217,17 +3220,17 @@
         updateHeaderFromBar(klineData[klineData.length - 1]);
       }
 
-      if (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min') {
+      if (isKline) {
         if (klineData && klineData.length > 0) {
           const latestBar = klineData[klineData.length - 1];
           chartInstance.setOption({
             title: [
-              { text: getMaTitle(latestBar), left: 56 },
-              { text: getVolTitle(latestBar), left: 56 },
-              { text: getMacdTitle(latestBar), left: 56 },
-              { text: getKdjTitle(latestBar), left: 56 }
+              { id: 'title_ma', text: getMaTitle(latestBar) },
+              { id: 'title_vol', text: getVolTitle(latestBar) },
+              { id: 'title_macd', text: getMacdTitle(latestBar) },
+              { id: 'title_kdj', text: getKdjTitle(latestBar) }
             ]
-          }, false, true);
+          }, false, false);
         }
       } else if (currentChartType === '5min') {
         if (current5MinLatestBar) {
@@ -3255,22 +3258,25 @@
 
     function updateSubChartInfoByIndex(idx) {
       if (idx < 0 || idx === lastHoveredIdx) return;
-      if (!chartInstance || isChartSwitching || activeRenderedChartType !== currentChartType) return;
+      const isKline = (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min');
+      const isActiveKline = (activeRenderedChartType === 'kline' || activeRenderedChartType === '60min' || activeRenderedChartType === '30min');
+      if (!chartInstance || isChartSwitching) return;
+      if (isKline ? !isActiveKline : activeRenderedChartType !== currentChartType) return;
       lastHoveredIdx = idx;
 
-      if (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min') {
+      if (isKline) {
         if (!klineData || idx >= klineData.length) return;
         const bar = klineData[idx];
         if (!bar) return;
         updateHeaderFromBar(bar);
         chartInstance.setOption({
           title: [
-            { text: getMaTitle(bar), left: 56 },
-            { text: getVolTitle(bar), left: 56 },
-            { text: getMacdTitle(bar), left: 56 },
-            { text: getKdjTitle(bar), left: 56 }
+            { id: 'title_ma', text: getMaTitle(bar) },
+            { id: 'title_vol', text: getVolTitle(bar) },
+            { id: 'title_macd', text: getMacdTitle(bar) },
+            { id: 'title_kdj', text: getKdjTitle(bar) }
           ]
-        }, false, true);
+        }, false, false);
       } else if (currentChartType === '5min') {
         if (!current5MinBarItems || idx >= current5MinBarItems.length) return;
         const bar = current5MinBarItems[idx];
@@ -5517,6 +5523,7 @@
         animation: false,
         title: [
           {
+            id: 'title_ma',
             text: getMaTitle(latestBar),
             left: 56,
             top: 2,
@@ -5533,6 +5540,7 @@
             }
           },
           {
+            id: 'title_vol',
             text: getVolTitle(latestBar),
             left: 56,
             top: '44%',
@@ -5548,6 +5556,7 @@
             }
           },
           {
+            id: 'title_macd',
             text: getMacdTitle(latestBar),
             left: 56,
             top: '62%',
@@ -5564,6 +5573,7 @@
             }
           },
           {
+            id: 'title_kdj',
             text: getKdjTitle(latestBar),
             left: 56,
             top: '80%',
@@ -5929,7 +5939,7 @@
       try {
         chartInstance.resize();
         chartInstance.setOption(option, true);
-        activeRenderedChartType = 'kline';
+        activeRenderedChartType = currentChartType;
         isChartSwitching = false;
         restoreHeaderToLatest();
         setTimeout(() => {
