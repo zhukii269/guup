@@ -4,6 +4,118 @@ import webview
 from stock_data_provider import StockDataProvider
 from interval_calculator import IntervalCalculator
 
+def patch_pywebview_evaluate_js():
+    try:
+        import webview.platforms.winforms as wf
+        import json
+        from threading import Semaphore
+        import System
+        from System import Action, Func, String, Object
+        from System.Threading.Tasks import Task
+
+        def safe_evaluate_js(self, script: str, parse_json: bool):
+            def _callback(res):
+                nonlocal result
+                if parse_json and res is not None:
+                    try:
+                        result = json.loads(res)
+                    except Exception:
+                        result = res
+                else:
+                    result = res
+                semaphore.release()
+
+            result = None
+            semaphore = Semaphore(0)
+
+            try:
+                if not hasattr(self, 'webview') or self.webview is None:
+                    return None
+                if hasattr(self, 'form') and self.form and not self.form.Visible:
+                    # Form is hidden; invoke script asynchronously without blocking thread on semaphore
+                    try:
+                        self.webview.Invoke(
+                            Func[Object](lambda: self.webview.ExecuteScriptAsync(script))
+                        )
+                    except Exception:
+                        pass
+                    return None
+
+                self.webview.Invoke(
+                    Func[Object](
+                        lambda: self.webview.ExecuteScriptAsync(script).ContinueWith(
+                            Action[Task[String]](lambda task: _callback(json.loads(task.Result))),
+                            self.syncContextTaskScheduler,
+                        )
+                    )
+                )
+                # 0.5s timeout: strictly prevent any deadlock if window state changes
+                if not semaphore.acquire(timeout=0.5):
+                    pass
+            except Exception as e:
+                try:
+                    semaphore.release()
+                except Exception:
+                    pass
+
+            return result
+
+        wf.Chromium.EdgeChrome.evaluate_js = safe_evaluate_js
+        print("EdgeChrome.evaluate_js safely patched with timeout and hidden guard.")
+    except Exception as e:
+        print("patch_pywebview_evaluate_js warning:", e)
+
+def set_ball_window_bounds(ball_win, x, y, w, h, on_top=True):
+    try:
+        import ctypes
+        if not hasattr(ball_win, 'native') or not ball_win.native:
+            ball_win.move(int(x), int(y))
+            ball_win.resize(int(w), int(h))
+            return
+        form = ball_win.native
+        hwnd = form.Handle.ToInt64() if hasattr(form.Handle, 'ToInt64') else int(form.Handle)
+        scale = getattr(form, '_scale', 1.0)
+        phys_x = int(x * scale)
+        phys_y = int(y * scale)
+        phys_w = int(w * scale)
+        phys_h = int(h * scale)
+        
+        user32 = ctypes.windll.user32
+        HWND_TOPMOST = -1
+        HWND_NOTOPMOST = -2
+        SWP_SHOWWINDOW = 0x0040
+        flags = SWP_SHOWWINDOW
+        insert_after = HWND_TOPMOST if on_top else HWND_NOTOPMOST
+        user32.SetWindowPos(hwnd, insert_after, phys_x, phys_y, phys_w, phys_h, flags)
+    except Exception as e:
+        print("set_ball_window_bounds error:", e)
+        try:
+            ball_win.move(int(x), int(y))
+            ball_win.resize(int(w), int(h))
+        except Exception:
+            pass
+
+def init_win32_ball_transparency(ball_win):
+    try:
+        import ctypes
+        if not hasattr(ball_win, 'native') or not ball_win.native:
+            return
+        form = ball_win.native
+        hwnd = form.Handle.ToInt64() if hasattr(form.Handle, 'ToInt64') else int(form.Handle)
+        dwmapi = ctypes.windll.dwmapi
+        
+        class MARGINS(ctypes.Structure):
+            _fields_ = [
+                ("cxLeftWidth", ctypes.c_int),
+                ("cxRightWidth", ctypes.c_int),
+                ("cyTopHeight", ctypes.c_int),
+                ("cyBottomHeight", ctypes.c_int),
+            ]
+        margins = MARGINS(-1, -1, -1, -1)
+        dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(margins))
+    except Exception as e:
+        print("init_win32_ball_transparency error:", e)
+
 def apply_win32_window_shape(window, mode="ball", alpha=255):
     try:
         import ctypes
@@ -76,12 +188,17 @@ class StockApi:
         self._window = main_win
         self._main_window = main_win
         self._ball_window = ball_win
+        try:
+            screen_w = webview.screens[0].width if webview.screens else 1920
+            self._ball_dock_x = max(10, screen_w - 90)
+            self._ball_dock_y = 240
+        except Exception:
+            self._ball_dock_x = 1800
+            self._ball_dock_y = 240
 
     def switch_to_ball_mode(self):
         try:
             self._in_ball_mode = True
-            if self._main_window:
-                self._main_window.hide()
             if self._ball_window:
                 self.expand_ball("ball")
                 self._ball_window.show()
@@ -89,20 +206,24 @@ class StockApi:
                     self._ball_window.on_top = True
                 except Exception:
                     pass
+            # Defer hiding main window slightly so the current IPC callback can return cleanly
+            import threading
+            threading.Timer(0.12, self._do_hide_main_window).start()
             return True
         except Exception as e:
             print("switch_to_ball_mode error:", e)
             return False
 
+    def _do_hide_main_window(self):
+        try:
+            if getattr(self, '_in_ball_mode', False) and self._main_window:
+                self._main_window.hide()
+        except Exception as e:
+            print("_do_hide_main_window error:", e)
+
     def switch_to_main_mode(self, symbol=None):
         try:
             self._in_ball_mode = False
-            if self._ball_window:
-                self._ball_window.hide()
-                try:
-                    self._ball_window.move(-5000, -5000)
-                except Exception:
-                    pass
             if self._main_window:
                 self._main_window.show()
                 try:
@@ -115,10 +236,24 @@ class StockApi:
                         self._main_window.evaluate_js(f"window.switchStock && window.switchStock('{clean_sym}')")
                     except Exception:
                         pass
+            # Defer hiding ball window slightly so the current IPC callback can return cleanly
+            import threading
+            threading.Timer(0.12, self._do_hide_ball_window).start()
             return True
         except Exception as e:
             print("switch_to_main_mode error:", e)
             return False
+
+    def _do_hide_ball_window(self):
+        try:
+            if not getattr(self, '_in_ball_mode', False) and self._ball_window:
+                self._ball_window.hide()
+                try:
+                    self._ball_window.move(-5000, -5000)
+                except Exception:
+                    pass
+        except Exception as e:
+            print("_do_hide_ball_window error:", e)
 
     def on_ball_drag_end(self):
         if not self._ball_window:
@@ -132,14 +267,14 @@ class StockApi:
             cur_y = self._ball_window.y
             cur_w = self._ball_window.width
 
-            if cur_w <= 90:
-                self._ball_dock_x = cur_x
-                self._ball_dock_y = cur_y
-            else:
-                if cur_x > screen_w / 2:
-                    self._ball_dock_x = cur_x + cur_w - 68
-                else:
+            if cur_x > 0 and cur_y > 0:
+                if cur_w <= 90:
                     self._ball_dock_x = cur_x
+                else:
+                    if cur_x > screen_w / 2:
+                        self._ball_dock_x = cur_x + cur_w - 68
+                    else:
+                        self._ball_dock_x = cur_x
                 self._ball_dock_y = cur_y
             return True
         except Exception as e:
@@ -165,33 +300,20 @@ class StockApi:
                 screen_w = webview.screens[0].width
                 screen_h = webview.screens[0].height
 
-            cur_x = self._ball_window.x
-            cur_y = self._ball_window.y
-            cur_w = self._ball_window.width
-
-            if cur_w <= 90 and cur_x > 0:
-                self._ball_dock_x = cur_x
-                self._ball_dock_y = cur_y
-            elif cur_w > 90 and cur_x > 0 and getattr(self, '_ball_dock_x', None) is None:
-                if cur_x > screen_w / 2:
-                    self._ball_dock_x = cur_x + cur_w - 68
-                else:
-                    self._ball_dock_x = cur_x
-                self._ball_dock_y = cur_y
-
+            # Maintain dock position on screen
             dock_x = getattr(self, '_ball_dock_x', None)
             dock_y = getattr(self, '_ball_dock_y', None)
-            if dock_x is None or dock_x < 0:
+            if dock_x is None or dock_x <= 0:
                 dock_x = max(10, screen_w - 90)
-            if dock_y is None or dock_y < 0:
+                self._ball_dock_x = dock_x
+            if dock_y is None or dock_y <= 0:
                 dock_y = 240
+                self._ball_dock_y = dock_y
 
             if mode == "ball":
-                # In ball mode, stay EXACTLY at dock position!
                 new_x = max(0, min(screen_w - 68, dock_x))
                 new_y = max(0, min(screen_h - 68, dock_y))
             else:
-                # In drawer / kline mode, expand outwards from dock position
                 if dock_x > screen_w / 2:
                     right_edge = min(screen_w - 6, dock_x + 68)
                     new_x = max(10, right_edge - w)
@@ -199,9 +321,8 @@ class StockApi:
                     new_x = max(10, dock_x)
                 new_y = min(max(10, dock_y), screen_h - h - 40)
 
-            self._ball_window.move(int(new_x), int(new_y))
-            self._ball_window.resize(int(w), int(h))
-            apply_win32_window_shape(self._ball_window, mode=mode)
+            # Move and resize window atomically via Win32 SetWindowPos
+            set_ball_window_bounds(self._ball_window, new_x, new_y, w, h, on_top=True)
             return True
         except Exception as e:
             print("expand_ball error:", e)
@@ -304,6 +425,7 @@ def get_asset_path(filename):
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", filename))
 
 def main():
+    patch_pywebview_evaluate_js()
     api = StockApi()
     html_path = get_asset_path("index.html")
     ball_html_path = get_asset_path("ball.html")
@@ -367,6 +489,8 @@ def main():
                 ball_win.move(-5000, -5000)
             except Exception:
                 pass
+        else:
+            init_win32_ball_transparency(ball_win)
 
     ball_win.events.shown += on_ball_shown
 
