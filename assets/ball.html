@@ -734,8 +734,7 @@
        ========================================= */
     window.addEventListener('DOMContentLoaded', () => {
       initEventListeners();
-      loadWatchPoolData();
-      startAutoRefresh();
+      loadWatchPoolData(false);
     });
 
     let hoverTimer = null;
@@ -865,6 +864,19 @@
       currentMode = 'ball';
       rootEl.className = 'mode-ball';
       loadWatchPoolData(false);
+      startAutoRefresh();
+    };
+
+    // Called from Python when switching back to main window
+    window.onBallModeDeactivated = function() {
+      if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+      if (quantRefreshTimer) {
+        clearInterval(quantRefreshTimer);
+        quantRefreshTimer = null;
+      }
     };
 
     /* =========================================

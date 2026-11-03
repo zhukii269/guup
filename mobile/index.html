@@ -1349,18 +1349,23 @@
         return `{lbl|KDJ(9,3,3)}  {k|K:${k}}  {d|D:${d}}  {j|J:${j}}`;
       }
 
+      let mobileSubRaf = null;
       function updateMobileSubTitles(b, idx) {
         if (!chartInstance || !b) return;
         if (idx !== undefined && idx === lastMobileHoveredIdx) return;
         if (idx !== undefined) lastMobileHoveredIdx = idx;
-        chartInstance.setOption({
-          title: [
-            { id: 'mobile_title_ma', text: getMobileMaTitle(b) },
-            { id: 'mobile_title_vol', text: getMobileVolTitle(b) },
-            { id: 'mobile_title_macd', text: getMobileMacdTitle(b) },
-            { id: 'mobile_title_kdj', text: getMobileKdjTitle(b) }
-          ]
-        }, false, false);
+        if (mobileSubRaf) cancelAnimationFrame(mobileSubRaf);
+        mobileSubRaf = requestAnimationFrame(() => {
+          if (!chartInstance) return;
+          chartInstance.setOption({
+            title: [
+              { id: 'mobile_title_ma', text: getMobileMaTitle(b) },
+              { id: 'mobile_title_vol', text: getMobileVolTitle(b) },
+              { id: 'mobile_title_macd', text: getMobileMacdTitle(b) },
+              { id: 'mobile_title_kdj', text: getMobileKdjTitle(b) }
+            ]
+          }, false, false);
+        });
       }
 
       function restoreMobileSubTitles() {
@@ -1661,7 +1666,6 @@
               // 同花顺核心体验：单指左右拖动十字线时，顶部看板及各副图指标实时联动更新
               const prevBar = idx > 0 ? klines[idx - 1] : null;
               updateHeaderQuote(bar, true, prevBar);
-              updateMobileSubTitles(bar, idx);
 
               if (bar.signal_type) {
                 const isB = bar.signal_type.startsWith('B');

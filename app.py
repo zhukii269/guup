@@ -25,6 +25,22 @@ def patch_pywebview_evaluate_js():
                     result = res
                 semaphore.release()
 
+            def _on_task_completed(task):
+                try:
+                    raw = task.Result
+                    parsed = None
+                    if raw is not None:
+                        try:
+                            parsed = json.loads(raw)
+                        except Exception:
+                            parsed = raw
+                    _callback(parsed)
+                except Exception:
+                    try:
+                        semaphore.release()
+                    except Exception:
+                        pass
+
             result = None
             semaphore = Semaphore(0)
 
@@ -32,19 +48,13 @@ def patch_pywebview_evaluate_js():
                 if not hasattr(self, 'webview') or self.webview is None:
                     return None
                 if hasattr(self, 'form') and self.form and not self.form.Visible:
-                    # Form is hidden; invoke script asynchronously without blocking thread on semaphore
-                    try:
-                        self.webview.Invoke(
-                            Func[Object](lambda: self.webview.ExecuteScriptAsync(script))
-                        )
-                    except Exception:
-                        pass
+                    # Form is hidden; strictly return None without any Invoke to prevent WinForms STA deadlocks
                     return None
 
                 self.webview.Invoke(
                     Func[Object](
                         lambda: self.webview.ExecuteScriptAsync(script).ContinueWith(
-                            Action[Task[String]](lambda task: _callback(json.loads(task.Result))),
+                            Action[Task[String]](_on_task_completed),
                             self.syncContextTaskScheduler,
                         )
                     )
@@ -219,16 +229,25 @@ class StockApi:
                 self._latest_watch_pool = pool_data
                 self._dp._save_disk_watch_pool_cache(pool_data)
 
+            # Signal main window to halt polling timers immediately
+            if self._main_window:
+                try:
+                    self._main_window.evaluate_js("window.onBallModeActivated && window.onBallModeActivated()")
+                except Exception:
+                    pass
+
             if self._ball_window:
                 self.expand_ball("ball")
                 self._ball_window.show()
+                # Activate floating ball state and quotes
                 try:
-                    self._ball_window.on_top = True
+                    self._ball_window.evaluate_js("window.onBallModeActivated && window.onBallModeActivated()")
                 except Exception:
                     pass
+
             # Defer hiding main window slightly so the current IPC callback can return cleanly
             import threading
-            threading.Timer(0.15, self._do_hide_main_window).start()
+            threading.Timer(0.12, self._do_hide_main_window).start()
             return True
         except Exception as e:
             print("switch_to_ball_mode error:", e)
@@ -238,16 +257,35 @@ class StockApi:
         try:
             if getattr(self, '_in_ball_mode', False) and self._main_window:
                 self._main_window.hide()
+                # Ensure ball window is active foreground window
+                if self._ball_window and hasattr(self._ball_window, 'native') and self._ball_window.native:
+                    try:
+                        form = self._ball_window.native
+                        hwnd = form.Handle.ToInt64() if hasattr(form.Handle, 'ToInt64') else int(form.Handle)
+                        _user32.SetForegroundWindow(hwnd)
+                    except Exception:
+                        pass
         except Exception as e:
             print("_do_hide_main_window error:", e)
 
     def switch_to_main_mode(self, symbol=None):
         try:
             self._in_ball_mode = False
+            # Immediately notify ball window to pause background timers
+            if self._ball_window:
+                try:
+                    self._ball_window.evaluate_js("window.onBallModeDeactivated && window.onBallModeDeactivated()")
+                except Exception:
+                    pass
+
             if self._main_window:
                 self._main_window.show()
                 try:
                     self._main_window.restore()
+                except Exception:
+                    pass
+                try:
+                    self._main_window.evaluate_js("window.onMainModeActivated && window.onMainModeActivated()")
                 except Exception:
                     pass
                 if symbol:
@@ -256,6 +294,7 @@ class StockApi:
                         self._main_window.evaluate_js(f"window.switchStock && window.switchStock('{clean_sym}')")
                     except Exception:
                         pass
+
             # Defer hiding ball window slightly so the current IPC callback can return cleanly
             import threading
             threading.Timer(0.12, self._do_hide_ball_window).start()
@@ -444,9 +483,13 @@ def get_asset_path(filename):
         return os.path.join(sys._MEIPASS, "assets", filename)
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", filename))
 
+active_api = None
+
 def main():
+    global active_api
     patch_pywebview_evaluate_js()
     api = StockApi()
+    active_api = api
     html_path = get_asset_path("index.html")
     ball_html_path = get_asset_path("ball.html")
     
