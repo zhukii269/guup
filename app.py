@@ -65,9 +65,27 @@ def patch_pywebview_evaluate_js():
     except Exception as e:
         print("patch_pywebview_evaluate_js warning:", e)
 
+import ctypes
+from ctypes import wintypes
+
+_user32 = ctypes.windll.user32
+_user32.SetWindowPos.argtypes = [
+    wintypes.HWND,
+    wintypes.HWND,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.UINT
+]
+_user32.SetWindowPos.restype = wintypes.BOOL
+
+_HWND_TOPMOST = wintypes.HWND(-1)
+_HWND_NOTOPMOST = wintypes.HWND(-2)
+_SWP_SHOWWINDOW = 0x0040
+
 def set_ball_window_bounds(ball_win, x, y, w, h, on_top=True):
     try:
-        import ctypes
         if not hasattr(ball_win, 'native') or not ball_win.native:
             ball_win.move(int(x), int(y))
             ball_win.resize(int(w), int(h))
@@ -80,13 +98,11 @@ def set_ball_window_bounds(ball_win, x, y, w, h, on_top=True):
         phys_w = int(w * scale)
         phys_h = int(h * scale)
         
-        user32 = ctypes.windll.user32
-        HWND_TOPMOST = -1
-        HWND_NOTOPMOST = -2
-        SWP_SHOWWINDOW = 0x0040
-        flags = SWP_SHOWWINDOW
-        insert_after = HWND_TOPMOST if on_top else HWND_NOTOPMOST
-        user32.SetWindowPos(hwnd, insert_after, phys_x, phys_y, phys_w, phys_h, flags)
+        insert_after = _HWND_TOPMOST if on_top else _HWND_NOTOPMOST
+        success = _user32.SetWindowPos(hwnd, insert_after, phys_x, phys_y, phys_w, phys_h, _SWP_SHOWWINDOW)
+        if not success:
+            ball_win.move(int(x), int(y))
+            ball_win.resize(int(w), int(h))
     except Exception as e:
         print("set_ball_window_bounds error:", e)
         try:
@@ -196,9 +212,13 @@ class StockApi:
             self._ball_dock_x = 1800
             self._ball_dock_y = 240
 
-    def switch_to_ball_mode(self):
+    def switch_to_ball_mode(self, pool_data=None):
         try:
             self._in_ball_mode = True
+            if pool_data and isinstance(pool_data, list) and len(pool_data) > 0:
+                self._latest_watch_pool = pool_data
+                self._dp._save_disk_watch_pool_cache(pool_data)
+
             if self._ball_window:
                 self.expand_ball("ball")
                 self._ball_window.show()
@@ -208,7 +228,7 @@ class StockApi:
                     pass
             # Defer hiding main window slightly so the current IPC callback can return cleanly
             import threading
-            threading.Timer(0.12, self._do_hide_main_window).start()
+            threading.Timer(0.15, self._do_hide_main_window).start()
             return True
         except Exception as e:
             print("switch_to_ball_mode error:", e)

@@ -1103,8 +1103,8 @@
       }
 
       // 3. Full Quantitative Watch Pool Scan (Sync buy/sell signals, tags, scores, resonance)
-      // Only run when explicitly requested (forceQuant=true) or when watchPoolData is empty
-      if ((forceQuant || !watchPoolData || watchPoolData.length === 0) && window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool && !isQuantScanning) {
+      // Only run when explicitly requested by user (forceQuant=true)
+      if (forceQuant && window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool && !isQuantScanning) {
         try {
           isQuantScanning = true;
           const userList = getUserWatchList();
@@ -1158,21 +1158,7 @@
         }
       }, 3500);
 
-      // Track 2: Full quant scan every 14s (signals, buy tiers 1-4, tags, scores)
-      quantRefreshTimer = setInterval(() => {
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_watch_pool && !isQuantScanning) {
-          const userList = getUserWatchList();
-          isQuantScanning = true;
-          window.pywebview.api.get_watch_pool(userList).then(fresh => {
-            isQuantScanning = false;
-            if (Array.isArray(fresh) && fresh.length > 0) {
-              applyWatchPoolData(fresh);
-            }
-          }).catch(() => {
-            isQuantScanning = false;
-          });
-        }
-      }, 14000);
+      // Track 2: Full quant scan is on-demand only (click refresh button) to maintain maximum smoothness
     }
 
     /* =========================================

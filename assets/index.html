@@ -6477,7 +6477,7 @@
 
     function switchToBallMode() {
       if (window.pywebview && window.pywebview.api && window.pywebview.api.switch_to_ball_mode) {
-        window.pywebview.api.switch_to_ball_mode();
+        window.pywebview.api.switch_to_ball_mode(currentWatchPool);
       }
     }
     window.switchToBallMode = switchToBallMode;
