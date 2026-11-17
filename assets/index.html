@@ -1645,6 +1645,10 @@
           </div>
         </div>
         <div class="watch-pool-sub" id="watchPoolSubText">A股/港股各主流板块代表ETF</div>
+        <div id="watchRegimeBar" style="margin-top:4px; font-size:10.5px; padding:3px 6px; border-radius:4px; background:rgba(100,116,139,0.12); color:#64748b; font-weight:600; display:flex; align-items:center; justify-content:space-between; gap:4px;">
+          <span id="watchRegimeText">🧭 双核轮动: 牛日K卖 ↔ 熊120分卖</span>
+          <span id="watchRegimeRule" style="font-size:9.5px; opacity:0.85;">MA30/60</span>
+        </div>
       </div>
       <div class="watch-pool-list" id="watchPoolList">
         <div class="watch-card-wrapper">
@@ -2228,6 +2232,7 @@
         <div class="chart-type-tabs">
           <button class="chart-type-tab" id="tab30Min" onclick="switchChartType('30min')">⏱️ 30分钟</button>
           <button class="chart-type-tab active" id="tab60Min" onclick="switchChartType('60min')">⏱️ 60分钟</button>
+          <button class="chart-type-tab" id="tab120Min" onclick="switchChartType('120min')">⏱️ 120分钟</button>
           <button class="chart-type-tab" id="tabKline" onclick="switchChartType('kline')">📊 日K线</button>
         </div>
 
@@ -2372,11 +2377,12 @@
     let currentSymbol = "sh000001";
     let currentStockName = "上证指数";
     let chartInstance = null;
-    let currentChartType = '60min'; // '30min' | '60min' | 'kline'
+    let currentChartType = '60min'; // '30min' | '60min' | '120min' | 'kline'
     let activeRenderedChartType = 'kline';
     let isChartSwitching = false;
     let kline30MinData = [];
     let kline60MinData = [];
+    let kline120MinData = [];
     let klineDailyData = [];
     let klineData = [];
     let latestRealtimeQuote = null;
@@ -2413,7 +2419,8 @@
       ma5: '#00838f',
       ma10: '#8e24aa',
       ma20: '#e65100',
-      ma30: '#1565c0'
+      ma30: '#1565c0',
+      ma60: '#ec4899'
     };
 
     let currentTheme = localStorage.getItem('stock_master_theme') || 'light';
@@ -2598,11 +2605,11 @@
       currentWatchPool = [];
       if (isBatchDeleteMode) toggleBatchDeleteMode(false);
       updateHeaderWatchButton();
-      showOrderToast("🔄 已恢复预设全部 26 只主流板块 ETF (T+1日K / T+0 30分基准)");
+      showOrderToast("🔄 已恢复预设全部 26 只主流板块 ETF (T+1 牛态日K/熊防120分 · T+0 30分)");
       loadWatchPool();
     }
 
-    const WATCH_POOL_CACHE_VER = '20261015_sync_v2';
+    const WATCH_POOL_CACHE_VER = '20261117_hybrid_v2';
 
     function renderWatchPoolImmediate() {
       try {
@@ -2757,7 +2764,13 @@
 
         // 并行非阻塞异步执行，绝不串行等待，确保各模块瞬间呈现
         syncAppConfig().catch(e => console.error("syncAppConfig error:", e));
-        if (isT0Symbol(currentSymbol)) {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_market_regime) {
+          window.pywebview.api.get_market_regime().then(reg => updateWatchRegimeBanner(reg)).catch(() => {});
+        }
+        const initItem = (currentWatchPool || []).find(x => (x.symbol || x.code || '').toLowerCase() === (currentSymbol || '').toLowerCase());
+        if (initItem && initItem.optimal_period === '120min') {
+          switchChartType('120min');
+        } else if (isT0Symbol(currentSymbol)) {
           switchChartType('30min');
         } else {
           switchChartType('kline');
@@ -2810,7 +2823,7 @@
       if (isT0Symbol(currentSymbol)) {
         load30MinData(currentSymbol);
       } else {
-        load60MinData(currentSymbol);
+        loadStockData(currentSymbol);
       }
 
       initPyWebViewReady();
@@ -2998,12 +3011,45 @@
       }
     }
 
+    function updateWatchRegimeBanner(reg, pool) {
+      const bar = document.getElementById('watchRegimeBar');
+      const txtEl = document.getElementById('watchRegimeText');
+      const ruleEl = document.getElementById('watchRegimeRule');
+      if (!bar || !txtEl) return;
+
+      let hs300Bull = null;
+      if (reg && typeof reg.is_bull === 'boolean') {
+        hs300Bull = reg.is_bull;
+      } else if (Array.isArray(pool) && pool.length > 0) {
+        const sample = pool.find(x => typeof x.hs300_bull === 'boolean');
+        if (sample) hs300Bull = sample.hs300_bull;
+      }
+
+      const bullCount = Array.isArray(pool) ? pool.filter(x => x.regime === 'bull').length : null;
+      const bearCount = Array.isArray(pool) ? pool.filter(x => x.regime === 'bear').length : null;
+
+      if (hs300Bull === true) {
+        bar.style.background = 'rgba(220, 38, 38, 0.10)';
+        bar.style.color = '#dc2626';
+        txtEl.innerText = reg && reg.close ? `🐂 沪深300(${reg.close}) > MA30 · 全场牛态` : '🐂 沪深300 > MA30 · 市场牛态(日K卖)';
+      } else if (hs300Bull === false) {
+        bar.style.background = 'rgba(37, 99, 235, 0.10)';
+        bar.style.color = '#2563eb';
+        txtEl.innerText = reg && reg.close ? `🐻 沪深300(${reg.close}) < MA30(${reg.ma30 || '--'}) · 熊防期` : '🐻 沪深300 < MA30 · 熊防看MA60';
+      }
+      if (ruleEl && bullCount !== null && (bullCount + bearCount) > 0) {
+        ruleEl.innerText = `牛${bullCount}/熊${bearCount}`;
+      }
+    }
+
     function renderWatchPool(pool) {
       if (typeof isMiniMode !== 'undefined' && isMiniMode) {
         renderMiniCard();
       }
       const container = document.getElementById('watchPoolList');
       if (!container || !pool) return;
+
+      updateWatchRegimeBanner(null, pool);
 
       const subText = document.getElementById('watchPoolSubText');
       if (subText && !isBatchDeleteMode) {
@@ -3036,6 +3082,11 @@
 
         const isT0 = item.trade_rule === 'T+0' || isT0Symbol(item.code, item.name);
         const t0Badge = isT0 ? `<span style="font-size:9px; background:#0284c7; color:#fff; border-radius:3px; padding:1px 3px; font-weight:700; margin-left:3px;">T+0</span>` : '';
+        const regBadge = !isT0 && item.regime ? (
+          item.regime === 'bull'
+            ? `<span style="font-size:9px; background:rgba(220,38,38,0.12); color:#dc2626; border:1px solid rgba(220,38,38,0.3); border-radius:3px; padding:0 4px; font-weight:700; margin-left:4px;">牛·日K</span>`
+            : `<span style="font-size:9px; background:rgba(37,99,235,0.12); color:#2563eb; border:1px solid rgba(37,99,235,0.3); border-radius:3px; padding:0 4px; font-weight:700; margin-left:4px;">熊·120分</span>`
+        ) : '';
 
         return `
           <div class="watch-card-wrapper">
@@ -3043,7 +3094,7 @@
             <button class="watch-card-del-btn" title="移出自选" onclick="removeSingleStockFromWatch('${item.code || item.symbol}', event)">✕</button>
             <div class="watch-card ${isActive ? 'active' : ''}" style="flex:1; min-width:0;" onclick="${isBatchDeleteMode ? `toggleSelectCard('${item.code}', event)` : `selectWatchItem('${item.symbol || item.code}')`}">
               <div class="watch-card-top" style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="watch-sector-name">${item.sector || '自选板块'}${t0Badge}</span>
+                <span class="watch-sector-name">${item.sector || '自选板块'}${t0Badge}${regBadge}</span>
                 <span class="watch-tag" style="background:${tagBg}; color:#ffffff; font-weight:bold; padding:2px 6px; border-radius:4px; font-size:10px; flex-shrink:0;">${tagText}</span>
               </div>
               <div class="watch-card-mid" style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
@@ -3083,7 +3134,7 @@
       window.addEventListener('resize', () => chartInstance.resize());
 
       chartInstance.on('dataZoom', (params) => {
-        if (currentChartType !== 'kline' && currentChartType !== '5min' && currentChartType !== '60min' && currentChartType !== '30min') return;
+        if (currentChartType !== 'kline' && currentChartType !== '5min' && currentChartType !== '120min' && currentChartType !== '60min' && currentChartType !== '30min') return;
         let s = null, e = null;
         if (params.batch && params.batch[0]) {
           if (typeof params.batch[0].start === 'number') s = params.batch[0].start;
@@ -3212,8 +3263,8 @@
 
     function restoreSubChartInfoToLatest() {
       lastHoveredIdx = -1;
-      const isKline = (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min');
-      const isActiveKline = (activeRenderedChartType === 'kline' || activeRenderedChartType === '60min' || activeRenderedChartType === '30min');
+      const isKline = (currentChartType === 'kline' || currentChartType === '120min' || currentChartType === '60min' || currentChartType === '30min');
+      const isActiveKline = (activeRenderedChartType === 'kline' || activeRenderedChartType === '120min' || activeRenderedChartType === '60min' || activeRenderedChartType === '30min');
       if (!chartInstance || isChartSwitching) return;
       if (isKline ? !isActiveKline : activeRenderedChartType !== currentChartType) return;
 
@@ -3262,8 +3313,8 @@
     let subChartRaf = null;
     function updateSubChartInfoByIndex(idx) {
       if (idx < 0 || idx === lastHoveredIdx) return;
-      const isKline = (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min');
-      const isActiveKline = (activeRenderedChartType === 'kline' || activeRenderedChartType === '60min' || activeRenderedChartType === '30min');
+      const isKline = (currentChartType === 'kline' || currentChartType === '120min' || currentChartType === '60min' || currentChartType === '30min');
+      const isActiveKline = (activeRenderedChartType === 'kline' || activeRenderedChartType === '120min' || activeRenderedChartType === '60min' || activeRenderedChartType === '30min');
       if (!chartInstance || isChartSwitching) return;
       if (isKline ? !isActiveKline : activeRenderedChartType !== currentChartType) return;
       lastHoveredIdx = idx;
@@ -3315,6 +3366,18 @@
       if (!item) return;
 
       const signalEl = document.getElementById('quantSignalText');
+      const curSymClean = (currentSymbol || '').toLowerCase().replace(/^(sh|sz)/i, '');
+      const watchItem = (typeof currentWatchPool !== 'undefined' && Array.isArray(currentWatchPool))
+        ? currentWatchPool.find(x => ((x.symbol || x.code || '').toLowerCase().replace(/^(sh|sz)/i, '') === curSymClean))
+        : null;
+
+      let regimeHtml = '';
+      if (watchItem && (watchItem.regime === 'bull' || watchItem.regime === 'bear')) {
+        regimeHtml = watchItem.regime === 'bull'
+          ? `<span class="quant-trend-badge" style="background:rgba(220,38,38,0.12); color:#dc2626; margin-right:6px;">🐂 牛态·日K卖</span>`
+          : `<span class="quant-trend-badge" style="background:rgba(37,99,235,0.12); color:#2563eb; margin-right:6px;">🐻 熊防·120分卖</span>`;
+      }
+
       let targetBar = item;
       if (!targetBar.signal_type && klineData && klineData.length > 0) {
         const todayStr = (item.day_date || (item.date ? item.date.split(' ')[0] : ''));
@@ -3326,19 +3389,24 @@
       if (targetBar.signal_type) {
         const isBuy = targetBar.signal_type.startsWith('B');
         if (targetBar.signal_type === 'S3') {
-          signalEl.innerHTML = `今日信号: <span style="color:#f59e0b; font-weight:bold;">[止盈: 减仓50% (留50%底仓观察)]</span>`;
+          signalEl.innerHTML = `${regimeHtml}今日信号: <span style="color:#f59e0b; font-weight:bold;">[止盈: 减仓50% (留50%底仓观察)]</span>`;
         } else {
-          signalEl.innerHTML = `今日信号: <span style="color:${isBuy ? '#dc2626' : '#16a34a'}; font-weight:bold;">[${targetBar.signal_name}]</span>`;
+          signalEl.innerHTML = `${regimeHtml}今日信号: <span style="color:${isBuy ? '#dc2626' : '#16a34a'}; font-weight:bold;">[${targetBar.signal_name}]</span>`;
         }
+      } else if (watchItem && watchItem.signal_type) {
+        const isBuy = watchItem.signal_type.startsWith('B');
+        signalEl.innerHTML = `${regimeHtml}策略信号: <span style="color:${isBuy ? '#dc2626' : '#16a34a'}; font-weight:bold;">[${watchItem.tag}]</span>`;
+      } else if (watchItem && watchItem.tag) {
+        signalEl.innerHTML = `${regimeHtml}策略状态: <span style="color:${watchItem.tag_color || '#ea580c'}; font-weight:bold;">${watchItem.tag}</span>`;
       } else {
-        signalEl.innerHTML = `今日信号: <span style="color:#ea580c; font-weight:bold;">观望持仓</span>`;
+        signalEl.innerHTML = `${regimeHtml}今日信号: <span style="color:#ea580c; font-weight:bold;">观望持仓</span>`;
       }
     }
 
     function getMaTitle(bar) {
       if (!bar) return '{lbl|均线}';
-      const prefix = (currentChartType === '30min') ? '30分均线' : ((currentChartType === '60min') ? '60分均线' : '均线');
-      return `{lbl|${prefix}}  {m5|MA5:${bar.ma5 ? bar.ma5.toFixed(3) : '-'}}  {m10|MA10:${bar.ma10 ? bar.ma10.toFixed(3) : '-'}}  {m20|MA20:${bar.ma20 ? bar.ma20.toFixed(3) : '-'}}  {m30|MA30:${bar.ma30 ? bar.ma30.toFixed(3) : '-'}}`;
+      const prefix = (currentChartType === '30min') ? '30分均线' : ((currentChartType === '60min') ? '60分均线' : ((currentChartType === '120min') ? '120分均线' : '均线'));
+      return `{lbl|${prefix}}  {m5|MA5:${bar.ma5 ? bar.ma5.toFixed(3) : '-'}}  {m10|MA10:${bar.ma10 ? bar.ma10.toFixed(3) : '-'}}  {m20|MA20:${bar.ma20 ? bar.ma20.toFixed(3) : '-'}}  {m30|MA30:${bar.ma30 ? bar.ma30.toFixed(3) : '-'}}  {m60|MA60:${bar.ma60 ? bar.ma60.toFixed(3) : '-'}}`;
     }
 
     function get5MinMaTitle(bar) {
@@ -3455,7 +3523,7 @@
       }, true);
 
       chartDom.addEventListener('mouseleave', function() {
-        if (klineData && klineData.length > 0 && (currentChartType === 'kline' || currentChartType === '60min' || currentChartType === '30min')) {
+        if (klineData && klineData.length > 0 && (currentChartType === 'kline' || currentChartType === '120min' || currentChartType === '60min' || currentChartType === '30min')) {
           updateTitles(klineData[klineData.length - 1]);
         }
       });
@@ -3709,6 +3777,140 @@
       refreshRealtimeQuote();
     }
 
+    async function load120MinData(symbol) {
+      currentSymbol = symbol;
+      latestRealtimeQuote = null;
+
+      try {
+        const cachedKlines = localStorage.getItem('stock_master_kline120_cache_' + symbol);
+        if (cachedKlines) {
+          const parsed = JSON.parse(cachedKlines);
+          if (parsed && parsed.klines && parsed.klines.length > 0) {
+            kline120MinData = parsed.klines;
+            if (currentChartType === '120min') {
+              renderData120Min(parsed);
+            }
+          }
+        }
+      } catch(e) {}
+
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_120min_klines) {
+          const res = await window.pywebview.api.get_120min_klines(symbol);
+          if (res && res.klines && res.klines.length > 0) {
+            kline120MinData = res.klines;
+            if (currentChartType === '120min') {
+              renderData120Min(res);
+            }
+            try {
+              localStorage.setItem('stock_master_kline120_cache_' + symbol, JSON.stringify(res));
+            } catch(e) {}
+          }
+        } else {
+          fetchDirect120MinData(symbol);
+        }
+      } catch (err) {
+        console.error("Error loading 120min stock data:", err);
+        fetchDirect120MinData(symbol);
+      }
+    }
+
+    async function fetchDirect120MinData(symbol) {
+      currentSymbol = symbol;
+      try {
+        const url = `https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=${symbol},m60,,320`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const stockDict = data?.data?.[symbol] || {};
+        const m60Data = stockDict.m60 || [];
+
+        const grouped = [];
+        const bucketMap = new Map();
+        for (let i = 0; i < m60Data.length; i++) {
+          const bar = m60Data[i];
+          if (!bar || bar.length < 6) continue;
+          const dtStr = String(bar[0]);
+          const datePart = dtStr.length >= 8 ? `${dtStr.slice(0,4)}-${dtStr.slice(4,6)}-${dtStr.slice(6,8)}` : dtStr;
+          const timePart = dtStr.length >= 12 ? `${dtStr.slice(8,10)}:${dtStr.slice(10,12)}` : '';
+          const session = (timePart && timePart <= '11:30') ? 'AM' : 'PM';
+          const key = `${datePart}_${session}`;
+          const oVal = parseFloat(bar[1]);
+          const cVal = parseFloat(bar[2]);
+          const hVal = parseFloat(bar[3]);
+          const lVal = parseFloat(bar[4]);
+          const vVal = parseFloat(bar[5]);
+          if (!bucketMap.has(key)) {
+            const barTime = session === 'AM' ? '11:30' : '15:00';
+            const fmtDt = datePart ? `${datePart} ${barTime}` : dtStr;
+            const entry = {
+              date: fmtDt,
+              day_date: datePart,
+              time: barTime,
+              datetime: fmtDt,
+              open: oVal,
+              close: cVal,
+              high: hVal,
+              low: lVal,
+              volume: vVal
+            };
+            bucketMap.set(key, entry);
+            grouped.push(entry);
+          } else {
+            const entry = bucketMap.get(key);
+            entry.close = cVal;
+            entry.high = Math.max(entry.high, hVal);
+            entry.low = Math.min(entry.low, lVal);
+            entry.volume += vVal;
+          }
+        }
+
+        const klines = grouped.map((g, i) => {
+          const prevClose = i > 0 ? grouped[i - 1].close : g.open;
+          const chgVal = g.close - prevClose;
+          const pctVal = prevClose > 0 ? (chgVal / prevClose * 100.0) : 0;
+          return { ...g, prev_close: prevClose, change: chgVal, pct_change: pctVal };
+        });
+
+        computeClientIndicators(klines);
+        addClientSignals(klines, "120分");
+
+        const resObj = {
+          symbol: symbol,
+          code: symbol.slice(2),
+          name: stockDict?.qt?.[symbol]?.[1] || (symbol === 'sh000001' ? '上证指数' : '股票'),
+          klines: klines
+        };
+        kline120MinData = klines;
+        if (currentChartType === '120min') {
+          renderData120Min(resObj);
+        }
+      } catch (err) {
+        console.error("Direct fetch 120min error:", err);
+      }
+    }
+
+    function renderData120Min(res) {
+      if (!res || !res.klines) return;
+
+      currentStockName = res.name || currentSymbol;
+      document.getElementById('stockName').innerText = res.name || "股票/指数";
+      document.getElementById('stockCode').innerText = res.code ? `${res.code}.${res.symbol.slice(0, 2).toUpperCase()}` : res.symbol;
+
+      kline120MinData = res.klines;
+      klineData = res.klines;
+      if (klineData.length > 0) {
+        const lastBar = klineData[klineData.length - 1];
+        updateHeaderFromBar(lastBar);
+
+        const defaultIdx = Math.max(0, klineData.length - 27);
+        updateFlushRangeStat(defaultIdx);
+        updateQuantStatusChip(lastBar);
+
+        renderKlineChart();
+      }
+      refreshRealtimeQuote();
+    }
+
     async function loadStockData(symbol) {
       currentSymbol = symbol;
       latestRealtimeQuote = null;
@@ -3798,7 +4000,7 @@
       const closes = klines.map(k => k.close);
 
       for (let i = 0; i < klines.length; i++) {
-        [5, 10, 20, 30].forEach(p => {
+        [5, 10, 20, 30, 60].forEach(p => {
           if (i + 1 >= p) {
             const sum = closes.slice(i + 1 - p, i + 1).reduce((a, b) => a + b, 0);
             klines[i][`ma${p}`] = sum / p;
@@ -4132,6 +4334,8 @@
         currentChartType = 'kline';
       } else if (type === '30min') {
         currentChartType = '30min';
+      } else if (type === '120min') {
+        currentChartType = '120min';
       } else {
         currentChartType = '60min';
       }
@@ -4140,6 +4344,7 @@
       let tabId = 'tab60Min';
       if (currentChartType === 'kline') tabId = 'tabKline';
       else if (currentChartType === '30min') tabId = 'tab30Min';
+      else if (currentChartType === '120min') tabId = 'tab120Min';
       let tabEl = document.getElementById(tabId);
       if (tabEl) tabEl.classList.add('active');
 
@@ -4151,13 +4356,16 @@
       if (isRangeStatActive && hud) hud.style.display = 'block';
 
       if (currentChartType === 'kline') {
-        if (hint) hint.innerText = '💡 日K线：趋势参考 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
+        if (hint) hint.innerText = '💡 日K线：T+1买点与牛态卖出周期 (沪深300>MA30或个股>MA60) | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
         loadStockData(currentSymbol);
       } else if (currentChartType === '30min') {
         if (hint) hint.innerText = '💡 30分K线：T+0核心参考周期（港股/黄金/跨境） | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
         load30MinData(currentSymbol);
+      } else if (currentChartType === '120min') {
+        if (hint) hint.innerText = '💡 120分K线：T+1熊防核心卖出周期 (沪深300<MA30且个股<MA60时启用) | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
+        load120MinData(currentSymbol);
       } else {
-        if (hint) hint.innerText = '💡 60分K线：T+1量化买卖核心参考周期 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
+        if (hint) hint.innerText = '💡 60分K线：纳指等海外ETF量化参考周期 | 滚轮：放大/缩小 | Shift+滚轮：左右平移';
         load60MinData(currentSymbol);
       }
     }
@@ -5347,7 +5555,7 @@
 
           renderKlineChart();
         }
-      } else if (currentChartType === '60min' || currentChartType === '30min') {
+      } else if (currentChartType === '120min' || currentChartType === '60min' || currentChartType === '30min') {
         // 处于分时K线周期下，保持分时K线视图
       }
       refreshRealtimeQuote();
@@ -5470,6 +5678,7 @@
       const ma10 = klineData.map(item => item.ma10);
       const ma20 = klineData.map(item => item.ma20);
       const ma30 = klineData.map(item => item.ma30);
+      const ma60 = klineData.map(item => item.ma60);
 
       const dif = klineData.map(item => item.dif);
       const dea = klineData.map(item => item.dea);
@@ -5541,7 +5750,8 @@
                 m5: { color: MA_COLORS.ma5, fontSize: 11, fontWeight: 'bold' },
                 m10: { color: MA_COLORS.ma10, fontSize: 11, fontWeight: 'bold' },
                 m20: { color: MA_COLORS.ma20, fontSize: 11, fontWeight: 'bold' },
-                m30: { color: MA_COLORS.ma30, fontSize: 11, fontWeight: 'bold' }
+                m30: { color: MA_COLORS.ma30, fontSize: 11, fontWeight: 'bold' },
+                m60: { color: MA_COLORS.ma60, fontSize: 11, fontWeight: 'bold' }
               }
             }
           },
@@ -5848,6 +6058,14 @@
             showSymbol: false,
             lineStyle: { width: 1.4, color: MA_COLORS.ma30 }
           },
+          {
+            name: 'MA60',
+            type: 'line',
+            data: ma60,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 1.5, color: MA_COLORS.ma60, type: 'dashed' }
+          },
           // --- Grid 1: VOL 成交量 ---
           {
             name: '成交量',
@@ -6043,12 +6261,20 @@
     function switchStock(symbol) {
       currentSymbol = symbol;
       updateHeaderWatchButton();
+      const normSym = (symbol || '').toLowerCase();
+      const watchItem = (typeof currentWatchPool !== 'undefined' && Array.isArray(currentWatchPool))
+        ? currentWatchPool.find(x => (x.symbol || x.code || '').toLowerCase() === normSym || (x.code || '').toLowerCase() === normSym)
+        : null;
       const is60m = symbol.includes('513390');
       const isT0 = isT0Symbol(symbol);
-      // 513390 纳指100 自动匹配 60min，其他 T+0 匹配 30min，T+1 匹配 日K
-      const targetType = is60m ? '60min' : (isT0 ? '30min' : 'kline');
+      // 513390 -> 60min, 其他 T+0 -> 30min, T+1 依据牛熊最优周期 (熊防/120分卖点 -> 120min, 牛态/日K买点 -> kline)
+      let targetType = is60m ? '60min' : (isT0 ? '30min' : 'kline');
+      if (!is60m && !isT0 && watchItem && watchItem.optimal_period === '120min') {
+        targetType = '120min';
+      }
       if (currentChartType === targetType) {
         if (targetType === 'kline') loadStockData(symbol);
+        else if (targetType === '120min') load120MinData(symbol);
         else if (targetType === '30min') load30MinData(symbol);
         else load60MinData(symbol);
       } else {

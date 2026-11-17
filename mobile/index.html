@@ -405,11 +405,15 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
     }
     .kline-title-group {
       display: flex;
       align-items: center;
-      gap: 6px;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
     }
     .btn-back-pool {
       display: inline-flex;
@@ -477,6 +481,7 @@
     .kline-period-group {
       display: inline-flex;
       align-items: center;
+      flex-shrink: 0;
       background: var(--bg-card-hover);
       border: 1px solid var(--border-color);
       border-radius: 6px;
@@ -487,10 +492,11 @@
       border: none;
       background: transparent;
       color: var(--text-muted);
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 2px 6px;
       border-radius: 4px;
+      white-space: nowrap;
       cursor: pointer;
       transition: all 0.15s;
     }
@@ -842,6 +848,11 @@
           </div>
         </div>
 
+        <div id="mobileRegimeBar" style="margin:0 16px 8px 16px; padding:6px 10px; border-radius:8px; background:rgba(100,116,139,0.12); font-size:11px; font-weight:600; color:var(--text-sub); display:flex; align-items:center; justify-content:space-between; border:1px solid var(--border-color);">
+          <span id="mobileRegimeText">🧭 双核轮动: 牛态日K卖 ↔ 熊防120分卖</span>
+          <span id="mobileRegimeStat" style="font-size:10px; opacity:0.85;">HS300&gt;MA30 或 股&gt;MA60</span>
+        </div>
+
         <div class="stock-list" id="stockListContainer">
           <!-- 动态渲染 ETF 卡片 -->
         </div>
@@ -863,6 +874,7 @@
             <div class="kline-period-group">
               <button class="kline-period-btn" id="btnPeriod30m" onclick="switchKlinePeriod('m30')">30分</button>
               <button class="kline-period-btn" id="btnPeriod60m" onclick="switchKlinePeriod('m60')">60分</button>
+              <button class="kline-period-btn" id="btnPeriod120m" onclick="switchKlinePeriod('m120')">120分</button>
               <button class="kline-period-btn active" id="btnPeriodDay" onclick="switchKlinePeriod('day')">日K</button>
             </div>
           </div>
@@ -1136,10 +1148,46 @@
       }
       window.toggleKlineStockStar = toggleKlineStockStar;
 
+      let latestMobileMarketRegime = null;
+
+      function updateMobileRegimeBanner(reg, pool) {
+        const bar = document.getElementById('mobileRegimeBar');
+        const txt = document.getElementById('mobileRegimeText');
+        const stat = document.getElementById('mobileRegimeStat');
+        if (!bar || !txt) return;
+        const r = reg || latestMobileMarketRegime;
+        let hs300Bull = r ? r.is_bull : null;
+        if (hs300Bull === null && Array.isArray(pool)) {
+          const s = pool.find(x => typeof x.hs300_bull === 'boolean');
+          if (s) hs300Bull = s.hs300_bull;
+        }
+        const bullCount = Array.isArray(pool) ? pool.filter(x => x.regime === 'bull').length : 0;
+        const bearCount = Array.isArray(pool) ? pool.filter(x => x.regime === 'bear').length : 0;
+
+        if (hs300Bull === true) {
+          bar.style.background = 'rgba(239, 68, 68, 0.10)';
+          bar.style.color = '#ef4444';
+          txt.textContent = r && r.close ? `🐂 沪深300(${r.close}) > MA30 · 全场牛态(日K卖)` : '🐂 沪深300 > MA30 · 市场牛态(日K卖)';
+        } else if (hs300Bull === false) {
+          bar.style.background = 'rgba(59, 130, 246, 0.10)';
+          bar.style.color = '#3b82f6';
+          txt.textContent = r && r.close ? `🐻 沪深300(${r.close}) < MA30(${r.ma30 || '--'}) · 熊防看MA60` : '🐻 沪深300 < MA30 · 熊防看个股MA60';
+        }
+        if (stat && (bullCount + bearCount) > 0) {
+          stat.textContent = `牛态${bullCount} · 熊防${bearCount}`;
+        }
+      }
+
       // 加载观察池数据
       async function loadWatchPool() {
         try {
-          watchPoolData = await MobileQuantEngine.getWatchPool();
+          const [poolRes, regRes] = await Promise.all([
+            MobileQuantEngine.getWatchPool(),
+            MobileQuantEngine.getMarketRegime ? MobileQuantEngine.getMarketRegime().catch(() => null) : Promise.resolve(null)
+          ]);
+          if (regRes) latestMobileMarketRegime = regRes;
+          watchPoolData = poolRes;
+          updateMobileRegimeBanner(regRes, watchPoolData);
           renderWatchPoolCards();
         } catch (e) {
           console.error('Failed to load watch pool:', e);
@@ -1149,6 +1197,7 @@
       function renderWatchPoolCards() {
         const countEl = document.getElementById('watchPoolCountText');
         if (countEl) countEl.textContent = watchPoolData.length;
+        updateMobileRegimeBanner(null, watchPoolData);
 
         const filtered = watchPoolData.filter(item => {
           if (currentFilter === '全部') return true;
@@ -1169,6 +1218,11 @@
           card.className = 'stock-card' + (isWatchManageMode ? ' manage-mode' : '');
           const isT0 = item.trade_rule === 'T+0' || (window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(item.code, item.name));
           const t0Badge = isT0 ? '<span style="font-size:10px; background:#0284c7; color:#fff; padding:1px 4px; border-radius:3px; font-weight:700; margin-left:3px;">T+0</span>' : '';
+          const regBadge = !isT0 && item.regime ? (
+            item.regime === 'bull'
+              ? '<span style="font-size:10px; background:rgba(239,68,68,0.12); color:#ef4444; border:1px solid rgba(239,68,68,0.35); padding:0px 4px; border-radius:3px; font-weight:700; margin-left:4px;">🐂牛·日K</span>'
+              : '<span style="font-size:10px; background:rgba(59,130,246,0.12); color:#3b82f6; border:1px solid rgba(59,130,246,0.35); padding:0px 4px; border-radius:3px; font-weight:700; margin-left:4px;">🐻熊·120分</span>'
+          ) : '';
 
           const actionHtml = isWatchManageMode ? `
             <button class="card-delete-badge" onclick="event.stopPropagation(); deleteMobileWatchItem('${item.code}')">🗑️ 移出</button>
@@ -1181,7 +1235,7 @@
               <div class="card-name-group">
                 <span class="card-name">${item.name}</span>
                 <span class="card-code">${item.code}</span>
-                ${t0Badge}
+                ${t0Badge}${regBadge}
               </div>
               <div style="display:flex; align-items:center; gap:4px;">
                 <span class="card-sector">${item.sector}</span>
@@ -1316,13 +1370,14 @@
       let lastMobileHoveredIdx = -1;
 
       function getMobileMaTitle(bar) {
-        const periodLabel = currentPeriod === 'm30' ? '30分均线' : (currentPeriod === 'm60' ? '60分均线' : '日K均线');
+        const periodLabel = currentPeriod === 'm30' ? '30分均线' : (currentPeriod === 'm60' ? '60分均线' : (currentPeriod === 'm120' ? '120分均线' : '日K均线'));
         if (!bar) return `{lbl|${periodLabel}}`;
         const m5 = bar.ma5 ? bar.ma5.toFixed(3) : '--';
         const m10 = bar.ma10 ? bar.ma10.toFixed(3) : '--';
         const m20 = bar.ma20 ? bar.ma20.toFixed(3) : '--';
         const m30 = bar.ma30 ? bar.ma30.toFixed(3) : '--';
-        return `{lbl|${periodLabel}}  {m5|MA5:${m5}}  {m10|MA10:${m10}}  {m20|MA20:${m20}}  {m30|MA30:${m30}}`;
+        const m60 = bar.ma60 ? bar.ma60.toFixed(3) : '--';
+        return `{lbl|${periodLabel}}  {m5|MA5:${m5}}  {m10|MA10:${m10}}  {m20|MA20:${m20}}  {m30|MA30:${m30}}  {m60|MA60:${m60}}`;
       }
 
       function getMobileVolTitle(bar) {
@@ -1400,32 +1455,42 @@
         currentPeriod = period;
         const b30 = document.getElementById('btnPeriod30m');
         const b60 = document.getElementById('btnPeriod60m');
+        const b120 = document.getElementById('btnPeriod120m');
         const bDay = document.getElementById('btnPeriodDay');
         if (b30) b30.classList.toggle('active', period === 'm30');
         if (b60) b60.classList.toggle('active', period === 'm60');
+        if (b120) b120.classList.toggle('active', period === 'm120');
         if (bDay) bDay.classList.toggle('active', period === 'day');
         loadStockKline(currentSymbol, period);
       }
       window.switchKlinePeriod = switchKlinePeriod;
 
-      // 加载个股K线数据 (支持 30分 / 60分 / 日K)
+      // 加载个股K线数据 (支持 30分 / 60分 / 120分 / 日K)
       async function loadStockKline(symbol, period = null) {
         dom.chartLoading.style.display = 'flex';
         try {
           if (symbol) currentSymbol = symbol;
           updateKlineStarButton();
-          // 若未明确传周期，根据交易制度智能选择: 513390 -> 60分, 其他T+0 -> 30分, T+1 -> 日K
+          // 若未明确传周期，优先使用观察池牛熊自适应最优周期 (T+1 熊防->m120, 牛态/买点->day, 513390->m60, 其他T+0->m30)
           if (!period) {
+            const normSym = MobileQuantEngine.normalizeSymbol(symbol);
+            const watchItem = (watchPoolData || []).find(x => MobileQuantEngine.normalizeSymbol(x.symbol || x.code) === normSym);
             const is60m = symbol && symbol.includes('513390');
             const isT0 = window.MobileQuantEngine && window.MobileQuantEngine.isT0Symbol(symbol);
-            period = is60m ? 'm60' : (isT0 ? 'm30' : 'day');
+            if (watchItem && ['m120', 'm60', 'm30', 'day'].includes(watchItem.optimal_period)) {
+              period = watchItem.optimal_period;
+            } else {
+              period = is60m ? 'm60' : (isT0 ? 'm30' : 'day');
+            }
           }
           currentPeriod = period;
           const b30 = document.getElementById('btnPeriod30m');
           const b60 = document.getElementById('btnPeriod60m');
+          const b120 = document.getElementById('btnPeriod120m');
           const bDay = document.getElementById('btnPeriodDay');
           if (b30) b30.classList.toggle('active', period === 'm30');
           if (b60) b60.classList.toggle('active', period === 'm60');
+          if (b120) b120.classList.toggle('active', period === 'm120');
           if (bDay) bDay.classList.toggle('active', period === 'day');
 
           let res;
@@ -1433,6 +1498,8 @@
             res = await MobileQuantEngine.get30MinKlines(symbol, 320);
           } else if (period === 'm60') {
             res = await MobileQuantEngine.get60MinKlines(symbol, 320);
+          } else if (period === 'm120') {
+            res = await MobileQuantEngine.get120MinKlines(symbol, 320);
           } else {
             res = await MobileQuantEngine.getDailyKlines(symbol, 400);
           }
@@ -1505,6 +1572,7 @@
         const ma10 = klines.map(k => k.ma10);
         const ma20 = klines.map(k => k.ma20);
         const ma30 = klines.map(k => k.ma30);
+        const ma60 = klines.map(k => k.ma60);
         const vols = klines.map(k => k.volume);
         const dif = klines.map(k => k.dif);
         const dea = klines.map(k => k.dea);
@@ -1573,7 +1641,8 @@
                   m5: { color: '#eab308', fontSize: 9.5, fontWeight: 'bold' },
                   m10: { color: '#06b6d4', fontSize: 9.5, fontWeight: 'bold' },
                   m20: { color: '#a855f7', fontSize: 9.5, fontWeight: 'bold' },
-                  m30: { color: '#10b981', fontSize: 9.5, fontWeight: 'bold' }
+                  m30: { color: '#10b981', fontSize: 9.5, fontWeight: 'bold' },
+                  m60: { color: '#ec4899', fontSize: 9.5, fontWeight: 'bold' }
                 }
               }
             },
@@ -1724,6 +1793,7 @@
             { name: 'MA10', type: 'line', data: ma10, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#06b6d4' } },
             { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#a855f7' } },
             { name: 'MA30', type: 'line', data: ma30, smooth: true, showSymbol: false, lineStyle: { width: 1.2, color: '#10b981' } },
+            { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, lineStyle: { width: 1.3, color: '#ec4899', type: 'dashed' } },
             {
               name: 'VOL',
               type: 'bar',

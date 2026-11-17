@@ -466,6 +466,12 @@ class StockApi:
     def get_60min_klines(self, symbol="sh000001"):
         return self._dp.get_60min_klines(symbol)
 
+    def get_120min_klines(self, symbol="sh000001"):
+        return self._dp.get_120min_klines(symbol)
+
+    def get_market_regime(self):
+        return self._dp.get_market_regime()
+
     def get_user_config(self):
         return self._dp.get_user_config()
 

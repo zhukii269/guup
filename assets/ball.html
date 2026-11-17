@@ -676,6 +676,7 @@
         <div class="period-bar">
           <div class="period-tabs">
             <button class="period-tab active" id="periodDay" onclick="switchPeriod('day')">日K</button>
+            <button class="period-tab" id="period120" onclick="switchPeriod('120min')">120分</button>
             <button class="period-tab" id="period30" onclick="switchPeriod('30min')">30分</button>
             <button class="period-tab" id="period60" onclick="switchPeriod('60min')">60分</button>
           </div>
@@ -933,11 +934,15 @@
         }
       }
 
-      // Recommend 60m for 513390, 30m for other T+0, day for T+1
+      // 513390->60m, other T+0->30m, T+1 uses adaptive optimal_period (day in Bull / 120min in Bear defense)
       const c = stock.code || stock.symbol || '';
       const is60m = c.includes('513390');
       const isT0 = checkIsT0(stock);
-      currentPeriod = is60m ? '60min' : (isT0 ? '30min' : 'day');
+      if (stock.optimal_period && ['day', '120min', '60min', '30min'].includes(stock.optimal_period)) {
+        currentPeriod = stock.optimal_period;
+      } else {
+        currentPeriod = is60m ? '60min' : (isT0 ? '30min' : (stock.regime === 'bear' ? '120min' : 'day'));
+      }
       updatePeriodTabs();
 
       // Load K-lines
@@ -1050,7 +1055,7 @@
       }
     };
 
-    const WATCH_POOL_CACHE_VER = '20261015_sync_v2';
+    const WATCH_POOL_CACHE_VER = '20261117_hybrid_v2';
 
     // Cross-window local storage sync from main window
     window.addEventListener('storage', (e) => {
@@ -1316,11 +1321,17 @@
         const pctSign = pct > 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`;
         const pctClass = pct > 0 ? 'up-red' : (pct < 0 ? 'down-green' : 'flat-gray');
 
+        const regPill = !isT0 && stock.regime ? (
+          stock.regime === 'bull'
+            ? '<span style="font-size:9px; padding:1px 4px; border-radius:4px; background:rgba(239,68,68,0.2); color:#fca5a5; border:1px solid rgba(239,68,68,0.4); font-weight:700;">牛·日K</span>'
+            : '<span style="font-size:9px; padding:1px 4px; border-radius:4px; background:rgba(59,130,246,0.2); color:#93c5fd; border:1px solid rgba(59,130,246,0.4); font-weight:700;">熊·120分</span>'
+        ) : '';
+
         row.innerHTML = `
           <div class="stock-info-left">
             <div class="stock-name-row">
               <span class="stock-name" title="${name}">${name}</span>
-              ${isT0 ? '<span class="t0-pill">T+0</span>' : ''}
+              ${isT0 ? '<span class="t0-pill">T+0</span>' : regPill}
             </div>
             <span class="stock-code">${code.toUpperCase()}</span>
           </div>
@@ -1347,16 +1358,18 @@
        K-LINE CHART & RESONANCE DIAGNOSTICS
        ========================================= */
     function updatePeriodTabs() {
-      ['period60', 'period30', 'periodDay'].forEach(id => {
+      ['period60', 'period30', 'period120', 'periodDay'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('active');
       });
       if (currentPeriod === '60min') document.getElementById('period60').classList.add('active');
       if (currentPeriod === '30min') document.getElementById('period30').classList.add('active');
+      if (currentPeriod === '120min') document.getElementById('period120').classList.add('active');
       if (currentPeriod === 'day') document.getElementById('periodDay').classList.add('active');
 
       const hintEl = document.getElementById('klinePeriodHint');
-      if (currentPeriod === 'day') hintEl.innerText = "核心基准: 日K线共振模型 (T+1推荐)";
+      if (currentPeriod === 'day') hintEl.innerText = "核心基准: T+1日K买点 / 牛态日K卖出";
+      else if (currentPeriod === '120min') hintEl.innerText = "熊防基准: 120分快速止盈卖出 (HS300<MA30且股<MA60)";
       else if (currentPeriod === '60min') hintEl.innerText = "稳健基准: 60分抗噪共振模型 (纳指等海外ETF推荐)";
       else if (currentPeriod === '30min') hintEl.innerText = "灵敏基准: 30分T+0日内轮动模型";
       else hintEl.innerText = "辅助周期: 多空细化观察";
@@ -1394,7 +1407,9 @@
 
       let fetchPromise;
       if (window.pywebview && window.pywebview.api) {
-        if (currentPeriod === '60min' && window.pywebview.api.get_60min_klines) {
+        if (currentPeriod === '120min' && window.pywebview.api.get_120min_klines) {
+          fetchPromise = window.pywebview.api.get_120min_klines(symbol);
+        } else if (currentPeriod === '60min' && window.pywebview.api.get_60min_klines) {
           fetchPromise = window.pywebview.api.get_60min_klines(symbol);
         } else if (currentPeriod === '30min' && window.pywebview.api.get_30min_klines) {
           fetchPromise = window.pywebview.api.get_30min_klines(symbol);
@@ -1432,6 +1447,7 @@
       const ma5Data = displayBars.map(k => k.ma5);
       const ma10Data = displayBars.map(k => k.ma10);
       const ma20Data = displayBars.map(k => k.ma20);
+      const ma60Data = displayBars.map(k => k.ma60);
       const volData = displayBars.map(k => ({
         value: k.volume || k.vol || 0,
         itemStyle: {
@@ -1572,6 +1588,14 @@
             smooth: true,
             showSymbol: false,
             lineStyle: { width: 1.2, color: '#f472b6' }
+          },
+          {
+            name: 'MA60',
+            type: 'line',
+            data: ma60Data,
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 1.3, color: '#ec4899', type: 'dashed' }
           },
           {
             name: '成交量',

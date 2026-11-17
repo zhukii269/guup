@@ -258,6 +258,135 @@ const MobileQuantEngine = (function() {
     return { symbol: fullSym, code: fullSym.slice(2), name: fullSym, klines: [] };
   }
 
+  // 合成 120 分钟 K 线 (由 60 分钟早盘/午盘两根合并，T+1 熊防期核心卖出周期)
+  async function get120MinKlines(symbol, limit = 320) {
+    const fullSym = normalizeSymbol(symbol);
+    try {
+      const res60 = await get60MinKlines(fullSym, limit);
+      const bars60 = (res60 && res60.klines) ? res60.klines : [];
+      if (bars60.length === 0) {
+        return { symbol: fullSym, code: fullSym.slice(2), name: (res60 && res60.name) || fullSym, klines: [] };
+      }
+
+      const grouped = [];
+      const bucketMap = new Map();
+      for (let i = 0; i < bars60.length; i++) {
+        const b = bars60[i];
+        const dPart = b.day_date || (b.date ? String(b.date).slice(0, 10) : '');
+        const tPart = b.time || '';
+        const session = (tPart && tPart <= '11:30') ? 'AM' : 'PM';
+        const key = `${dPart}_${session}`;
+        if (!bucketMap.has(key)) {
+          const barTime = session === 'AM' ? '11:30' : '15:00';
+          const dtFmt = dPart ? `${dPart} ${barTime}` : (b.datetime || b.date || '');
+          const entry = {
+            date: dtFmt,
+            day_date: dPart,
+            time: barTime,
+            datetime: dtFmt,
+            open: b.open,
+            close: b.close,
+            high: b.high,
+            low: b.low,
+            volume: b.volume || 0,
+            amount: b.amount || 0
+          };
+          bucketMap.set(key, entry);
+          grouped.push(entry);
+        } else {
+          const g = bucketMap.get(key);
+          g.close = b.close;
+          g.high = Math.max(g.high, b.high);
+          g.low = Math.min(g.low, b.low);
+          g.volume += (b.volume || 0);
+          g.amount += (b.amount || 0);
+        }
+      }
+
+      const klines = grouped.map((g, i) => {
+        const prevClose = i > 0 ? grouped[i - 1].close : g.open;
+        const pct_change = (prevClose !== null && prevClose > 0)
+          ? Math.round(((g.close - prevClose) / prevClose * 100) * 100) / 100
+          : 0.0;
+        return { ...g, prev_close: prevClose, pct_change };
+      });
+
+      addMovingAverages(klines);
+      addEmas(klines);
+      addBoll(klines);
+      addVolumeMovingAverages(klines);
+      addMacd(klines);
+      addKdj(klines);
+      addRsi(klines);
+      addSignals(klines, '120分');
+
+      return {
+        symbol: fullSym,
+        code: fullSym.slice(2),
+        name: (res60 && res60.name) || fullSym,
+        klines
+      };
+    } catch (e) {
+      console.error("get120MinKlines error for " + fullSym, e);
+      return { symbol: fullSym, code: fullSym.slice(2), name: fullSym, klines: [] };
+    }
+  }
+
+  let _hs300RegimeCache = null;
+  let _hs300RegimeCacheTime = 0;
+
+  async function getMarketBullRegime() {
+    const now = Date.now();
+    if (_hs300RegimeCache && (now - _hs300RegimeCacheTime) < 180000) {
+      return _hs300RegimeCache;
+    }
+    const res = await getDailyKlines("sh000300", 600);
+    const klines = (res && res.klines) ? res.klines : [];
+    const dayMap = new Map();
+    for (let i = 0; i < klines.length; i++) {
+      const b = klines[i];
+      if (!b || !b.date) continue;
+      const isBull = !!(b.ma30 && b.close > b.ma30);
+      dayMap.set(b.date, { close: b.close, ma30: b.ma30, is_bull: isBull });
+    }
+    const latest = klines.length > 0 ? klines[klines.length - 1] : {};
+    const closeVal = latest.close || 0;
+    const ma30Val = latest.ma30 || 0;
+    const isBullNow = !!(ma30Val && closeVal > ma30Val);
+    const diffPct = ma30Val ? Math.round(((closeVal - ma30Val) / ma30Val * 100) * 100) / 100 : 0;
+
+    const regime = {
+      symbol: "sh000300",
+      name: "沪深300",
+      date: latest.date || "",
+      close: Math.round(closeVal * 100) / 100,
+      ma30: ma30Val ? Math.round(ma30Val * 100) / 100 : null,
+      diff_pct: diffPct,
+      is_bull: isBullNow,
+      label: isBullNow ? "牛态(日K卖)" : "熊防(需看个股MA60)",
+      day_map: dayMap
+    };
+    if (klines.length > 0) {
+      _hs300RegimeCache = regime;
+      _hs300RegimeCacheTime = now;
+    }
+    return regime;
+  }
+
+  async function getMarketRegime() {
+    const r = await getMarketBullRegime();
+    return {
+      symbol: r.symbol,
+      name: r.name,
+      date: r.date,
+      close: r.close,
+      ma30: r.ma30,
+      diff_pct: r.diff_pct,
+      is_bull: r.is_bull,
+      label: r.label
+    };
+  }
+
   // 智能识别ETF交易制度 (T+0 vs T+1)
   function isT0Symbol(symbol, name = '') {
     if (!symbol) return false;
@@ -525,14 +654,278 @@ const MobileQuantEngine = (function() {
     }
   }
 
+  // 评估买入共振条件 (B1, B2, B3, B4)
+  function evaluateBuySignal(klines, i, tfLabel = '60分') {
+    if (!klines || i < 20 || i >= klines.length) return null;
+    const bar = klines[i];
+    const prevBar = klines[i - 1];
+    const prev2Bar = klines[i - 2];
+
+    const ma5 = bar.ma5;
+    const prevMa5 = prevBar.ma5;
+    const ma10 = bar.ma10;
+    const volMa5 = bar.vol_ma5 || bar.volume;
+    const volume = bar.volume || 0;
+
+    const dif = bar.dif || 0;
+    const prevDif = prevBar.dif || 0;
+    const macdBar = bar.macd || 0;
+    const prevMacd = prevBar.macd || 0;
+    const prev2Macd = prev2Bar.macd || 0;
+
+    const kVal = bar.k || 50.0;
+    const dVal = bar.d || 50.0;
+    const jVal = bar.j || 50.0;
+    const prevK = prevBar.k || 50.0;
+    const prevJ = prevBar.j || 50.0;
+    const prev2J = prev2Bar ? (prev2Bar.j || 50.0) : 50.0;
+
+    const condMa5Up = (ma5 !== null) && (prevMa5 !== null) && (ma5 >= prevMa5 - 1e-5);
+    const condMacdGreenShrink = (macdBar <= 0) && (prevMacd <= 0) && (Math.abs(macdBar) < Math.abs(prevMacd)) && (Math.abs(prevMacd) <= Math.abs(prev2Macd));
+    const condMacdRedExpand = (macdBar >= 0) && ((prevMacd <= 0 || prev2Macd <= 0) || (prev2Macd >= 0 && macdBar > prevMacd && prevMacd >= prev2Macd));
+    const condMacdTrend = condMacdGreenShrink || condMacdRedExpand;
+
+    const universalDifUp = dif > prevDif;
+    let scenarioA = false;
+    if (macdBar <= 0) {
+      let greenWavePeak = 0.0;
+      let j = i;
+      while (j >= 0 && klines[j].macd <= 0) {
+        greenWavePeak = Math.max(greenWavePeak, Math.abs(klines[j].macd));
+        j--;
+      }
+      if (greenWavePeak > 0) {
+        scenarioA = Math.abs(macdBar) <= 0.35 * greenWavePeak;
+      }
+    }
+    const scenarioB = (macdBar >= 0) && (prevMacd <= 0 || prev2Macd <= 0);
+    const condMacdGoldClose = (scenarioA || scenarioB) && universalDifUp;
+    const condKdjBull = kVal > dVal;
+
+    const start60 = Math.max(0, i - 60 + 1);
+    let highest60 = -Infinity;
+    let lowest60 = Infinity;
+    for (let j = start60; j <= i; j++) {
+      if (klines[j].high > highest60) highest60 = klines[j].high;
+      if (klines[j].low < lowest60) lowest60 = klines[j].low;
+    }
+    const range60 = Math.max(0.001, highest60 - lowest60);
+    const posRatio60 = (bar.close - lowest60) / range60;
+
+    const start15 = Math.max(0, i - 15 + 1);
+    let lowest15 = Infinity;
+    for (let j = start15; j <= i; j++) {
+      if (klines[j].low < lowest15) lowest15 = klines[j].low;
+    }
+    const gainFromRecentLow = lowest15 > 0 ? (bar.close - lowest15) / lowest15 : 0;
+
+    const isHighPosition = (posRatio60 >= 0.65) || (gainFromRecentLow >= 0.15);
+    const isVolumeSurgeUp = isHighPosition && (bar.pct_change >= 3.0) && (volume >= 1.3 * volMa5);
+
+    const cond3Base = condMa5Up && condMacdTrend && condMacdGoldClose && condKdjBull && (!isVolumeSurgeUp);
+
+    const isVol11 = volume >= 1.1 * volMa5;
+    const isVol125 = volume >= 1.25 * volMa5;
+    const isRedBar = (bar.pct_change > 0) || (bar.close >= bar.open);
+    const isAboveMa5 = (ma5 !== null) && (bar.close >= ma5);
+    const isAboveMa10 = (ma10 !== null) && (bar.close >= ma10);
+
+    const isDeepOversoldBounce = (prevJ < 15 || prev2J < 15 || prevK < 20) && (jVal >= prevJ + 5.0);
+    const isBreakoutLaunch = isAboveMa10 && isVol125 && isRedBar;
+
+    if (cond3Base) {
+      let tier = 2;
+      let st = "B2";
+      let sname = `买入: ${tfLabel}2档半仓共振`;
+      let spos = "半仓 50% 标准建仓";
+      let sreason = `2档标准共振：MA5向上 + MACD动能修复 + KDJ多头，建议50%半仓稳健建仓`;
+
+      if (isDeepOversoldBounce || isBreakoutLaunch) {
+        tier = 4;
+        st = "B4";
+        sname = `买入: ${tfLabel}4档全仓共振`;
+        spos = "全仓 100% 顶格建仓";
+        const launchReason = isDeepOversoldBounce ? "深跌黄金坑强力拔起" : "放量突破站稳MA10";
+        sreason = `4档全仓共振：三大指标金叉 + ${launchReason}，建议100%全仓出击`;
+      } else if (isAboveMa5 && isRedBar) {
+        tier = 3;
+        st = "B3";
+        sname = `买入: ${tfLabel}3档重仓共振`;
+        spos = "重仓 75% 积极建仓";
+        const volNote = isVol11 ? "温和放量" : "站稳均线";
+        sreason = `3档重仓共振：三大指标金叉 + ${volNote}收红站上MA5，建议75%重仓建仓`;
+      }
+      return { signal_type: st, signal_name: sname, signal_position: spos, signal_reason: sreason, buy_tier: tier };
+    }
+
+    const cond2Base = condMa5Up && condMacdTrend && condMacdGoldClose && (!isVolumeSurgeUp) && (jVal > prevJ);
+    if (cond2Base) {
+      return {
+        signal_type: "B1",
+        signal_name: `买入: ${tfLabel}1档轻仓共振`,
+        signal_position: "轻仓 25% 试探建仓",
+        signal_reason: `1档试错共振：MA5走平止跌 + MACD动能修复，双指标企稳，防踏空轻仓25%试探`,
+        buy_tier: 1
+      };
+    }
+    return null;
+  }
+
+  // 评估卖出条件 (S7 / S4 / S1 / S2 / S3)
+  function evaluateSellSignal(klines, i, buyPrice, s3Triggered) {
+    if (!klines || i < 20 || i >= klines.length) return null;
+    const bar = klines[i];
+    const prevBar = klines[i - 1];
+    const prev2Bar = klines[i - 2];
+    const prev3Bar = klines[i - 3];
+
+    const ma5 = bar.ma5;
+    const prevMa5 = prevBar.ma5;
+    const volMa5 = bar.vol_ma5 || bar.volume;
+
+    const dif = bar.dif || 0;
+    const dea = bar.dea || 0;
+    const prevDif = prevBar.dif || 0;
+    const prevDea = prevBar.dea || 0;
+
+    const macdBar = bar.macd || 0;
+    const prevMacd = prevBar.macd || 0;
+    const prev2Macd = prev2Bar.macd || 0;
+    const prev3Macd = prev3Bar.macd || 0;
+
+    const kVal = bar.k || 50.0;
+    const dVal = bar.d || 50.0;
+    const jVal = bar.j || 50.0;
+    const prevK = prevBar.k || 50.0;
+    const prevD = prevBar.d || 50.0;
+    const prevJ = prevBar.j || 50.0;
+
+    const candleBody = Math.abs(bar.close - bar.open);
+    const upperShadow = bar.high - Math.max(bar.open, bar.close);
+    const profitPct = buyPrice > 0 ? (bar.close - buyPrice) / buyPrice : 0;
+
+    // 0. S7
+    const isVolumeSurgeUpS7 = (bar.pct_change >= 5.0) && (bar.volume >= 1.3 * volMa5);
+    const dayRange = Math.max(0.001, bar.high - bar.low);
+    const shadowRatio = upperShadow / dayRange;
+    if (isVolumeSurgeUpS7 && (shadowRatio >= 0.10)) {
+      return {
+        signal_type: "S7",
+        signal_name: "止盈: 放量大涨带上影",
+        signal_position: "止盈清仓 / 锁定利润",
+        signal_reason: `持仓期间放量大涨(+${bar.pct_change.toFixed(2)}% >=5%)且上影线占振幅${(shadowRatio * 100).toFixed(0)}%(>=10%)，冲高锁定利润`,
+        closes_position: true,
+        sets_s3: false
+      };
+    }
+
+    // 1. S4
+    const ma10 = bar.ma10 || ma5;
+    const maBreakDown = (ma10 !== null) && (bar.close < ma10);
+    const condMacdFlipGreen = (macdBar <= -0.001) && (prevMacd >= 0) && maBreakDown;
+    const condMacdReExpand = (macdBar < 0) && (prevMacd < 0) && (Math.abs(macdBar) - Math.abs(prevMacd) > 0.001);
+    const condMacdBad = condMacdFlipGreen || condMacdReExpand;
+
+    const ma5DropRatio = (prevMa5 && ma5 && prevMa5 > 0) ? (prevMa5 - ma5) / prevMa5 : 0;
+    const macdBullExpanding = (macdBar > 0) && (macdBar >= prevMacd);
+    const ma5SignificantDown = (ma5DropRatio >= 0.005 && maBreakDown) || (prevMa5 !== null && ma5 !== null && ma5 < prevMa5 * 0.995 && maBreakDown);
+    const condMaTurnDown = (ma5 !== null) && (prevMa5 !== null) && ma5SignificantDown && (!macdBullExpanding);
+
+    if (condMacdBad || condMaTurnDown) {
+      let reasonDetail = "";
+      if (condMacdFlipGreen) reasonDetail = "破位10日线且MACD翻绿";
+      else if (condMacdReExpand) reasonDetail = "MACD绿柱放大(>0.001)";
+      else reasonDetail = "破位10日线且MA5下拐";
+      return {
+        signal_type: "S4",
+        signal_name: "止损: 指标走坏",
+        signal_position: "100% 严格止损",
+        signal_reason: `触发指标止损(${reasonDetail})，必须严格离场防范套牢`,
+        closes_position: true,
+        sets_s3: false
+      };
+    }
+
+    // 2. S1
+    const recent3dJs = [];
+    for (let j = Math.max(0, i - 3); j <= i; j++) recent3dJs.push(klines[j].j || 50.0);
+    const kdjExactDeath = (prevK >= prevD) && (kVal < dVal);
+    const kdjNearDeath = (jVal < prevJ) && (kVal >= dVal) && (kVal - dVal <= 2.5) && (kVal - dVal <= 0.45 * (prevK - prevD));
+    const kdjDeathOrNear = kdjExactDeath || kdjNearDeath;
+    const dFilterPassed = dVal >= 50;
+
+    let s1Triggered = false;
+    let s1Reason = "";
+    if (dif < 0) {
+      const hasJOverbought = recent3dJs.some(v => v >= 80);
+      if (hasJOverbought && kdjDeathOrNear && dFilterPassed) {
+        s1Triggered = true;
+        const detail = kdjExactDeath ? "正式死叉" : `预判死叉(间距仅${(kVal - dVal).toFixed(2)})`;
+        s1Reason = `0轴下方弱势反弹，J值高位(>80)回落，KDJ(${detail})，快速落袋为安`;
+      }
+    } else {
+      const hasJExtreme = recent3dJs.some(v => v >= 100);
+      const condJ100Death = hasJExtreme && kdjExactDeath && dFilterPassed;
+      const condRedShrink3d = (macdBar >= 0) && (prevMacd > 0) && (prev2Macd > 0) && (prev3Macd > 0) &&
+                              (macdBar < prevMacd) && (prevMacd < prev2Macd) && (prev2Macd < prev3Macd);
+      const condMacdDeath = (prevMacd > 0) && (macdBar <= 0) && (prevDif >= prevDea) && (dif <= dea);
+      if (condJ100Death) {
+        s1Triggered = true;
+        s1Reason = "0轴上方强势行情，J值冲破100极端超买后KDJ正式死叉(K<D)，高位锁定利润";
+      } else if (condRedShrink3d) {
+        s1Triggered = true;
+        s1Reason = "0轴上方强势行情，MACD红柱连续3日逐根缩短，提前锁定利润";
+      } else if (condMacdDeath) {
+        s1Triggered = true;
+        s1Reason = "0轴上方强势行情，MACD正式死叉(DIF下穿DEA)，兜底无条件清仓";
+      }
+    }
+    if (s1Triggered) {
+      return {
+        signal_type: "S1",
+        signal_name: "止盈: 强势/弱势分级止盈",
+        signal_position: "止盈清仓 / 锁定利润",
+        signal_reason: s1Reason,
+        closes_position: true,
+        sets_s3: false
+      };
+    }
+
+    // 3. S2
+    const volumeBurst = bar.volume >= 1.5 * volMa5;
+    const longUpper = upperShadow >= 2.0 * Math.max(0.001, candleBody);
+    const recentUp = (prevBar.pct_change > 0 && prev2Bar.pct_change > 0) || (profitPct >= 0.03);
+    if (volumeBurst && longUpper && recentUp) {
+      return {
+        signal_type: "S2",
+        signal_name: "止盈: 放量长上影线",
+        signal_position: "减仓 / 锁定利润",
+        signal_reason: `高位放量(${(bar.volume / volMa5).toFixed(1)}倍均量)收长上影线，主力抛压强烈`,
+        closes_position: true,
+        sets_s3: false
+      };
+    }
+
+    // 4. S3
+    if (profitPct >= 0.05 && (!s3Triggered)) {
+      return {
+        signal_type: "S3",
+        signal_name: "止盈: 目标落袋50%",
+        signal_position: "减仓50% / 保留50%底仓",
+        signal_reason: `持仓盈利达到 ${(profitPct * 100).toFixed(2)}%，首次触及5%目标止盈点，减仓50%锁定利润，保留50%底仓`,
+        closes_position: false,
+        sets_s3: true
+      };
+    }
+    return null;
+  }
+
   // 注入量化决策信号 (B, S1, S2, S3, S4, S7)
   function addSignals(klines, tfLabel = '60分') {
     if (!klines || klines.length < 30) return;
 
     let inPosition = false;
-    let buyIndex = -1;
     let buyPrice = 0.0;
-    let buyHighest = 0.0;
     let s3Triggered = false;
 
     for (let i = 0; i < klines.length; i++) {
@@ -544,288 +937,163 @@ const MobileQuantEngine = (function() {
 
       if (i < 20) continue;
 
-      const prevBar = klines[i - 1];
-      const prev2Bar = klines[i - 2];
-      const prev3Bar = klines[i - 3];
-
-      const ma5 = bar.ma5;
-      const prevMa5 = prevBar.ma5;
-      const volMa5 = bar.vol_ma5 || bar.volume;
-
-      const dif = bar.dif || 0;
-      const dea = bar.dea || 0;
-      const prevDif = prevBar.dif || 0;
-      const prevDea = prevBar.dea || 0;
-
-      const macdBar = bar.macd || 0;
-      const prevMacd = prevBar.macd || 0;
-      const prev2Macd = prev2Bar.macd || 0;
-      const prev3Macd = prev3Bar.macd || 0;
-
-      const kVal = bar.k || 50.0;
-      const dVal = bar.d || 50.0;
-      const jVal = bar.j || 50.0;
-      const prevK = prevBar.k || 50.0;
-      const prevD = prevBar.d || 50.0;
-      const prevJ = prevBar.j || 50.0;
-      const prev2J = prev2Bar ? (prev2Bar.j || 50.0) : 50.0;
-      const ma10 = bar.ma10;
-      const volume = bar.volume || 0;
-
-      const candleBody = Math.abs(bar.close - bar.open);
-      const upperShadow = bar.high - Math.max(bar.open, bar.close);
-
-      // ==========================================
-      // 模式 A: 未持仓状态，寻找买入信号 (B1, B2, B3, B4)
-      // ==========================================
       if (!inPosition) {
-        // 1. MA5 止跌
-        const condMa5Up = (ma5 !== null) && (prevMa5 !== null) && (ma5 >= prevMa5 - 1e-5);
-
-        // 2. MACD 动能验证 (绿柱缩短或红柱放大)
-        const condMacdGreenShrink = (macdBar <= 0) && (prevMacd <= 0) && (Math.abs(macdBar) < Math.abs(prevMacd)) && (Math.abs(prevMacd) <= Math.abs(prev2Macd));
-        const condMacdRedExpand = (macdBar >= 0) && ((prevMacd <= 0 || prev2Macd <= 0) || (prev2Macd >= 0 && macdBar > prevMacd && prevMacd >= prev2Macd));
-        const condMacdTrend = condMacdGreenShrink || condMacdRedExpand;
-
-        // 3. MACD 金叉附近判定 + DIF 主动上行
-        const universalDifUp = dif > prevDif;
-
-        // 场景 A: 绿柱末期
-        let scenarioA = false;
-        if (macdBar <= 0) {
-          let greenWavePeak = 0.0;
-          let j = i;
-          while (j >= 0 && klines[j].macd <= 0) {
-            greenWavePeak = Math.max(greenWavePeak, Math.abs(klines[j].macd));
-            j--;
-          }
-          if (greenWavePeak > 0) {
-            scenarioA = Math.abs(macdBar) <= 0.35 * greenWavePeak;
-          }
-        }
-
-        // 场景 B: 红柱初期 (前两根)
-        const scenarioB = (macdBar >= 0) && (prevMacd <= 0 || prev2Macd <= 0);
-        const condMacdGoldClose = (scenarioA || scenarioB) && universalDifUp;
-
-        // 4. KDJ 多头 (K > D)
-        const condKdjBull = kVal > dVal;
-
-        // 5. 过滤高位脉冲放量诱多
-        const start60 = Math.max(0, i - 60 + 1);
-        let highest60 = -Infinity;
-        let lowest60 = Infinity;
-        for (let j = start60; j <= i; j++) {
-          if (klines[j].high > highest60) highest60 = klines[j].high;
-          if (klines[j].low < lowest60) lowest60 = klines[j].low;
-        }
-        const range60 = Math.max(0.001, highest60 - lowest60);
-        const posRatio60 = (bar.close - lowest60) / range60;
-
-        const start15 = Math.max(0, i - 15 + 1);
-        let lowest15 = Infinity;
-        for (let j = start15; j <= i; j++) {
-          if (klines[j].low < lowest15) lowest15 = klines[j].low;
-        }
-        const gainFromRecentLow = lowest15 > 0 ? (bar.close - lowest15) / lowest15 : 0;
-
-        const isHighPosition = (posRatio60 >= 0.65) || (gainFromRecentLow >= 0.15);
-        const isVolumeSurgeUp = isHighPosition && (bar.pct_change >= 3.0) && (volume >= 1.3 * volMa5);
-
-        const cond3Base = condMa5Up && condMacdTrend && condMacdGoldClose && condKdjBull && (!isVolumeSurgeUp);
-
-        // 分档辅助研判因子
-        const isVol11 = volume >= 1.1 * volMa5;
-        const isVol125 = volume >= 1.25 * volMa5;
-        const isRedBar = (bar.pct_change > 0) || (bar.close >= bar.open);
-        const isAboveMa5 = (ma5 !== null) && (bar.close >= ma5);
-        const isAboveMa10 = (ma10 !== null) && (bar.close >= ma10);
-
-        // 4档起爆/超跌催化剂
-        const isDeepOversoldBounce = (prevJ < 15 || prev2J < 15 || prevK < 20) && (jVal >= prevJ + 5.0);
-        const isBreakoutLaunch = isAboveMa10 && isVol125 && isRedBar;
-
-        if (cond3Base) {
-          let tier = 2;
-          let st = "B2";
-          let sname = `买入: ${tfLabel}2档半仓共振`;
-          let spos = "半仓 50% 标准建仓";
-          let sreason = `2档标准共振：MA5向上 + MACD动能修复 + KDJ多头，建议50%半仓稳健建仓`;
-
-          if (isDeepOversoldBounce || isBreakoutLaunch) {
-            tier = 4;
-            st = "B4";
-            sname = `买入: ${tfLabel}4档全仓共振`;
-            spos = "全仓 100% 顶格建仓";
-            const launchReason = isDeepOversoldBounce ? "深跌黄金坑强力拔起" : "放量突破站稳MA10";
-            sreason = `4档全仓共振：三大指标金叉 + ${launchReason}，建议100%全仓出击`;
-          } else if (isAboveMa5 && isRedBar) {
-            tier = 3;
-            st = "B3";
-            sname = `买入: ${tfLabel}3档重仓共振`;
-            spos = "重仓 75% 积极建仓";
-            const volNote = isVol11 ? "温和放量" : "站稳均线";
-            sreason = `3档重仓共振：三大指标金叉 + ${volNote}收红站上MA5，建议75%重仓建仓`;
-          }
-
-          bar.signal_type = st;
-          bar.signal_name = sname;
-          bar.signal_position = spos;
-          bar.signal_reason = sreason;
-          bar.buy_tier = tier;
-
+        const bRes = evaluateBuySignal(klines, i, tfLabel);
+        if (bRes) {
+          bar.signal_type = bRes.signal_type;
+          bar.signal_name = bRes.signal_name;
+          bar.signal_position = bRes.signal_position;
+          bar.signal_reason = bRes.signal_reason;
+          bar.buy_tier = bRes.buy_tier;
           inPosition = true;
           s3Triggered = false;
-          buyIndex = i;
           buyPrice = bar.close;
-          buyHighest = bar.high;
-          continue;
-        } else {
-          // 1档: 双指标初现企稳试错 (MA5止跌 + MACD动能修复，KDJ的J拐头向上)
-          const cond2Base = condMa5Up && condMacdTrend && condMacdGoldClose && (!isVolumeSurgeUp) && (jVal > prevJ);
-          if (cond2Base) {
-            bar.signal_type = "B1";
-            bar.signal_name = `买入: ${tfLabel}1档轻仓共振`;
-            bar.signal_position = "轻仓 25% 试探建仓";
-            bar.signal_reason = `1档试错共振：MA5走平止跌 + MACD动能修复，双指标企稳，防踏空轻仓25%试探`;
-            bar.buy_tier = 1;
-
-            inPosition = true;
+        }
+      } else {
+        const sRes = evaluateSellSignal(klines, i, buyPrice, s3Triggered);
+        if (sRes) {
+          bar.signal_type = sRes.signal_type;
+          bar.signal_name = sRes.signal_name;
+          bar.signal_position = sRes.signal_position;
+          bar.signal_reason = sRes.signal_reason;
+          if (sRes.closes_position) {
+            inPosition = false;
             s3Triggered = false;
-            buyIndex = i;
-            buyPrice = bar.close;
-            buyHighest = bar.high;
-            continue;
+          } else if (sRes.sets_s3) {
+            s3Triggered = true;
           }
-        }
-      }
-      // ==========================================
-      // 模式 B: 持仓状态，评估卖出信号 (S)
-      // ==========================================
-      else {
-        const profitPct = buyPrice > 0 ? (bar.close - buyPrice) / buyPrice : 0;
-        buyHighest = Math.max(buyHighest, bar.high);
-
-        // 0. 放量大涨(>=5%)且上影线占全天振幅>=10% (S7 最高优先级止盈)
-        const isVolumeSurgeUpS7 = (bar.pct_change >= 5.0) && (bar.volume >= 1.3 * volMa5);
-        const dayRange = Math.max(0.001, bar.high - bar.low);
-        const shadowRatio = upperShadow / dayRange;
-
-        if (isVolumeSurgeUpS7 && (shadowRatio >= 0.10)) {
-          bar.signal_type = "S7";
-          bar.signal_name = "止盈: 放量大涨带上影";
-          bar.signal_position = "止盈清仓 / 锁定利润";
-          bar.signal_reason = `持仓期间放量大涨(+${bar.pct_change.toFixed(2)}% >=5%)且上影线占振幅${(shadowRatio * 100).toFixed(0)}%(>=10%)，冲高锁定利润`;
-          inPosition = false;
-          s3Triggered = false;
-          continue;
-        }
-
-        // 1. S4: 指标止损 (破位MA10且MACD翻绿/绿柱放大 OR 破位MA10且MA5显著下拐)
-        const ma10 = bar.ma10 || ma5;
-        const maBreakDown = (ma10 !== null) && (bar.close < ma10);
-
-        const condMacdFlipGreen = (macdBar <= -0.001) && (prevMacd >= 0) && maBreakDown;
-        const condMacdReExpand = (macdBar < 0) && (prevMacd < 0) && (Math.abs(macdBar) - Math.abs(prevMacd) > 0.001);
-        const condMacdBad = condMacdFlipGreen || condMacdReExpand;
-
-        const ma5DropRatio = (prevMa5 && ma5 && prevMa5 > 0) ? (prevMa5 - ma5) / prevMa5 : 0;
-        const macdBullExpanding = (macdBar > 0) && (macdBar >= prevMacd);
-        const ma5SignificantDown = (ma5DropRatio >= 0.005 && maBreakDown) || (ma5 < prevMa5 * 0.995 && maBreakDown);
-        const condMaTurnDown = (ma5 !== null) && (prevMa5 !== null) && ma5SignificantDown && (!macdBullExpanding);
-
-        if (condMacdBad || condMaTurnDown) {
-          bar.signal_type = "S4";
-          bar.signal_name = "止损: 指标走坏";
-          bar.signal_position = "100% 严格止损";
-          let reasonDetail = "";
-          if (condMacdFlipGreen) {
-            reasonDetail = "破位10日线且MACD翻绿";
-          } else if (condMacdReExpand) {
-            reasonDetail = "MACD绿柱放大(>0.001)";
-          } else {
-            reasonDetail = "破位10日线且MA5下拐";
-          }
-          bar.signal_reason = `触发指标止损(${reasonDetail})，必须严格离场防范套牢`;
-          inPosition = false;
-          s3Triggered = false;
-          continue;
-        }
-
-        // 2. S1: 强势/弱势分级止盈 (DIF 0轴线上线下分级)
-        const recent3dJs = [];
-        for (let j = Math.max(0, i - 3); j <= i; j++) recent3dJs.push(klines[j].j || 50.0);
-        const kdjExactDeath = (prevK >= prevD) && (kVal < dVal);
-        const kdjNearDeath = (jVal < prevJ) && (kVal >= dVal) && (kVal - dVal <= 2.5) && (kVal - dVal <= 0.45 * (prevK - prevD));
-        const kdjDeathOrNear = kdjExactDeath || kdjNearDeath;
-        const dFilterPassed = dVal >= 50;
-
-        let s1Triggered = false;
-        let s1Reason = "";
-
-        if (dif < 0) {
-          // 场景 1: DIF < 0 弱势反弹
-          const hasJOverbought = recent3dJs.some(v => v >= 80);
-          if (hasJOverbought && kdjDeathOrNear && dFilterPassed) {
-            s1Triggered = true;
-            const detail = kdjExactDeath ? "正式死叉" : `预判死叉(间距仅${(kVal - dVal).toFixed(2)})`;
-            s1Reason = `0轴下方弱势反弹，J值高位(>80)回落，KDJ(${detail})，快速落袋为安`;
-          }
-        } else {
-          // 场景 2: DIF >= 0 强势行情
-          const hasJExtreme = recent3dJs.some(v => v >= 100);
-          const condJ100Death = hasJExtreme && kdjExactDeath && dFilterPassed;
-          const condRedShrink3d = (macdBar >= 0) && (prevMacd > 0) && (prev2Macd > 0) && (prev3Macd > 0) &&
-                                  (macdBar < prevMacd) && (prevMacd < prev2Macd) && (prev2Macd < prev3Macd);
-          const condMacdDeath = (prevMacd > 0) && (macdBar <= 0) && (prevDif >= prevDea) && (dif <= dea);
-
-          if (condJ100Death) {
-            s1Triggered = true;
-            s1Reason = "0轴上方强势行情，J值冲破100极端超买后KDJ正式死叉(K<D)，高位锁定利润";
-          } else if (condRedShrink3d) {
-            s1Triggered = true;
-            s1Reason = "0轴上方强势行情，MACD红柱连续3日逐根缩短，提前锁定利润";
-          } else if (condMacdDeath) {
-            s1Triggered = true;
-            s1Reason = "0轴上方强势行情，MACD正式死叉(DIF下穿DEA)，兜底无条件清仓";
-          }
-        }
-
-        if (s1Triggered) {
-          bar.signal_type = "S1";
-          bar.signal_name = "止盈: 强势/弱势分级止盈";
-          bar.signal_position = "止盈清仓 / 锁定利润";
-          bar.signal_reason = s1Reason;
-          inPosition = false;
-          s3Triggered = false;
-          continue;
-        }
-
-        // 3. S2: 放量长上影线
-        const volumeBurst = bar.volume >= 1.5 * volMa5;
-        const longUpper = upperShadow >= 2.0 * Math.max(0.001, candleBody);
-        const recentUp = (prevBar.pct_change > 0 && prev2Bar.pct_change > 0) || (profitPct >= 0.03);
-        if (volumeBurst && longUpper && recentUp) {
-          bar.signal_type = "S2";
-          bar.signal_name = "止盈: 放量长上影线";
-          bar.signal_position = "减仓 / 锁定利润";
-          bar.signal_reason = `高位放量(${(bar.volume / volMa5).toFixed(1)}倍均量)收长上影线，主力抛压强烈`;
-          inPosition = false;
-          s3Triggered = false;
-          continue;
-        }
-
-        // 4. S3: 盈利>=5% 首次减仓 50%
-        if (profitPct >= 0.05 && (!s3Triggered)) {
-          bar.signal_type = "S3";
-          bar.signal_name = "止盈: 目标落袋50%";
-          bar.signal_position = "减仓50% / 保留50%底仓";
-          bar.signal_reason = `持仓盈利达到 ${(profitPct * 100).toFixed(2)}%，首次触及5%目标止盈点，减仓50%锁定利润，保留50%底仓`;
-          s3Triggered = true;
-          continue;
         }
       }
     }
+  }
+
+  // 追踪 T+1 双核轮动状态: 日K买入 + OR(沪深300>MA30, 个股>MA60) ? 牛态日K卖 : 熊防120分卖 (严格T+1)
+  function traceT1HybridSignals(dayKlines, m120Klines, hs300DayMap, hs300LatestBull = false) {
+    if (!dayKlines || dayKlines.length === 0) return null;
+
+    const m120ByDay = new Map();
+    for (let mIdx = 0; mIdx < (m120Klines || []).length; mIdx++) {
+      const mb = m120Klines[mIdx];
+      const dKey = mb.day_date || (mb.date ? String(mb.date).slice(0, 10) : '');
+      if (!dKey) continue;
+      if (!m120ByDay.has(dKey)) m120ByDay.set(dKey, []);
+      m120ByDay.get(dKey).push(mIdx);
+    }
+
+    let inPos = false;
+    let hasS3Holding = false;
+    let buyCostPrice = dayKlines[dayKlines.length - 1].close;
+    let buyDate = '';
+    const eventsByDate = new Map();
+
+    const nDays = dayKlines.length;
+    for (let dayIdx = 0; dayIdx < nDays; dayIdx++) {
+      const dayBar = dayKlines[dayIdx];
+      const d = dayBar.date;
+      const isLastDay = (dayIdx === nDays - 1);
+
+      let isBullD = false;
+      if (!isLastDay) {
+        const refIdx = dayIdx > 0 ? dayIdx - 1 : 0;
+        const refBar = dayKlines[refIdx];
+        const hsB = (hs300DayMap && hs300DayMap.get(refBar.date)) ? !!hs300DayMap.get(refBar.date).is_bull : false;
+        const stB = !!(refBar.ma60 && refBar.close > refBar.ma60);
+        isBullD = hsB || stB;
+      } else {
+        const stB = !!(dayBar.ma60 && dayBar.close > dayBar.ma60);
+        isBullD = !!(hs300LatestBull || stB);
+      }
+
+      const dayEv = { buy: null, sells: [], is_bull: isBullD };
+
+      if (inPos && d > buyDate) {
+        const mIndices = m120ByDay.get(d) || [];
+        const useM120 = (!isBullD) && mIndices.some(idx => idx >= 20);
+        if (useM120) {
+          for (let k = 0; k < mIndices.length; k++) {
+            const mIdx = mIndices[k];
+            if (!inPos || mIdx < 20) continue;
+            const sr = evaluateSellSignal(m120Klines, mIdx, buyCostPrice, hasS3Holding);
+            if (sr) {
+              const mBar = m120Klines[mIdx];
+              dayEv.sells.push({ ...sr, price: mBar.close, tf: '120分', datetime: mBar.datetime || d });
+              if (sr.closes_position) {
+                inPos = false;
+                hasS3Holding = false;
+              } else if (sr.sets_s3) {
+                hasS3Holding = true;
+              }
+            }
+          }
+        } else {
+          const sr = evaluateSellSignal(dayKlines, dayIdx, buyCostPrice, hasS3Holding);
+          if (sr) {
+            dayEv.sells.push({ ...sr, price: dayBar.close, tf: '日K', datetime: d });
+            if (sr.closes_position) {
+              inPos = false;
+              hasS3Holding = false;
+            } else if (sr.sets_s3) {
+              hasS3Holding = true;
+            }
+          }
+        }
+      }
+
+      if (!inPos) {
+        const br = evaluateBuySignal(dayKlines, dayIdx, '日K');
+        if (br) {
+          inPos = true;
+          hasS3Holding = false;
+          buyCostPrice = dayBar.close;
+          buyDate = d;
+          dayEv.buy = { ...br, price: dayBar.close, tf: '日K', datetime: d };
+        }
+      }
+
+      if (dayEv.buy || dayEv.sells.length > 0) {
+        eventsByDate.set(d, dayEv);
+      }
+    }
+
+    const latestBar = dayKlines[dayKlines.length - 1];
+    const latestDate = latestBar.date;
+    const latestMa60 = latestBar.ma60 || null;
+    const stockBullNow = !!(latestMa60 && latestBar.close > latestMa60);
+    const isBullNow = !!(hs300LatestBull || stockBullNow);
+
+    const todayEv = eventsByDate.get(latestDate) || { buy: null, sells: [] };
+    let todaySig = null;
+    let todaySigTf = isBullNow ? '日K' : '120分';
+    let todaySigName = '';
+    let todaySigReason = '';
+
+    if (todayEv.buy) {
+      todaySig = todayEv.buy.signal_type;
+      todaySigTf = '日K';
+      todaySigName = todayEv.buy.signal_name;
+      todaySigReason = todayEv.buy.signal_reason;
+    } else if (todayEv.sells.length > 0) {
+      const s = todayEv.sells[todayEv.sells.length - 1];
+      todaySig = s.signal_type;
+      todaySigTf = s.tf;
+      todaySigName = s.signal_name;
+      todaySigReason = s.signal_reason;
+    }
+
+    return {
+      today_sig: todaySig,
+      today_sig_tf: todaySigTf,
+      today_sig_name: todaySigName,
+      today_sig_reason: todaySigReason,
+      in_pos: inPos,
+      has_s3_holding: hasS3Holding,
+      buy_cost_price: buyCostPrice,
+      buy_date: buyDate,
+      is_bull_now: isBullNow,
+      hs300_bull_now: hs300LatestBull,
+      stock_bull_now: stockBullNow,
+      stock_ma60: latestMa60
+    };
   }
 
   // ==========================================
@@ -955,18 +1223,40 @@ const MobileQuantEngine = (function() {
     const listToLoad = getWatchList();
     if (!listToLoad || listToLoad.length === 0) return [];
 
-    // 并发拉取各标的的 K 线数据 (513390匹配60分，其他T+0匹配30分，T+1匹配日K)
+    // 先获取沪深300牛熊状态 (全局共享 1 次请求)
+    let hs300Regime = { is_bull: false, day_map: new Map(), close: 0, ma30: 0 };
+    try {
+      hs300Regime = await getMarketBullRegime();
+    } catch (e) {}
+    const hs300DayMap = hs300Regime.day_map || new Map();
+    const hs300BullNow = !!hs300Regime.is_bull;
+
+    // 并发拉取各标的的 K 线数据 (513390匹配60分，其他T+0匹配30分，T+1启用牛态日K卖↔熊防120分卖)
     const promises = listToLoad.map(async (item) => {
       const code = item.code || item.symbol;
       const is60m = String(code).includes("513390");
       const isT0 = isT0Symbol(code, item.desc || item.name);
       const tfLabel = is60m ? "60分" : (isT0 ? "30分" : "日K");
-      const checkBarsCount = is60m ? 4 : (isT0 ? 8 : 3);
-      const optimalPeriod = is60m ? "m60" : (isT0 ? "m30" : "day");
+      let optimalPeriod = is60m ? "m60" : (isT0 ? "m30" : (hs300BullNow ? "day" : "m120"));
+      let regime = (isT0 || is60m) ? "t0" : (hs300BullNow ? "bull" : "bear");
+      let regimeLabel = (isT0 || is60m) ? (is60m ? "T+0·60分" : "T+0·30分") : (hs300BullNow ? "牛态·日K卖" : "熊防·120分卖");
 
-      const data = is60m ? await get60MinKlines(code, 320) : (isT0 ? await get30MinKlines(code, 320) : await getDailyKlines(code, 600));
-      const klines = data.klines || [];
-      const quote = await getRealtimeQuote(code);
+      let data, quote;
+      let m120Klines = [];
+      if (is60m) {
+        [data, quote] = await Promise.all([get60MinKlines(code, 320), getRealtimeQuote(code)]);
+      } else if (isT0) {
+        [data, quote] = await Promise.all([get30MinKlines(code, 320), getRealtimeQuote(code)]);
+      } else {
+        let m120Res;
+        [data, m120Res, quote] = await Promise.all([
+          getDailyKlines(code, 600),
+          get120MinKlines(code, 320),
+          getRealtimeQuote(code)
+        ]);
+        m120Klines = (m120Res && m120Res.klines) || [];
+      }
+      const klines = (data && data.klines) || [];
 
       if (klines.length === 0) {
         const cur = (quote && quote.current > 0) ? quote.current : (item.close || 1.0);
@@ -994,6 +1284,9 @@ const MobileQuantEngine = (function() {
           reason_summary: `等待更多 ${tfLabel} 交易数据确认`,
           trade_rule: isT0 ? "T+0" : "T+1",
           optimal_period: optimalPeriod,
+          regime,
+          regime_label: regimeLabel,
+          hs300_bull: hs300BullNow,
           latest_bar: null
         };
       }
@@ -1001,24 +1294,21 @@ const MobileQuantEngine = (function() {
       const bar = klines[klines.length - 1];
       const prev = klines.length > 1 ? klines[klines.length - 2] : bar;
       const prev2 = klines.length > 2 ? klines[klines.length - 3] : prev;
-      const prev3 = klines.length > 3 ? klines[klines.length - 4] : prev2;
 
       const ma5 = bar.ma5;
       const prevMa5 = prev.ma5;
 
-      // 评估 5 项 B1 条件
+      // 评估 5 项 B1 条件 (T+1 基于日K, T+0 基于 30m/60m)
       const c1 = (ma5 !== null) && (prevMa5 !== null) && (ma5 >= prevMa5 - 1e-5);
 
       const mb = bar.macd || 0;
       const pmb = prev.macd || 0;
       const p2mb = prev2.macd || 0;
-      const p3mb = prev3.macd || 0;
       const c2 = (mb <= 0 && pmb <= 0 && Math.abs(mb) < Math.abs(pmb) && Math.abs(pmb) <= Math.abs(p2mb)) ||
                  (mb >= 0 && (pmb <= 0 || p2mb <= 0 || (p2mb >= 0 && mb > pmb && pmb >= p2mb)));
 
       const universalDifUp = (bar.dif > prev.dif);
 
-      // 场景 A (绿柱末期・金叉前左侧)
       let scenarioA = false;
       if (mb <= 0) {
         let greenWavePeak = 0.0;
@@ -1032,17 +1322,24 @@ const MobileQuantEngine = (function() {
         }
       }
 
-      // 场景 B (红柱初期・金叉后右侧)
       const scenarioB = (mb >= 0) && (pmb <= 0 || p2mb <= 0);
-
       const c3 = (scenarioA || scenarioB) && universalDifUp;
       const c4 = (bar.k || 0) > (bar.d || 0);
-
       const score = (c1 ? 1 : 0) + (c2 ? 1 : 0) + (c3 ? 1 : 0) + (c4 ? 1 : 0);
 
-      // 检查今日 (最新交易日 对应周期) 是否刚触发买卖信号
-      let todaySig = bar.signal_type;
+      let todaySig = null;
+      let todaySigTf = tfLabel;
+      let hybridSigReason = "";
+      let inPos = false;
+      let hasS3Holding = false;
+      let buyCostPrice = bar.close;
+      let buyDate = "";
+      let stockBullNow = false;
+      let stockMa60 = bar.ma60 || null;
+      let sellTfName = tfLabel;
+
       if (isT0 || is60m) {
+        todaySig = bar.signal_type;
         const currCalDay = (bar.day_date || bar.date || bar.datetime || "").slice(0, 10);
         const tfCheckBars = is60m ? 4 : 8;
         const recentBars = klines.slice(-tfCheckBars);
@@ -1055,34 +1352,40 @@ const MobileQuantEngine = (function() {
             }
           }
         }
-      } else {
-        // 日K线：每日仅有一根K线，今日信号严格仅取决于最新日K柱 bar
-        todaySig = bar.signal_type;
-      }
-
-      // 评估股票当前是否处于持仓状态 (S3减仓50%后依然保持持仓，唯有S1/S2/S4/S7完全清仓)
-      let inPos = false;
-      let hasS3Holding = false;
-      let buyCostPrice = bar.close;
-      let buyDate = "";
-
-      for (let j = klines.length - 2; j >= 0; j--) {
-        const sig = klines[j].signal_type;
-        if (sig && (sig === "B" || sig.startsWith("B"))) {
-          inPos = true;
-          buyCostPrice = klines[j].close;
-          buyDate = klines[j].date;
-          break;
-        } else if (sig === "S1" || sig === "S2" || sig === "S4" || sig === "S7") {
-          inPos = false;
-          hasS3Holding = false;
-          break;
-        } else if (sig === "S3") {
-          inPos = true;
-          hasS3Holding = true;
-          // S3 只是卖出半仓，持仓成本必须继续向前追溯至真正的建仓买点 B，绝不能重置成本与收益率！
-          continue;
+        for (let j = klines.length - 2; j >= 0; j--) {
+          const sig = klines[j].signal_type;
+          if (sig && (sig === "B" || sig.startsWith("B"))) {
+            inPos = true;
+            buyCostPrice = klines[j].close;
+            buyDate = klines[j].date;
+            break;
+          } else if (sig === "S1" || sig === "S2" || sig === "S4" || sig === "S7") {
+            inPos = false;
+            hasS3Holding = false;
+            break;
+          } else if (sig === "S3") {
+            inPos = true;
+            hasS3Holding = true;
+            continue;
+          }
         }
+      } else {
+        const hybrid = traceT1HybridSignals(klines, m120Klines, hs300DayMap, hs300BullNow);
+        const isBull = hybrid.is_bull_now;
+        stockBullNow = hybrid.stock_bull_now;
+        stockMa60 = hybrid.stock_ma60;
+        regime = isBull ? "bull" : "bear";
+        sellTfName = isBull ? "日K" : "120分";
+        regimeLabel = isBull ? "牛态·日K卖" : "熊防·120分卖";
+        optimalPeriod = isBull ? "day" : "m120";
+
+        todaySig = hybrid.today_sig;
+        todaySigTf = hybrid.today_sig_tf;
+        hybridSigReason = hybrid.today_sig_reason || "";
+        inPos = hybrid.in_pos;
+        hasS3Holding = hybrid.has_s3_holding;
+        buyCostPrice = hybrid.buy_cost_price;
+        buyDate = hybrid.buy_date;
       }
 
       let tag = "蓄势回调";
@@ -1092,6 +1395,7 @@ const MobileQuantEngine = (function() {
       let reasonSummary = `${tfLabel}探底寻支撑，密切观察`;
 
       if (todaySig && (todaySig === "B" || todaySig.startsWith("B"))) {
+        const buyTf = (!isT0 && !is60m) ? "日K" : tfLabel;
         let tier = 2;
         if (todaySig === "B4") tier = 4;
         else if (todaySig === "B3") tier = 3;
@@ -1099,54 +1403,66 @@ const MobileQuantEngine = (function() {
         else if (todaySig === "B1") tier = 1;
 
         if (tier === 4) {
-          tag = `${tfLabel}4档买入`;
-          tagColor = "#b91c1c"; // 深红/紫红高亮 (全仓100%)
+          tag = `${buyTf}4档买入`;
+          tagColor = "#b91c1c";
           sortPriority = 110;
-          reasonSummary = `${tfLabel}4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击`;
+          reasonSummary = `${buyTf}4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击`;
         } else if (tier === 3) {
-          tag = `${tfLabel}3档买入`;
-          tagColor = "#dc2626"; // 鲜艳大红 (重仓75%)
+          tag = `${buyTf}3档买入`;
+          tagColor = "#dc2626";
           sortPriority = 105;
-          reasonSummary = `${tfLabel}3档重仓共振(站上MA5收红)，建议75%重仓建仓`;
+          reasonSummary = `${buyTf}3档重仓共振(站上MA5收红)，建议75%重仓建仓`;
         } else if (tier === 2) {
-          tag = `${tfLabel}2档买入`;
-          tagColor = "#ea580c"; // 橙红 (半仓50%)
+          tag = `${buyTf}2档买入`;
+          tagColor = "#ea580c";
           sortPriority = 100;
-          reasonSummary = `${tfLabel}2档标准共振(三指标金叉)，建议50%半仓稳健建仓`;
+          reasonSummary = `${buyTf}2档标准共振(三指标金叉)，建议50%半仓稳健建仓`;
         } else {
-          tag = `${tfLabel}1档买入`;
-          tagColor = "#2563eb"; // 稳健蓝 (轻仓25%)
+          tag = `${buyTf}1档买入`;
+          tagColor = "#2563eb";
           sortPriority = 98;
-          reasonSummary = `${tfLabel}1档试错共振(双指标初现企稳)，建议25%轻仓试探`;
+          reasonSummary = `${buyTf}1档试错共振(双指标初现企稳)，建议25%轻仓试探`;
+        }
+        if (!isT0 && !is60m) {
+          optimalPeriod = "day";
+          if (regime === "bear") reasonSummary += " [熊防:次日起120分护盘]";
         }
         tagGroup = "买入";
         buyCostPrice = bar.close;
         buyDate = bar.date;
       } else if (["S1", "S2", "S7", "S4"].includes(todaySig)) {
-        tag = `${tfLabel}卖出`;
-        tagColor = "#16a34a"; // 鲜艳大绿 (卖出专用)
+        const sTf = todaySigTf;
+        tag = `${sTf}卖出`;
+        tagColor = "#16a34a";
         tagGroup = "卖出";
         sortPriority = 95;
-        reasonSummary = `${tfLabel}触发分级止盈/止损卖点，建议平仓`;
+        reasonSummary = hybridSigReason || `${sTf}触发分级止盈/止损卖点，建议平仓`;
+        if (!isT0 && !is60m) {
+          optimalPeriod = (sTf === "120分") ? "m120" : "day";
+        }
       } else if (todaySig === "S3") {
-        tag = "减半止盈";
-        tagColor = "#f59e0b"; // 醒目琥珀金 (减仓50%专用)
+        const sTf = todaySigTf;
+        tag = (sTf === "120分") ? "120分减半止盈" : "减半止盈";
+        tagColor = "#f59e0b";
         tagGroup = "减仓";
         sortPriority = 90;
-        reasonSummary = "盈利触及5%，止盈减半(保留50%底仓)";
+        reasonSummary = `${sTf}盈利触及5%，止盈减半(保留50%底仓)`;
+        if (!isT0 && !is60m) {
+          optimalPeriod = (sTf === "120分") ? "m120" : "day";
+        }
       } else if (inPos) {
         if (hasS3Holding) {
           tag = "持仓(50%底仓)";
           tagColor = "#f97316";
           tagGroup = "持有";
           sortPriority = 80;
-          reasonSummary = "盈利已锁定50%，留50%底仓观察";
+          reasonSummary = (!isT0 && !is60m) ? `已锁50%利润，${sellTfName}跟踪留仓` : "盈利已锁定50%，留50%底仓观察";
         } else {
           tag = "观望持仓";
           tagColor = "#ea580c";
           tagGroup = "持有";
           sortPriority = 70;
-          reasonSummary = `${tfLabel}持仓观望中，等待后续卖点`;
+          reasonSummary = (!isT0 && !is60m) ? `${regimeLabel} · 持仓等待${sellTfName}卖点` : `${tfLabel}持仓观望中，等待后续卖点`;
         }
       } else if (score >= 3) {
         tag = "即将满足";
@@ -1160,13 +1476,14 @@ const MobileQuantEngine = (function() {
         if (scenarioB) subReasons.push("红柱初期");
         else if (scenarioA) subReasons.push("绿柱末期");
         if (c4) subReasons.push("KDJ多头");
-        reasonSummary = subReasons.length > 0 ? subReasons.slice(0, 2).join(" · ") : `${tfLabel}多指标向好`;
+        const baseR = subReasons.length > 0 ? subReasons.slice(0, 2).join(" · ") : `${tfLabel}多指标向好`;
+        reasonSummary = (!isT0 && !is60m) ? `${baseR} (${regimeLabel})` : baseR;
       } else {
         tag = "蓄势回调";
         tagColor = "#94a3b8";
         tagGroup = "观望";
         sortPriority = 10;
-        reasonSummary = `${tfLabel}探底寻支撑，密切观察`;
+        reasonSummary = (!isT0 && !is60m) ? `${regimeLabel} · 寻支撑观察` : `${tfLabel}探底寻支撑，密切观察`;
       }
 
       const prevCloseVal = (quote && quote.prev_close > 0) ? quote.prev_close : (klines.length > 1 ? klines[klines.length - 2].close : bar.close);
@@ -1198,6 +1515,12 @@ const MobileQuantEngine = (function() {
         reason_summary: reasonSummary,
         trade_rule: isT0 ? "T+0" : "T+1",
         optimal_period: optimalPeriod,
+        regime: regime,
+        regime_label: regimeLabel,
+        sell_period: (!isT0 && !is60m) ? (regime === "bull" ? "day" : "m120") : optimalPeriod,
+        hs300_bull: hs300BullNow,
+        stock_bull: stockBullNow,
+        stock_ma60: stockMa60 ? Math.round(stockMa60 * 1000) / 1000 : null,
         cost_price: inPos ? buyCostPrice : 0,
         buy_cost_price: inPos ? buyCostPrice : 0,
         buy_date: buyDate,
@@ -1346,6 +1669,9 @@ const MobileQuantEngine = (function() {
     getDailyKlines,
     get30MinKlines,
     get60MinKlines,
+    get120MinKlines,
+    getMarketRegime,
+    traceT1HybridSignals,
     getWatchList,
     saveWatchList,
     addToWatchList,

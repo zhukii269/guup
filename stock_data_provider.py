@@ -78,6 +78,10 @@ class StockDataProvider:
         self._30min_klines_cache_time = {}
         self._60min_klines_cache = {}
         self._60min_klines_cache_time = {}
+        self._120min_klines_cache = {}
+        self._120min_klines_cache_time = {}
+        self._hs300_regime_cache = None
+        self._hs300_regime_cache_time = 0
         self._history_pnl_cache = None
         self._history_pnl_cache_time = 0
         self._history_pnl_cache_dict = {}
@@ -101,7 +105,7 @@ class StockDataProvider:
             if path and os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    if isinstance(data, dict) and "daily_curve" in data and len(data["daily_curve"]) > 50 and "stats" in data:
+                    if isinstance(data, dict) and data.get("strategy_version") == "hybrid_v2" and "daily_curve" in data and len(data["daily_curve"]) > 50 and "stats" in data:
                         self._history_pnl_cache = data
                         self._history_pnl_cache_time = time.time() - 60.0
         except Exception as e:
@@ -643,6 +647,134 @@ class StockDataProvider:
                 return self._60min_klines_cache[cache_key]
             return {"symbol": symbol, "code": symbol[2:], "name": "", "klines": []}
 
+    def get_120min_klines(self, symbol="sh000001", limit=320):
+        """Synthesize 120-minute (half-day AM/PM) K-lines from 60-minute bars."""
+        symbol = self.normalize_symbol(symbol)
+        now_ts = time.time()
+        cache_key = (symbol, limit)
+        if hasattr(self, '_120min_klines_cache') and cache_key in self._120min_klines_cache:
+            last_ts = self._120min_klines_cache_time.get(cache_key, 0)
+            if now_ts - last_ts < 20.0:
+                return self._120min_klines_cache[cache_key]
+
+        try:
+            res60 = self.get_60min_klines(symbol, limit=limit)
+            bars60 = res60.get("klines", [])
+            if not bars60:
+                return {"symbol": symbol, "code": symbol[2:], "name": res60.get("name", ""), "klines": []}
+
+            grouped = []
+            bucket_idx = {}
+            for b in bars60:
+                d_part = b.get("day_date") or (b.get("date", "")[:10])
+                t_part = b.get("time", "")
+                session = "AM" if (t_part and t_part <= "11:30") else "PM"
+                key = (d_part, session)
+                if key not in bucket_idx:
+                    bucket_idx[key] = len(grouped)
+                    bar_time = "11:30" if session == "AM" else "15:00"
+                    dt_fmt = f"{d_part} {bar_time}" if d_part else b.get("datetime", "")
+                    grouped.append({
+                        "date": dt_fmt,
+                        "day_date": d_part,
+                        "time": bar_time,
+                        "datetime": dt_fmt,
+                        "open": b["open"],
+                        "close": b["close"],
+                        "high": b["high"],
+                        "low": b["low"],
+                        "volume": b.get("volume", 0.0),
+                    })
+                else:
+                    g = grouped[bucket_idx[key]]
+                    g["close"] = b["close"]
+                    g["high"] = max(g["high"], b["high"])
+                    g["low"] = min(g["low"], b["low"])
+                    g["volume"] += b.get("volume", 0.0)
+
+            klines = []
+            for i, g in enumerate(grouped):
+                prev_close = grouped[i - 1]["close"] if i > 0 else g["open"]
+                chg_val = round(g["close"] - prev_close, 3)
+                pct_val = round((chg_val / prev_close * 100.0) if prev_close > 0 else 0.0, 2)
+                g["prev_close"] = prev_close
+                g["change"] = chg_val
+                g["pct_change"] = pct_val
+                klines.append(g)
+
+            self._add_moving_averages(klines)
+            self._add_emas(klines)
+            self._add_boll(klines)
+            self._add_volume_moving_averages(klines)
+            self._add_macd(klines)
+            self._add_kdj(klines)
+            self._add_rsi(klines)
+            self._add_signals(klines, timeframe_name="120分")
+
+            res_data = {
+                "symbol": symbol,
+                "code": symbol[2:],
+                "name": res60.get("name", ""),
+                "klines": klines
+            }
+            if not hasattr(self, '_120min_klines_cache'):
+                self._120min_klines_cache = {}
+                self._120min_klines_cache_time = {}
+            self._120min_klines_cache[cache_key] = res_data
+            self._120min_klines_cache_time[cache_key] = time.time()
+            return res_data
+        except Exception as e:
+            print(f"Error calculating 120min klines for {symbol}: {e}")
+            if hasattr(self, '_120min_klines_cache') and cache_key in self._120min_klines_cache:
+                return self._120min_klines_cache[cache_key]
+            return {"symbol": symbol, "code": symbol[2:], "name": "", "klines": []}
+
+    def get_market_bull_regime(self):
+        """Determine market bull/bear regime via HS300 (sh000300 Close > MA30), cached 180s."""
+        now_ts = time.time()
+        if getattr(self, '_hs300_regime_cache', None) is not None:
+            if now_ts - getattr(self, '_hs300_regime_cache_time', 0) < 180.0:
+                return self._hs300_regime_cache
+
+        res = self.get_daily_klines("sh000300")
+        klines = res.get("klines", []) if isinstance(res, dict) else []
+        day_map = {}
+        for b in klines:
+            d = b.get("date")
+            if not d:
+                continue
+            ma30 = b.get("ma30")
+            c = b.get("close", 0.0)
+            is_bull = bool(ma30 and c > ma30)
+            day_map[d] = {"close": c, "ma30": ma30, "is_bull": is_bull}
+
+        latest = klines[-1] if klines else {}
+        close_val = latest.get("close", 0.0)
+        ma30_val = latest.get("ma30") or 0.0
+        is_bull_now = bool(ma30_val and close_val > ma30_val)
+        diff_pct = round(((close_val - ma30_val) / ma30_val * 100.0), 2) if ma30_val else 0.0
+
+        regime = {
+            "symbol": "sh000300",
+            "name": "沪深300",
+            "date": latest.get("date", ""),
+            "close": round(close_val, 2),
+            "ma30": round(ma30_val, 2) if ma30_val else None,
+            "diff_pct": diff_pct,
+            "is_bull": is_bull_now,
+            "label": "牛态(日K卖)" if is_bull_now else "熊防(需看个股MA60)",
+            "day_map": day_map,
+        }
+        if klines:
+            self._hs300_regime_cache = regime
+            self._hs300_regime_cache_time = now_ts
+        return regime
+
+    def get_market_regime(self):
+        """Return lightweight JSON summary of current HS300 market regime for UI consumption."""
+        r = self.get_market_bull_regime()
+        return {k: v for k, v in r.items() if k != "day_map"}
+
     def get_30min_klines(self, symbol="sh000001", limit=320):
         symbol = self.normalize_symbol(symbol)
         now_ts = time.time()
@@ -1016,14 +1148,281 @@ class StockDataProvider:
 
         return m60_signals
 
+    def _evaluate_buy_signal(self, klines, i, timeframe_name="60分"):
+        """Evaluate B1-B4 buy resonance conditions at index i."""
+        if not klines or i < 20 or i >= len(klines):
+            return None
+
+        bar = klines[i]
+        prev_bar = klines[i - 1]
+        prev2_bar = klines[i - 2]
+
+        ma5 = bar.get("ma5")
+        prev_ma5 = prev_bar.get("ma5")
+        ma10 = bar.get("ma10")
+        vol_ma5 = bar.get("vol_ma5") or bar["volume"]
+        volume = bar.get("volume", 0)
+
+        dif = bar.get("dif", 0)
+        prev_dif = prev_bar.get("dif", 0)
+        macd_bar = bar.get("macd", 0)
+        prev_macd = prev_bar.get("macd", 0)
+        prev2_macd = prev2_bar.get("macd", 0)
+
+        k_val = bar.get("k", 50.0)
+        d_val = bar.get("d", 50.0)
+        j_val = bar.get("j", 50.0)
+        prev_k = prev_bar.get("k", 50.0)
+        prev_j = prev_bar.get("j", 50.0)
+        prev2_j = prev2_bar.get("j", 50.0)
+
+        # 1. 5日线止跌 (MA5 >= 前一日 MA5)
+        cond_ma5_up = (ma5 is not None) and (prev_ma5 is not None) and (ma5 >= prev_ma5 - 1e-5)
+
+        # 2. MACD动能验证 (绿柱连续2日缩短 或 红柱连续2日放大 / 刚转红柱)
+        cond_macd_green_shrink = (macd_bar <= 0) and (prev_macd <= 0) and (abs(macd_bar) < abs(prev_macd)) and (abs(prev_macd) <= abs(prev2_macd))
+        cond_macd_red_expand = (macd_bar >= 0) and ((prev_macd <= 0 or prev2_macd <= 0) or (prev2_macd >= 0 and macd_bar > prev_macd and prev_macd >= prev2_macd))
+        cond_macd_trend = cond_macd_green_shrink or cond_macd_red_expand
+
+        # 3. MACD金叉附近判定 (二选一) + 通用约束 (DIF主动上行 dif > prev_dif)
+        universal_dif_up = (dif > prev_dif)
+
+        # 场景 A（绿柱末期・金叉前左侧）：绿柱绝对值 <= 本轮峰值的 35%
+        scenario_a = False
+        if macd_bar <= 0:
+            green_wave_peak = 0.0
+            j = i
+            while j >= 0 and klines[j]["macd"] <= 0:
+                green_wave_peak = max(green_wave_peak, abs(klines[j]["macd"]))
+                j -= 1
+            if green_wave_peak > 0:
+                scenario_a = abs(macd_bar) <= 0.35 * green_wave_peak
+
+        # 场景 B（红柱初期・金叉后右侧）：MACD正式金叉后的前 2 根红柱 (prev_macd <= 0 或 prev2_macd <= 0)
+        scenario_b = (macd_bar >= 0) and (prev_macd <= 0 or prev2_macd <= 0)
+        cond_macd_gold_close = (scenario_a or scenario_b) and universal_dif_up
+
+        # 4. KDJ多头结构 (K > D)
+        cond_kdj_bull = k_val > d_val
+
+        # 5. 放量大涨过滤：严格看位置
+        start_60 = max(0, i - 60 + 1)
+        highest_60 = max(b["high"] for b in klines[start_60:i + 1])
+        lowest_60 = min(b["low"] for b in klines[start_60:i + 1])
+        range_60 = max(0.001, highest_60 - lowest_60)
+        pos_ratio_60 = (bar["close"] - lowest_60) / range_60
+
+        start_15 = max(0, i - 15 + 1)
+        lowest_15 = min(b["low"] for b in klines[start_15:i + 1])
+        gain_from_recent_low = (bar["close"] - lowest_15) / lowest_15 if lowest_15 > 0 else 0
+
+        is_high_position = (pos_ratio_60 >= 0.65) or (gain_from_recent_low >= 0.15)
+        is_volume_surge_up = is_high_position and (bar["pct_change"] >= 3.0) and (bar["volume"] >= 1.3 * vol_ma5)
+
+        # 共振强度 4 档分级模型
+        cond_3_base = cond_ma5_up and cond_macd_trend and cond_macd_gold_close and cond_kdj_bull and (not is_volume_surge_up)
+
+        is_vol_11 = (volume >= 1.1 * vol_ma5)
+        is_vol_125 = (volume >= 1.25 * vol_ma5)
+        is_red_bar = (bar.get("pct_change", 0) > 0) or (bar["close"] >= bar["open"])
+        is_above_ma5 = (ma5 is not None and bar["close"] >= ma5)
+        is_above_ma10 = (ma10 is not None and bar["close"] >= ma10)
+
+        is_deep_oversold_bounce = (prev_j < 15 or prev2_j < 15 or prev_k < 20) and (j_val >= prev_j + 5.0)
+        is_breakout_launch = is_above_ma10 and is_vol_125 and is_red_bar
+
+        if cond_3_base:
+            if is_deep_oversold_bounce or is_breakout_launch:
+                tier = 4
+                st = "B4"
+                sname = f"买入: {timeframe_name}4档全仓共振"
+                spos = "全仓 100% 顶格建仓"
+                launch_reason = "深跌黄金坑强力拔起" if is_deep_oversold_bounce else "放量突破站稳MA10"
+                sreason = f"4档全仓共振：三大指标金叉 + {launch_reason}，建议100%全仓出击"
+            elif is_above_ma5 and is_red_bar:
+                tier = 3
+                st = "B3"
+                sname = f"买入: {timeframe_name}3档重仓共振"
+                spos = "重仓 75% 积极建仓"
+                vol_note = "温和放量" if is_vol_11 else "站稳均线"
+                sreason = f"3档重仓共振：三大指标金叉 + {vol_note}收红站上MA5，建议75%重仓建仓"
+            else:
+                tier = 2
+                st = "B2"
+                sname = f"买入: {timeframe_name}2档半仓共振"
+                spos = "半仓 50% 标准建仓"
+                sreason = f"2档标准共振：MA5向上 + MACD动能修复 + KDJ多头，建议50%半仓稳健建仓"
+            return {
+                "signal_type": st,
+                "signal_name": sname,
+                "signal_position": spos,
+                "signal_reason": sreason,
+                "buy_tier": tier,
+            }
+
+        cond_2_base = cond_ma5_up and cond_macd_trend and cond_macd_gold_close and (not is_volume_surge_up) and (j_val > prev_j)
+        if cond_2_base:
+            return {
+                "signal_type": "B1",
+                "signal_name": f"买入: {timeframe_name}1档轻仓共振",
+                "signal_position": "轻仓 25% 试探建仓",
+                "signal_reason": f"1档试错共振：MA5走平止跌 + MACD动能修复，双指标企稳，防踏空轻仓25%试探",
+                "buy_tier": 1,
+            }
+        return None
+
+    def _evaluate_sell_signal(self, klines, i, buy_price, s3_triggered):
+        """Evaluate S7/S4/S1/S2/S3 sell conditions at index i given entry cost and S3 state."""
+        if not klines or i < 20 or i >= len(klines):
+            return None
+
+        bar = klines[i]
+        prev_bar = klines[i - 1]
+        prev2_bar = klines[i - 2]
+        prev3_bar = klines[i - 3]
+
+        ma5 = bar.get("ma5")
+        prev_ma5 = prev_bar.get("ma5")
+        vol_ma5 = bar.get("vol_ma5") or bar["volume"]
+
+        dif = bar.get("dif", 0)
+        dea = bar.get("dea", 0)
+        prev_dif = prev_bar.get("dif", 0)
+        prev_dea = prev_bar.get("dea", 0)
+
+        macd_bar = bar.get("macd", 0)
+        prev_macd = prev_bar.get("macd", 0)
+        prev2_macd = prev2_bar.get("macd", 0)
+        prev3_macd = prev3_bar.get("macd", 0)
+
+        k_val = bar.get("k", 50.0)
+        d_val = bar.get("d", 50.0)
+        j_val = bar.get("j", 50.0)
+        prev_k = prev_bar.get("k", 50.0)
+        prev_d = prev_bar.get("d", 50.0)
+        prev_j = prev_bar.get("j", 50.0)
+
+        candle_body = abs(bar["close"] - bar["open"])
+        upper_shadow = bar["high"] - max(bar["open"], bar["close"])
+        profit_pct = (bar["close"] - buy_price) / buy_price if buy_price > 0 else 0
+
+        # S7: 放量大涨(>=5%)且上影线占全天振幅>=10% (最高优先级止盈)
+        is_volume_surge_up_s7 = (bar["pct_change"] >= 5.0) and (bar["volume"] >= 1.3 * vol_ma5)
+        day_range = max(0.001, bar["high"] - bar["low"])
+        shadow_ratio = upper_shadow / day_range
+        if is_volume_surge_up_s7 and (shadow_ratio >= 0.10):
+            return {
+                "signal_type": "S7",
+                "signal_name": "止盈: 放量大涨带上影",
+                "signal_position": "止盈清仓 / 锁定利润",
+                "signal_reason": f"持仓期间放量大涨(+{bar['pct_change']:.2f}% >=5%)且上影线占振幅{shadow_ratio*100:.0f}%(>=10%)，冲高锁定利润",
+                "closes_position": True,
+                "sets_s3": False,
+            }
+
+        # S4: 指标止损
+        ma10 = bar.get("ma10", ma5)
+        ma_break_down = (ma10 is not None) and (bar["close"] < ma10)
+
+        cond_macd_flip_green = (macd_bar <= -0.001) and (prev_macd >= 0) and ma_break_down
+        cond_macd_re_expand = (macd_bar < 0) and (prev_macd < 0) and (abs(macd_bar) - abs(prev_macd) > 0.001)
+        cond_macd_bad = cond_macd_flip_green or cond_macd_re_expand
+
+        ma5_drop_ratio = (prev_ma5 - ma5) / prev_ma5 if (ma5 and prev_ma5 and prev_ma5 > 0) else 0
+        macd_bull_expanding = (macd_bar > 0) and (macd_bar >= prev_macd)
+        ma5_significant_down = (ma5_drop_ratio >= 0.005 and ma_break_down) or (prev_ma5 is not None and ma5 is not None and ma5 < prev_ma5 * 0.995 and ma_break_down)
+        cond_ma_turn_down = (ma5 is not None) and (prev_ma5 is not None) and ma5_significant_down and (not macd_bull_expanding)
+
+        if cond_macd_bad or cond_ma_turn_down:
+            if cond_macd_flip_green:
+                reason_detail = "破位10日线且MACD翻绿"
+            elif cond_macd_re_expand:
+                reason_detail = "MACD绿柱放大(>0.001)"
+            else:
+                reason_detail = "破位10日线且MA5下拐"
+            return {
+                "signal_type": "S4",
+                "signal_name": "止损: 指标走坏",
+                "signal_position": "100% 严格止损",
+                "signal_reason": f"触发指标止损({reason_detail})，必须严格离场防范套牢",
+                "closes_position": True,
+                "sets_s3": False,
+            }
+
+        # S1: 强势/弱势分级止盈 (DIF 0轴上线下分级策略)
+        recent_3d_js = [klines[j].get("j", 50.0) for j in range(max(0, i - 3), i + 1)]
+        kdj_exact_death = (prev_k >= prev_d) and (k_val < d_val)
+        kdj_near_death = (j_val < prev_j) and (k_val >= d_val) and (k_val - d_val <= 2.5) and (k_val - d_val <= 0.45 * (prev_k - prev_d))
+        kdj_death_or_near = kdj_exact_death or kdj_near_death
+        d_filter_passed = d_val >= 50
+
+        s1_triggered = False
+        s1_reason = ""
+
+        if dif < 0:
+            has_j_overbought = any(j >= 80 for j in recent_3d_js)
+            if has_j_overbought and kdj_death_or_near and d_filter_passed:
+                s1_triggered = True
+                detail = "正式死叉" if kdj_exact_death else f"预判死叉(间距仅{k_val-d_val:.2f})"
+                s1_reason = f"0轴下方弱势反弹，J值高位(>80)回落，KDJ({detail})，快速落袋为安"
+        else:
+            has_j_extreme = any(j >= 100 for j in recent_3d_js)
+            cond_j100_death = has_j_extreme and kdj_exact_death and d_filter_passed
+            cond_red_shrink_3d = (macd_bar >= 0) and (prev_macd > 0) and (prev2_macd > 0) and (prev3_macd > 0) and (macd_bar < prev_macd) and (prev_macd < prev2_macd) and (prev2_macd < prev3_macd)
+            cond_macd_death = (prev_macd > 0) and (macd_bar <= 0) and (prev_dif >= prev_dea) and (dif <= dea)
+
+            if cond_j100_death:
+                s1_triggered = True
+                s1_reason = "0轴上方强势行情，J值冲破100极端超买后KDJ正式死叉(K<D)，高位锁定利润"
+            elif cond_red_shrink_3d:
+                s1_triggered = True
+                s1_reason = "0轴上方强势行情，MACD红柱连续3日逐根缩短，提前锁定利润"
+            elif cond_macd_death:
+                s1_triggered = True
+                s1_reason = "0轴上方强势行情，MACD正式死叉(DIF下穿DEA)，兜底无条件清仓"
+
+        if s1_triggered:
+            return {
+                "signal_type": "S1",
+                "signal_name": "止盈: 强势/弱势分级止盈",
+                "signal_position": "止盈清仓 / 锁定利润",
+                "signal_reason": s1_reason,
+                "closes_position": True,
+                "sets_s3": False,
+            }
+
+        # S2: 放量长上影线
+        volume_burst = bar["volume"] >= 1.5 * vol_ma5
+        long_upper = upper_shadow >= 2.0 * max(0.001, candle_body)
+        recent_up = (prev_bar["pct_change"] > 0 and prev2_bar["pct_change"] > 0) or (profit_pct >= 0.03)
+        if volume_burst and long_upper and recent_up:
+            return {
+                "signal_type": "S2",
+                "signal_name": "止盈: 放量长上影线",
+                "signal_position": "减仓 / 锁定利润",
+                "signal_reason": f"高位放量({bar['volume']/vol_ma5:.1f}倍均量)收长上影线(影长{upper_shadow:.3f})，主力抛压强烈",
+                "closes_position": True,
+                "sets_s3": False,
+            }
+
+        # S3: 目标止盈 (盈利>=5% 仅触发一次，减仓50%)
+        if profit_pct >= 0.05 and (not s3_triggered):
+            return {
+                "signal_type": "S3",
+                "signal_name": "止盈: 目标落袋50%",
+                "signal_position": "减仓50% / 保留50%底仓",
+                "signal_reason": f"持仓盈利达到 {profit_pct*100:.2f}%，首次触及5%目标止盈点，减仓50%锁定利润，保留50%底仓等待后续信号",
+                "closes_position": False,
+                "sets_s3": True,
+            }
+        return None
+
     def _add_signals(self, klines, m60_signals=None, timeframe_name="60分"):
         if not klines or len(klines) < 30:
             return
 
         in_position = False
-        buy_index = -1
         buy_price = 0.0
-        buy_highest = 0.0
         s3_triggered = False
 
         for i in range(len(klines)):
@@ -1036,288 +1435,164 @@ class StockDataProvider:
             if i < 20:
                 continue
 
-            prev_bar = klines[i-1]
-            prev2_bar = klines[i-2]
-            prev3_bar = klines[i-3]
-
-            ma5 = bar.get("ma5")
-            prev_ma5 = prev_bar.get("ma5")
-
-            vol_ma5 = bar.get("vol_ma5") or bar["volume"]
-
-            dif = bar.get("dif", 0)
-            dea = bar.get("dea", 0)
-            prev_dif = prev_bar.get("dif", 0)
-            prev_dea = prev_bar.get("dea", 0)
-
-            macd_bar = bar.get("macd", 0)
-            prev_macd = prev_bar.get("macd", 0)
-            prev2_macd = prev2_bar.get("macd", 0)
-            prev3_macd = prev3_bar.get("macd", 0)
-
-            k_val = bar.get("k", 50.0)
-            d_val = bar.get("d", 50.0)
-            j_val = bar.get("j", 50.0)
-            prev_k = prev_bar.get("k", 50.0)
-            prev_d = prev_bar.get("d", 50.0)
-            prev_j = prev_bar.get("j", 50.0)
-            prev2_j = prev2_bar.get("j", 50.0)
-            ma10 = bar.get("ma10")
-            volume = bar.get("volume", 0)
-
-            # K线形态分析
-            candle_body = abs(bar["close"] - bar["open"])
-            upper_shadow = bar["high"] - max(bar["open"], bar["close"])
-
-            # ----------------------------------------------------
-            # ----------------------------------------------------
-            # 模式 A: 未持仓状态，寻找【买入信号 (B)】
-            # ----------------------------------------------------
             if not in_position:
-                # 1. 5日线止跌 (MA5 >= 前一日 MA5)
-                cond_ma5_up = (ma5 is not None) and (prev_ma5 is not None) and (ma5 >= prev_ma5 - 1e-5)
-
-                # 2. MACD动能验证 (绿柱连续2日缩短 或 红柱连续2日放大 / 刚转红柱)
-                cond_macd_green_shrink = (macd_bar <= 0) and (prev_macd <= 0) and (abs(macd_bar) < abs(prev_macd)) and (abs(prev_macd) <= abs(prev2_macd))
-                cond_macd_red_expand = (macd_bar >= 0) and ((prev_macd <= 0 or prev2_macd <= 0) or (prev2_macd >= 0 and macd_bar > prev_macd and prev_macd >= prev2_macd))
-                cond_macd_trend = cond_macd_green_shrink or cond_macd_red_expand
-
-                # 3. MACD金叉附近判定 (二选一) + 通用约束 (DIF主动上行 dif > prev_dif)
-                universal_dif_up = (dif > prev_dif)
-
-                # 场景 A（绿柱末期・金叉前左侧）：绿柱绝对值 <= 本轮峰值的 35%
-                scenario_a = False
-                if macd_bar <= 0:
-                    green_wave_peak = 0.0
-                    j = i
-                    while j >= 0 and klines[j]["macd"] <= 0:
-                        green_wave_peak = max(green_wave_peak, abs(klines[j]["macd"]))
-                        j -= 1
-                    if green_wave_peak > 0:
-                        scenario_a = abs(macd_bar) <= 0.35 * green_wave_peak
-
-                # 场景 B（红柱初期・金叉后右侧）：MACD正式金叉后的前 2 根红柱 (prev_macd <= 0 或 prev2_macd <= 0)
-                scenario_b = (macd_bar >= 0) and (prev_macd <= 0 or prev2_macd <= 0)
-
-                cond_macd_gold_close = (scenario_a or scenario_b) and universal_dif_up
-
-                # 4. KDJ多头结构 (K > D)
-                cond_kdj_bull = k_val > d_val
-
-                # 5. 放量大涨过滤：严格看位置！
-                # 长期下跌/中长期回调后的放量大涨是好事(底部放量长阳突破)，大幅上涨之后的放量大涨才是坏事(高位脉冲诱多追高)
-                start_60 = max(0, i - 60 + 1)
-                highest_60 = max(b["high"] for b in klines[start_60:i+1])
-                lowest_60 = min(b["low"] for b in klines[start_60:i+1])
-                range_60 = max(0.001, highest_60 - lowest_60)
-                pos_ratio_60 = (bar["close"] - lowest_60) / range_60
-
-                start_15 = max(0, i - 15 + 1)
-                lowest_15 = min(b["low"] for b in klines[start_15:i+1])
-                gain_from_recent_low = (bar["close"] - lowest_15) / lowest_15 if lowest_15 > 0 else 0
-
-                # 仅当处于大幅上涨之后(60日相对高位 pos_ratio_60 >= 0.65 或 近期已累计大涨 gain_from_recent_low >= 0.15)时，放量大涨才属于脉冲追高
-                is_high_position = (pos_ratio_60 >= 0.65) or (gain_from_recent_low >= 0.15)
-                is_volume_surge_up = is_high_position and (bar["pct_change"] >= 3.0) and (bar["volume"] >= 1.3 * vol_ma5)
-
-                # ----------------------------------------------------
-                # 共振强度 4 档分级模型：
-                # 4档(全仓100%): 三指标金叉 + (黄金坑深跌反转 或 放量突破站稳MA10)
-                # 3档(重仓75%):  三指标金叉 + 站稳MA5收红
-                # 2档(半仓50%):  三指标标准金叉多头
-                # 1档(轻仓25%):  MA5走平 + MACD拐头收敛 (双指标初现企稳试错)
-                # ----------------------------------------------------
-                cond_3_base = cond_ma5_up and cond_macd_trend and cond_macd_gold_close and cond_kdj_bull and (not is_volume_surge_up)
-
-                is_vol_11 = (volume >= 1.1 * vol_ma5)
-                is_vol_125 = (volume >= 1.25 * vol_ma5)
-                is_red_bar = (bar.get("pct_change", 0) > 0) or (bar["close"] >= bar["open"])
-                is_above_ma5 = (ma5 is not None and bar["close"] >= ma5)
-                is_above_ma10 = (ma10 is not None and bar["close"] >= ma10)
-
-                # 严重超跌反弹定义：此前J值曾深探 < 15 或 K < 20，且当前大幅拔起金叉
-                is_deep_oversold_bounce = (prev_j < 15 or prev2_j < 15 or prev_k < 20) and (j_val >= prev_j + 5.0)
-                # 突破型启动：站稳MA10且成交量放大1.25倍收红
-                is_breakout_launch = is_above_ma10 and is_vol_125 and is_red_bar
-
-                if cond_3_base:
-                    # 4 档：全仓 100%
-                    if is_deep_oversold_bounce or is_breakout_launch:
-                        tier = 4
-                        st = "B4"
-                        sname = f"买入: {timeframe_name}4档全仓共振"
-                        spos = "全仓 100% 顶格建仓"
-                        launch_reason = "深跌黄金坑强力拔起" if is_deep_oversold_bounce else "放量突破站稳MA10"
-                        sreason = f"4档全仓共振：三大指标金叉 + {launch_reason}，建议100%全仓出击"
-                    # 3 档：重仓 75%
-                    elif is_above_ma5 and is_red_bar:
-                        tier = 3
-                        st = "B3"
-                        sname = f"买入: {timeframe_name}3档重仓共振"
-                        spos = "重仓 75% 积极建仓"
-                        vol_note = "温和放量" if is_vol_11 else "站稳均线"
-                        sreason = f"3档重仓共振：三大指标金叉 + {vol_note}收红站上MA5，建议75%重仓建仓"
-                    # 2 档：半仓 50%
-                    else:
-                        tier = 2
-                        st = "B2"
-                        sname = f"买入: {timeframe_name}2档半仓共振"
-                        spos = "半仓 50% 标准建仓"
-                        sreason = f"2档标准共振：MA5向上 + MACD动能修复 + KDJ多头，建议50%半仓稳健建仓"
-
-                    bar["signal_type"] = st
-                    bar["signal_name"] = sname
-                    bar["signal_position"] = spos
-                    bar["signal_reason"] = sreason
-                    bar["buy_tier"] = tier
-
+                sig_res = self._evaluate_buy_signal(klines, i, timeframe_name=timeframe_name)
+                if sig_res:
+                    bar["signal_type"] = sig_res["signal_type"]
+                    bar["signal_name"] = sig_res["signal_name"]
+                    bar["signal_position"] = sig_res["signal_position"]
+                    bar["signal_reason"] = sig_res["signal_reason"]
+                    bar["buy_tier"] = sig_res["buy_tier"]
                     in_position = True
                     s3_triggered = False
-                    buy_index = i
                     buy_price = bar["close"]
-                    buy_highest = bar["high"]
-                    continue
-                else:
-                    # 1 档：轻仓 25% 试错
-                    cond_2_base = cond_ma5_up and cond_macd_trend and cond_macd_gold_close and (not is_volume_surge_up) and (j_val > prev_j)
-                    if cond_2_base:
-                        tier = 1
-                        st = "B1"
-                        bar["signal_type"] = st
-                        bar["signal_name"] = f"买入: {timeframe_name}1档轻仓共振"
-                        bar["signal_position"] = "轻仓 25% 试探建仓"
-                        bar["signal_reason"] = f"1档试错共振：MA5走平止跌 + MACD动能修复，双指标企稳，防踏空轻仓25%试探"
-                        bar["buy_tier"] = tier
-
-                        in_position = True
-                        s3_triggered = False
-                        buy_index = i
-                        buy_price = bar["close"]
-                        buy_highest = bar["high"]
-                        continue
-
-            # ----------------------------------------------------
-            # 模式 B: 持仓状态，评估【卖出条件 (止盈 / 止损)】
-            # ----------------------------------------------------
             else:
-                holding_days = i - buy_index
-                profit_pct = (bar["close"] - buy_price) / buy_price if buy_price > 0 else 0
-                buy_highest = max(buy_highest, bar["high"])
+                sig_res = self._evaluate_sell_signal(klines, i, buy_price, s3_triggered)
+                if sig_res:
+                    bar["signal_type"] = sig_res["signal_type"]
+                    bar["signal_name"] = sig_res["signal_name"]
+                    bar["signal_position"] = sig_res["signal_position"]
+                    bar["signal_reason"] = sig_res["signal_reason"]
+                    if sig_res["closes_position"]:
+                        in_position = False
+                        s3_triggered = False
+                    elif sig_res["sets_s3"]:
+                        s3_triggered = True
 
-                # --- (0) 放量大涨(>=5%)且上影线占全天振幅>=10%冲高离场 (最高优先级止盈) ---
-                is_volume_surge_up_s7 = (bar["pct_change"] >= 5.0) and (bar["volume"] >= 1.3 * vol_ma5)
-                day_range = max(0.001, bar["high"] - bar["low"])
-                shadow_ratio = upper_shadow / day_range
-                
-                if is_volume_surge_up_s7 and (shadow_ratio >= 0.10):
-                    bar["signal_type"] = "S7"
-                    bar["signal_name"] = "止盈: 放量大涨带上影"
-                    bar["signal_position"] = "止盈清仓 / 锁定利润"
-                    vol_ratio = bar["volume"] / vol_ma5 if vol_ma5 else 1.0
-                    bar["signal_reason"] = f"持仓期间放量大涨(+{bar['pct_change']:.2f}% >=5%)且上影线占振幅{shadow_ratio*100:.0f}%(>=10%)，冲高锁定利润"
-                    in_position = False
-                    s3_triggered = False
-                    continue
+    def _trace_t1_hybrid_signals(self, day_klines, m120_klines, hs300_day_map, hs300_latest_bull=False, causal_today=False):
+        """
+        Trace adaptive T+1 strategy: Daily-K buy (B1-B4) + regime-adaptive sell:
+        OR(HS300 Close > MA30, Stock Close > MA60) => Bull (Daily-K sell); else Bear (120m sell, strict T+1).
+        """
+        if not day_klines:
+            return None
 
-                # S4: 指标止损 (破位MA10且MACD翻绿/绿柱放大 OR 破位MA10且MA5显著下拐)
-                ma10 = bar.get("ma10", ma5)
-                ma_break_down = (ma10 is not None) and (bar["close"] < ma10)
+        m120_by_day = {}
+        for m_idx, mb in enumerate(m120_klines or []):
+            d_key = mb.get("day_date") or (mb.get("date", "")[:10])
+            if d_key:
+                m120_by_day.setdefault(d_key, []).append(m_idx)
 
-                cond_macd_flip_green = (macd_bar <= -0.001) and (prev_macd >= 0) and ma_break_down
-                cond_macd_re_expand = (macd_bar < 0) and (prev_macd < 0) and (abs(macd_bar) - abs(prev_macd) > 0.001)
-                cond_macd_bad = cond_macd_flip_green or cond_macd_re_expand
+        in_pos = False
+        has_s3_holding = False
+        buy_cost_price = day_klines[-1]["close"]
+        buy_date = ""
+        events_by_date = {}
 
-                # 优化均线离场逻辑：跌破10日线(MA10)防守，过滤5日线附近微弱震荡，但在 MACD 红柱扩张(多头)时保护不卖出
-                ma5_drop_ratio = (prev_ma5 - ma5) / prev_ma5 if (ma5 and prev_ma5 and prev_ma5 > 0) else 0
-                macd_bull_expanding = (macd_bar > 0) and (macd_bar >= prev_macd)
-                ma5_significant_down = (ma5_drop_ratio >= 0.005 and ma_break_down) or (ma5 < prev_ma5 * 0.995 and ma_break_down)
-                cond_ma_turn_down = (ma5 is not None) and (prev_ma5 is not None) and ma5_significant_down and (not macd_bull_expanding)
+        n_days = len(day_klines)
+        for day_idx, day_bar in enumerate(day_klines):
+            d = day_bar["date"]
+            is_last_day = (day_idx == n_days - 1)
 
-                if cond_macd_bad or cond_ma_turn_down:
-                    bar["signal_type"] = "S4"
-                    bar["signal_name"] = "止损: 指标走坏"
-                    bar["signal_position"] = "100% 严格止损"
-                    if cond_macd_flip_green:
-                        reason_detail = "破位10日线且MACD翻绿"
-                    elif cond_macd_re_expand:
-                        reason_detail = "MACD绿柱放大(>0.001)"
-                    else:
-                        reason_detail = "破位10日线且MA5下拐"
-                    bar["signal_reason"] = f"触发指标止损({reason_detail})，必须严格离场防范套牢"
-                    in_position = False
-                    s3_triggered = False
-                    continue
+            if (not is_last_day) or causal_today:
+                ref_idx = day_idx - 1 if day_idx > 0 else 0
+                ref_bar = day_klines[ref_idx]
+                ref_d = ref_bar["date"]
+                hs300_b = hs300_day_map.get(ref_d, {}).get("is_bull", False)
+                ref_ma60 = ref_bar.get("ma60")
+                stock_b = bool(ref_ma60 and ref_bar["close"] > ref_ma60)
+                is_bull_d = hs300_b or stock_b
+            else:
+                cur_ma60 = day_bar.get("ma60")
+                stock_b = bool(cur_ma60 and day_bar["close"] > cur_ma60)
+                is_bull_d = bool(hs300_latest_bull or stock_b)
 
+            day_events = {"buy": None, "sells": [], "is_bull": is_bull_d}
 
-                # --- (一) S1 止盈升级规则 (DIF 0轴上线下分级策略) ---
-                recent_3d_js = [klines[j].get("j", 50.0) for j in range(max(0, i-3), i+1)]
-                kdj_exact_death = (prev_k >= prev_d) and (k_val < d_val)
-                kdj_near_death = (j_val < prev_j) and (k_val >= d_val) and (k_val - d_val <= 2.5) and (k_val - d_val <= 0.45 * (prev_k - prev_d))
-                kdj_death_or_near = kdj_exact_death or kdj_near_death
-                d_filter_passed = d_val >= 50
-
-                s1_triggered = False
-                s1_reason = ""
-
-                # 场景 1: DIF < 0 (0轴下方，弱势反弹)：J >= 80 后死叉 / 预判死叉，快速落袋
-                if dif < 0:
-                    has_j_overbought = any(j >= 80 for j in recent_3d_js)
-                    if has_j_overbought and kdj_death_or_near and d_filter_passed:
-                        s1_triggered = True
-                        detail = "正式死叉" if kdj_exact_death else f"预判死叉(间距仅{k_val-d_val:.2f})"
-                        s1_reason = f"0轴下方弱势反弹，J值高位(>80)回落，KDJ({detail})，快速落袋为安"
-                # 场景 2: DIF >= 0 (0轴上方，强势行情)：三种高级触发机制
+            # Step 1: Evaluate exits strictly on d > buy_date (T+1 constraint)
+            if in_pos and d > buy_date:
+                m120_indices = m120_by_day.get(d, [])
+                use_m120 = (not is_bull_d) and any(idx >= 20 for idx in m120_indices)
+                if use_m120:
+                    for m_idx in m120_indices:
+                        if not in_pos or m_idx < 20:
+                            continue
+                        s_res = self._evaluate_sell_signal(m120_klines, m_idx, buy_cost_price, has_s3_holding)
+                        if s_res:
+                            m_bar = m120_klines[m_idx]
+                            day_events["sells"].append({
+                                **s_res,
+                                "price": m_bar["close"],
+                                "tf": "120分",
+                                "datetime": m_bar.get("datetime", d),
+                            })
+                            if s_res["closes_position"]:
+                                in_pos = False
+                                has_s3_holding = False
+                            elif s_res["sets_s3"]:
+                                has_s3_holding = True
                 else:
-                    # ① J值突破100极端超买后KDJ正式死叉 (必须 K < D，防止多头趋势中因预判死叉提前卖飞)
-                    has_j_extreme = any(j >= 100 for j in recent_3d_js)
-                    cond_j100_death = has_j_extreme and kdj_exact_death and d_filter_passed
-                    
-                    # ② 核心触发：MACD红柱连续3个交易日逐根缩短 (修正归零边界：允许缩短至 0 轴归零 macd_bar >= 0)
-                    cond_red_shrink_3d = (macd_bar >= 0) and (prev_macd > 0) and (prev2_macd > 0) and (prev3_macd > 0) and (macd_bar < prev_macd) and (prev_macd < prev2_macd) and (prev2_macd < prev3_macd)
+                    s_res = self._evaluate_sell_signal(day_klines, day_idx, buy_cost_price, has_s3_holding)
+                    if s_res:
+                        day_events["sells"].append({
+                            **s_res,
+                            "price": day_bar["close"],
+                            "tf": "日K",
+                            "datetime": d,
+                        })
+                        if s_res["closes_position"]:
+                            in_pos = False
+                            has_s3_holding = False
+                        elif s_res["sets_s3"]:
+                            has_s3_holding = True
 
-                    # ③ 最终兜底：MACD正式死叉 (修正边界：红柱转平或翻绿，DIF与DEA粘合或下穿 dif <= dea)
-                    cond_macd_death = (prev_macd > 0) and (macd_bar <= 0) and (prev_dif >= prev_dea) and (dif <= dea)
+            # Step 2: Evaluate Daily-K buy when flat
+            if not in_pos:
+                b_res = self._evaluate_buy_signal(day_klines, day_idx, timeframe_name="日K")
+                if b_res:
+                    in_pos = True
+                    has_s3_holding = False
+                    buy_cost_price = day_bar["close"]
+                    buy_date = d
+                    day_events["buy"] = {
+                        **b_res,
+                        "price": day_bar["close"],
+                        "tf": "日K",
+                        "datetime": d,
+                    }
 
-                    if cond_j100_death:
-                        s1_triggered = True
-                        s1_reason = "0轴上方强势行情，J值冲破100极端超买后KDJ正式死叉(K<D)，高位锁定利润"
-                    elif cond_red_shrink_3d:
-                        s1_triggered = True
-                        s1_reason = "0轴上方强势行情，MACD红柱连续3日逐根缩短，提前锁定利润"
-                    elif cond_macd_death:
-                        s1_triggered = True
-                        s1_reason = "0轴上方强势行情，MACD正式死叉(DIF下穿DEA)，兜底无条件清仓"
+            if day_events["buy"] or day_events["sells"]:
+                events_by_date[d] = day_events
 
-                if s1_triggered:
-                    bar["signal_type"] = "S1"
-                    bar["signal_name"] = "止盈: 强势/弱势分级止盈"
-                    bar["signal_position"] = "止盈清仓 / 锁定利润"
-                    bar["signal_reason"] = s1_reason
-                    in_position = False
-                    s3_triggered = False
-                    continue
+        latest_bar = day_klines[-1]
+        latest_date = latest_bar["date"]
+        latest_ma60 = latest_bar.get("ma60")
+        stock_bull_now = bool(latest_ma60 and latest_bar["close"] > latest_ma60)
+        is_bull_now = bool(hs300_latest_bull or stock_bull_now)
 
-                # S2: 放量长上影线 (量能>=1.5倍MAVOL5, 上影线>=2倍实体, 出现于高位)
-                volume_burst = bar["volume"] >= 1.5 * vol_ma5
-                long_upper = upper_shadow >= 2.0 * max(0.001, candle_body)
-                recent_up = (prev_bar["pct_change"] > 0 and prev2_bar["pct_change"] > 0) or (profit_pct >= 0.03)
-                if volume_burst and long_upper and recent_up:
-                    bar["signal_type"] = "S2"
-                    bar["signal_name"] = "止盈: 放量长上影线"
-                    bar["signal_position"] = "减仓 / 锁定利润"
-                    bar["signal_reason"] = f"高位放量({bar['volume']/vol_ma5:.1f}倍均量)收长上影线(影长{upper_shadow:.3f})，主力抛压强烈"
-                    in_position = False
-                    s3_triggered = False
-                    continue
+        today_ev = events_by_date.get(latest_date, {})
+        today_sig = None
+        today_sig_tf = "日K" if is_bull_now else "120分"
+        today_sig_name = ""
+        today_sig_reason = ""
+        if today_ev.get("buy"):
+            b = today_ev["buy"]
+            today_sig = b["signal_type"]
+            today_sig_tf = "日K"
+            today_sig_name = b["signal_name"]
+            today_sig_reason = b["signal_reason"]
+        elif today_ev.get("sells"):
+            s = today_ev["sells"][-1]
+            today_sig = s["signal_type"]
+            today_sig_tf = s["tf"]
+            today_sig_name = s["signal_name"]
+            today_sig_reason = s["signal_reason"]
 
-                # S3: 目标止盈 (盈利>=5% 仅触发一次，减仓50%，保留50%底仓等待后续卖点)
-                if profit_pct >= 0.05 and (not s3_triggered):
-                    bar["signal_type"] = "S3"
-                    bar["signal_name"] = "止盈: 目标落袋50%"
-                    bar["signal_position"] = "减仓50% / 保留50%底仓"
-                    bar["signal_reason"] = f"持仓盈利达到 {profit_pct*100:.2f}%，首次触及5%目标止盈点，减仓50%锁定利润，保留50%底仓等待后续信号"
-                    s3_triggered = True
-                    continue
+        return {
+            "today_sig": today_sig,
+            "today_sig_tf": today_sig_tf,
+            "today_sig_name": today_sig_name,
+            "today_sig_reason": today_sig_reason,
+            "in_pos": in_pos,
+            "has_s3_holding": has_s3_holding,
+            "buy_cost_price": buy_cost_price,
+            "buy_date": buy_date,
+            "is_bull_now": is_bull_now,
+            "hs300_bull_now": hs300_latest_bull,
+            "stock_bull_now": stock_bull_now,
+            "stock_ma60": latest_ma60,
+            "events_by_date": events_by_date,
+        }
 
 
     def search_stock(self, keyword):
@@ -1420,6 +1695,9 @@ class StockDataProvider:
             return []
 
     def _scan_and_cache_watch_pool(self, sector_etfs, cache_key):
+        hs300_regime = self.get_market_bull_regime()
+        hs300_day_map = hs300_regime.get("day_map", {})
+        hs300_bull_now = bool(hs300_regime.get("is_bull", False))
 
         def _process_item(item):
             code = item["code"]
@@ -1439,7 +1717,11 @@ class StockDataProvider:
                 tf_check_bars = 3
                 optimal_period = "day"
 
+            regime = "t0" if (is_t0 or is_60m) else ("bull" if hs300_bull_now else "bear")
+            regime_label = ("T+0·60分" if is_60m else "T+0·30分") if (is_t0 or is_60m) else ("牛态·日K卖" if hs300_bull_now else "熊防·120分卖")
+
             try:
+                m120_klines = []
                 if is_60m:
                     data = self.get_60min_klines(code)
                     klines = data.get("klines", [])
@@ -1461,6 +1743,8 @@ class StockDataProvider:
                         time.sleep(0.15)
                         data = self.get_daily_klines(code)
                         klines = data.get("klines", [])
+                    if klines:
+                        m120_klines = self.get_120min_klines(code).get("klines", [])
 
                 if not klines:
                     # 备选回退60分
@@ -1501,29 +1785,30 @@ class StockDataProvider:
                         "is_triggered": False,
                         "reason_summary": p_reason,
                         "trade_rule": "T+0" if is_t0 else "T+1",
-                        "optimal_period": optimal_period
+                        "optimal_period": optimal_period,
+                        "regime": regime,
+                        "regime_label": regime_label,
+                        "sell_period": optimal_period,
+                        "hs300_bull": hs300_bull_now,
                     }
-                
+
                 bar = klines[-1]
                 prev = klines[-2] if len(klines) > 1 else bar
                 prev2 = klines[-3] if len(klines) > 2 else prev
-                prev3 = klines[-4] if len(klines) > 3 else prev2
 
                 ma5 = bar.get("ma5")
                 prev_ma5 = prev.get("ma5")
-                
-                # 评估 5 项 B1 条件
+
+                # 评估 5 项 B1 条件 (T+1 永远基于日K评估买点; T+0 基于 30m/60m)
                 c1 = (ma5 is not None) and (prev_ma5 is not None) and (ma5 >= prev_ma5 - 1e-5)
-                
+
                 mb = bar.get("macd", 0)
                 pmb = prev.get("macd", 0)
                 p2mb = prev2.get("macd", 0)
-                p3mb = prev3.get("macd", 0)
                 c2 = (mb <= 0 and pmb <= 0 and abs(mb) < abs(pmb) and abs(pmb) <= abs(p2mb)) or (mb >= 0 and (pmb <= 0 or p2mb <= 0 or (p2mb >= 0 and mb > pmb and pmb >= p2mb)))
 
                 universal_dif_up = (bar.get("dif", 0) > prev.get("dif", 0))
 
-                # 场景 A（绿柱末期・金叉前左侧）
                 scenario_a = False
                 if mb <= 0:
                     green_wave_peak = 0.0
@@ -1534,108 +1819,136 @@ class StockDataProvider:
                     if green_wave_peak > 0:
                         scenario_a = abs(mb) <= 0.35 * green_wave_peak
 
-                # 场景 B（红柱初期・金叉后右侧）：前 2 根红柱
                 scenario_b = (mb >= 0) and (pmb <= 0 or p2mb <= 0)
-
                 c3 = (scenario_a or scenario_b) and universal_dif_up
-
                 c4 = bar.get("k", 0) > bar.get("d", 0)
-
                 score = sum([c1, c2, c3, c4])
 
-                # 检查今日 (最新交易日 对应周期) 是否刚触发买卖信号
+                stock_ma60 = bar.get("ma60")
+                stock_bull_now = False
+                hybrid_sig_reason = ""
+                sell_tf_name = tf_name
+                sell_period = optimal_period
+
                 if is_t0 or is_60m:
                     curr_cal_day = (bar.get("day_date") or bar.get("date") or bar.get("datetime") or "")[:10]
                     today_bars = [k for k in klines[-tf_check_bars:] if curr_cal_day and (k.get("day_date") == curr_cal_day or k.get("date", "").startswith(curr_cal_day) or k.get("datetime", "").startswith(curr_cal_day))]
                     today_sig = bar.get("signal_type")
+                    today_sig_tf = tf_name
                     if not today_sig and today_bars:
                         for tb in reversed(today_bars[:-1]):
                             if tb.get("signal_type"):
                                 today_sig = tb.get("signal_type")
                                 break
+
+                    in_pos = False
+                    has_s3_holding = False
+                    buy_cost_price = bar["close"]
+                    buy_date = ""
+                    for k in reversed(klines[:-1]):
+                        sig = k.get("signal_type")
+                        if sig and sig.startswith("B"):
+                            in_pos = True
+                            buy_cost_price = k.get("close", bar["close"])
+                            buy_date = k.get("date", "")
+                            break
+                        elif sig in ["S1", "S2", "S4", "S7"]:
+                            in_pos = False
+                            has_s3_holding = False
+                            break
+                        elif sig == "S3":
+                            in_pos = True
+                            has_s3_holding = True
+                            continue
                 else:
-                    # 日K线：每日仅有一根K线，今日信号严格仅取决于最新日K柱 bar，绝不能将历史前几日的买点当做今日买点！
-                    today_sig = bar.get("signal_type")
+                    # T+1 自适应双核模式：日K买点 + OR(沪深300>MA30, 个股>MA60) 判别牛态日K卖 ↔ 熊防120分卖
+                    hybrid = self._trace_t1_hybrid_signals(
+                        klines, m120_klines, hs300_day_map,
+                        hs300_latest_bull=hs300_bull_now, causal_today=False
+                    )
+                    is_bull = hybrid["is_bull_now"]
+                    stock_bull_now = hybrid["stock_bull_now"]
+                    stock_ma60 = hybrid["stock_ma60"]
+                    regime = "bull" if is_bull else "bear"
+                    sell_tf_name = "日K" if is_bull else "120分"
+                    sell_period = "day" if is_bull else "120min"
+                    regime_label = "牛态·日K卖" if is_bull else "熊防·120分卖"
+                    optimal_period = sell_period
 
-                # 评估股票当前是否处于持仓状态 (S3减仓50%后依然保持持仓，唯有S1/S2/S4/S7完全清仓)
-                in_pos = False
-                has_s3_holding = False
-                buy_cost_price = bar["close"]
-                buy_date = ""
-
-                for k in reversed(klines[:-1]):
-                    sig = k.get("signal_type")
-                    if sig and sig.startswith("B"):
-                        in_pos = True
-                        buy_cost_price = k.get("close", bar["close"])
-                        buy_date = k.get("date", "")
-                        break
-                    elif sig in ["S1", "S2", "S4", "S7"]:
-                        in_pos = False
-                        has_s3_holding = False
-                        break
-                    elif sig == "S3":
-                        in_pos = True
-                        has_s3_holding = True
-                        # S3 只是卖出半仓，持仓成本必须继续向前追溯至真正的建仓买点 B，绝不能重置成本与收益率！
-                        continue
+                    today_sig = hybrid["today_sig"]
+                    today_sig_tf = hybrid["today_sig_tf"]
+                    hybrid_sig_reason = hybrid.get("today_sig_reason", "")
+                    in_pos = hybrid["in_pos"]
+                    has_s3_holding = hybrid["has_s3_holding"]
+                    buy_cost_price = hybrid["buy_cost_price"]
+                    buy_date = hybrid["buy_date"]
 
                 sort_priority = 10
 
-                # 优先判定【今日 (最新交易日 对应周期)】是否刚触发买卖/减仓信号
                 if today_sig and today_sig.startswith("B"):
+                    buy_tf = "日K" if not (is_t0 or is_60m) else tf_name
                     if today_sig == "B4":
-                        tag = f"{tf_name}4档买入"
-                        tag_color = "#b91c1c"  # 深红/紫红高亮 (全仓100%)
-                        reason_summary = f"{tf_name}4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击"
+                        tag = f"{buy_tf}4档买入"
+                        tag_color = "#b91c1c"
+                        reason_summary = f"{buy_tf}4档全仓共振(超跌拔起/量价突破)，建议100%全仓出击"
                         sort_priority = 110
                     elif today_sig == "B3":
-                        tag = f"{tf_name}3档买入"
-                        tag_color = "#dc2626"  # 大红高亮 (重仓75%)
-                        reason_summary = f"{tf_name}3档重仓共振(站上MA5收红)，建议75%重仓建仓"
+                        tag = f"{buy_tf}3档买入"
+                        tag_color = "#dc2626"
+                        reason_summary = f"{buy_tf}3档重仓共振(站上MA5收红)，建议75%重仓建仓"
                         sort_priority = 105
                     elif today_sig == "B2":
-                        tag = f"{tf_name}2档买入"
-                        tag_color = "#ea580c"  # 橙红高亮 (半仓50%)
-                        reason_summary = f"{tf_name}2档标准共振(三指标金叉)，建议50%半仓稳健建仓"
+                        tag = f"{buy_tf}2档买入"
+                        tag_color = "#ea580c"
+                        reason_summary = f"{buy_tf}2档标准共振(三指标金叉)，建议50%半仓稳健建仓"
                         sort_priority = 100
                     elif today_sig == "B1":
-                        tag = f"{tf_name}1档买入"
-                        tag_color = "#2563eb"  # 蓝色高亮 (轻仓25%)
-                        reason_summary = f"{tf_name}1档试错共振(双指标初现企稳)，建议25%轻仓试探"
+                        tag = f"{buy_tf}1档买入"
+                        tag_color = "#2563eb"
+                        reason_summary = f"{buy_tf}1档试错共振(双指标初现企稳)，建议25%轻仓试探"
                         sort_priority = 98
                     else:
-                        tag = f"{tf_name}买入"
+                        tag = f"{buy_tf}买入"
                         tag_color = "#dc2626"
-                        reason_summary = f"{tf_name}多指标共振确认，顺势分批建仓"
+                        reason_summary = f"{buy_tf}多指标共振确认，顺势分批建仓"
                         sort_priority = 100
+                    if (not is_t0) and (not is_60m):
+                        optimal_period = "day"
+                        if regime == "bear":
+                            reason_summary += " [熊防:次日起由120分护盘]"
                     buy_cost_price = bar["close"]
                     buy_date = bar.get("date", "")
 
                 elif today_sig in ["S1", "S2", "S7", "S4"]:
-                    tag = f"{tf_name}卖出"
-                    tag_color = "#16a34a"  # 鲜艳大绿高亮 (卖点专用)
-                    reason_summary = f"{tf_name}触发分级止盈/止损卖点，建议平仓"
+                    s_tf = today_sig_tf
+                    tag = f"{s_tf}卖出"
+                    tag_color = "#16a34a"
+                    reason_summary = hybrid_sig_reason or f"{s_tf}触发分级止盈/止损卖点，建议平仓"
                     sort_priority = 95
+                    if (not is_t0) and (not is_60m):
+                        optimal_period = "120min" if s_tf == "120分" else "day"
                 elif today_sig == "S3":
-                    tag = "减半止盈"
-                    tag_color = "#f59e0b"  # 醒目琥珀金 (减仓50%专用)
-                    reason_summary = "盈利触及5%，止盈减半(保留50%底仓)"
+                    s_tf = today_sig_tf
+                    tag = "120分减半止盈" if s_tf == "120分" else "减半止盈"
+                    tag_color = "#f59e0b"
+                    reason_summary = f"{s_tf}盈利触及5%，止盈减半(保留50%底仓)"
                     sort_priority = 90
+                    if (not is_t0) and (not is_60m):
+                        optimal_period = "120min" if s_tf == "120分" else "day"
                 elif in_pos:
                     if has_s3_holding:
                         tag = "持仓(50%底仓)"
-                        tag_color = "#f97316"  # 橙色
-                        reason_summary = "盈利已锁定50%，留50%底仓观察"
+                        tag_color = "#f97316"
+                        reason_summary = f"已锁50%利润，由{sell_tf_name}跟踪后续卖点"
                         sort_priority = 80
                     else:
                         tag = "观望持仓"
-                        tag_color = "#ea580c"  # 红橙色 (已持仓多头状态)
-                        reason_summary = f"{tf_name}持仓观望中，等待后续卖点"
+                        tag_color = "#ea580c"
+                        reason_summary = f"{regime_label} · 持仓等待{sell_tf_name}卖点" if not (is_t0 or is_60m) else f"{tf_name}持仓观望中，等待后续卖点"
                         sort_priority = 70
                 elif score >= 3:
                     tag = "即将满足"
-                    tag_color = "#f97316"  # 醒目橙色
+                    tag_color = "#f97316"
                     sub_reasons = []
                     if c1: sub_reasons.append("MA5向上")
                     if mb > 0 and mb > pmb: sub_reasons.append("红柱延伸")
@@ -1643,12 +1956,13 @@ class StockDataProvider:
                     if scenario_b: sub_reasons.append("红柱初期")
                     elif scenario_a: sub_reasons.append("绿柱末期")
                     if c4: sub_reasons.append("KDJ多头")
-                    reason_summary = " · ".join(sub_reasons[:2]) if sub_reasons else f"{tf_name}多指标向好"
+                    base_r = " · ".join(sub_reasons[:2]) if sub_reasons else f"{tf_name}多指标向好"
+                    reason_summary = f"{base_r} ({regime_label})" if not (is_t0 or is_60m) else base_r
                     sort_priority = 50
                 else:
                     tag = "蓄势回调"
-                    tag_color = "#94a3b8"  # 浅灰
-                    reason_summary = f"{tf_name}寻支撑，密切观察"
+                    tag_color = "#94a3b8"
+                    reason_summary = f"{regime_label} · 寻支撑观察" if not (is_t0 or is_60m) else f"{tf_name}寻支撑，密切观察"
                     sort_priority = 10
 
                 res_dict = {
@@ -1676,7 +1990,13 @@ class StockDataProvider:
                     "is_s3_today": (today_sig == "S3"),
                     "has_s3_holding": has_s3_holding,
                     "trade_rule": "T+0" if is_t0 else "T+1",
-                    "optimal_period": optimal_period
+                    "optimal_period": optimal_period,
+                    "regime": regime,
+                    "regime_label": regime_label,
+                    "sell_period": sell_period,
+                    "hs300_bull": hs300_bull_now,
+                    "stock_bull": stock_bull_now,
+                    "stock_ma60": round(stock_ma60, 3) if stock_ma60 else None,
                 }
                 if not hasattr(self, "_item_data_cache"):
                     self._item_data_cache = {}
@@ -1713,7 +2033,13 @@ class StockDataProvider:
                     "buy_date": "",
                     "sort_priority": 15,
                     "is_triggered": False,
-                    "reason_summary": p_reason
+                    "reason_summary": p_reason,
+                    "trade_rule": "T+0" if is_t0 else "T+1",
+                    "optimal_period": optimal_period,
+                    "regime": regime,
+                    "regime_label": regime_label,
+                    "sell_period": optimal_period,
+                    "hs300_bull": hs300_bull_now,
                 }
 
         with ThreadPoolExecutor(max_workers=8) as executor:
@@ -2141,16 +2467,23 @@ class StockDataProvider:
                         return self._history_pnl_cache
 
         max_single_pos_cap = total_capital * float(max_pos_cap_pct)
+        hs300_regime = self.get_market_bull_regime()
+        hs300_day_map = hs300_regime.get("day_map", {})
 
         from concurrent.futures import ThreadPoolExecutor
 
         def fetch_one(item):
             try:
                 code = item.get("code") or item.get("symbol")
+                name_hint = item.get("desc") or item.get("name") or ""
                 data = self.get_daily_klines(code)
-                return item, data.get("klines", [])
+                day_klines = data.get("klines", [])
+                m120_klines = []
+                if day_klines and (not is_t0_etf(code, name_hint)):
+                    m120_klines = self.get_120min_klines(code).get("klines", [])
+                return item, day_klines, m120_klines
             except Exception:
-                return item, []
+                return item, [], []
 
         with ThreadPoolExecutor(max_workers=12) as executor:
             stock_data = list(executor.map(fetch_one, custom_list))
@@ -2159,7 +2492,7 @@ class StockDataProvider:
         bench_map = {b["date"]: b["close"] for b in bench_data}
 
         all_dates_set = set()
-        for item, klines in stock_data:
+        for item, klines, _ in stock_data:
             for k in klines:
                 all_dates_set.add(k["date"])
         sorted_dates = sorted(list(all_dates_set))
@@ -2170,6 +2503,7 @@ class StockDataProvider:
             if getattr(self, '_history_pnl_cache', None) is not None:
                 return self._history_pnl_cache
             return {
+                "strategy_version": "hybrid_v2",
                 "initial_capital": total_capital,
                 "total_capital": total_capital,
                 "total_assets": total_capital,
@@ -2181,13 +2515,31 @@ class StockDataProvider:
             }
 
         stock_map = {}
-        for item, klines in stock_data:
+        for item, klines, m120_klines in stock_data:
             code = item.get("code") or item.get("symbol")
-            k_map = {k["date"]: k for k in klines}
+            name_hint = item.get("desc") or item.get("name") or ""
+            k_map = {}
+            idx_map = {}
+            prev_map = {}
+            for idx, k in enumerate(klines):
+                d = k["date"]
+                k_map[d] = k
+                idx_map[d] = idx
+                prev_map[d] = klines[idx - 1] if idx > 0 else k
+            m120_by_day = {}
+            for m_idx, mb in enumerate(m120_klines or []):
+                d_key = mb.get("day_date") or (mb.get("date", "")[:10])
+                if d_key:
+                    m120_by_day.setdefault(d_key, []).append(m_idx)
             stock_map[code] = {
                 "info": item,
+                "is_t0": is_t0_etf(code, name_hint),
                 "klines": klines,
-                "k_map": k_map
+                "k_map": k_map,
+                "idx_map": idx_map,
+                "prev_map": prev_map,
+                "m120_klines": m120_klines,
+                "m120_by_day": m120_by_day,
             }
 
         positions = {}
@@ -2197,17 +2549,57 @@ class StockDataProvider:
         start_bench_close = bench_map.get(sorted_dates[0], 3000.0)
 
         for d in sorted_dates:
-            # Step 1: Process Sells & Profit Taking first to recover cash
+            # Step 1: Process Sells & Profit Taking first to recover cash (Bull=Day / Bear=120m adaptive for T+1)
             for code, s_obj in stock_map.items():
                 k = s_obj["k_map"].get(d)
                 if not k:
                     continue
-                sig = k.get("signal_type")
-                c = k["close"]
                 pos = positions.get(code)
+                if not (pos and pos["shares"] > 0):
+                    continue
+                if d <= pos["buy_date"]:
+                    continue
 
-                if pos and pos["shares"] > 0:
+                sell_events = []
+                if not s_obj["is_t0"]:
+                    prev_k = s_obj["prev_map"].get(d, k)
+                    hs300_b = hs300_day_map.get(prev_k["date"], {}).get("is_bull", False)
+                    prev_ma60 = prev_k.get("ma60")
+                    stock_b = bool(prev_ma60 and prev_k["close"] > prev_ma60)
+                    is_bull_d = hs300_b or stock_b
+                    m120_indices = s_obj["m120_by_day"].get(d, [])
+                    use_m120 = (not is_bull_d) and any(idx >= 20 for idx in m120_indices)
+                    if use_m120:
+                        s3_tmp = pos.get("s3_done", False)
+                        for m_idx in m120_indices:
+                            if m_idx < 20:
+                                continue
+                            sr = self._evaluate_sell_signal(s_obj["m120_klines"], m_idx, pos["cost_price"], s3_tmp)
+                            if sr:
+                                m_bar = s_obj["m120_klines"][m_idx]
+                                sell_events.append((sr["signal_type"], f"[熊防120分] {sr['signal_name']}", m_bar["close"]))
+                                if sr["closes_position"]:
+                                    break
+                                elif sr["sets_s3"]:
+                                    s3_tmp = True
+                    else:
+                        d_idx = s_obj["idx_map"].get(d, -1)
+                        sr = self._evaluate_sell_signal(s_obj["klines"], d_idx, pos["cost_price"], pos.get("s3_done", False))
+                        if sr:
+                            tf_tag = "[牛态日K]" if is_bull_d else "[日K]"
+                            sell_events.append((sr["signal_type"], f"{tf_tag} {sr['signal_name']}", k["close"]))
+                else:
+                    sig_t0 = k.get("signal_type")
+                    if sig_t0 in ["S3", "S1", "S2", "S4", "S7"]:
+                        sell_events.append((sig_t0, k.get("signal_name", "分级止盈/清仓"), k["close"]))
+
+                for sig, s_name, c in sell_events:
+                    pos = positions.get(code)
+                    if not (pos and pos["shares"] > 0):
+                        break
                     if sig == "S3":
+                        if pos.get("s3_done"):
+                            continue
                         sell_shares = int(pos["shares"] * 0.5 / 100) * 100
                         if sell_shares > 0:
                             returned_cash = sell_shares * c
@@ -2225,10 +2617,11 @@ class StockDataProvider:
                                 "shares": sell_shares,
                                 "profit": round(pnl, 2),
                                 "return_pct": round(ret_pct, 2),
-                                "reason": "S3目标落袋50%"
+                                "reason": s_name or "S3目标落袋50%"
                             })
                             pos["shares"] -= sell_shares
                             pos["buy_amount"] = pos["shares"] * pos["cost_price"]
+                            pos["s3_done"] = True
                             if pos["shares"] <= 0:
                                 positions[code] = None
                     elif sig in ["S1", "S2", "S4", "S7"]:
@@ -2248,9 +2641,10 @@ class StockDataProvider:
                             "shares": sell_shares,
                             "profit": round(pnl, 2),
                             "return_pct": round(ret_pct, 2),
-                            "reason": k.get("signal_name", "分级止盈/清仓")
+                            "reason": s_name
                         })
                         positions[code] = None
+                        break
 
             # Step 2: Score buy candidates for day d
             buy_candidates = []
@@ -2258,9 +2652,14 @@ class StockDataProvider:
                 k = s_obj["k_map"].get(d)
                 if not k:
                     continue
+                pos = positions.get(code)
                 sig = k.get("signal_type")
+                if (not s_obj["is_t0"]) and (not (pos and pos["shares"] > 0)):
+                    d_idx = s_obj["idx_map"].get(d, -1)
+                    b_eval = self._evaluate_buy_signal(s_obj["klines"], d_idx, timeframe_name="日K")
+                    if b_eval:
+                        sig = b_eval["signal_type"]
                 if sig and sig.startswith("B"):
-                    pos = positions.get(code)
                     cur_cost = pos["buy_amount"] if pos else 0.0
                     room = max_single_pos_cap - cur_cost
                     if k.get("close", 0) > 0 and room >= (k["close"] * 100):
@@ -2413,6 +2812,7 @@ class StockDataProvider:
         closed_trades.reverse()
 
         res = {
+            "strategy_version": "hybrid_v2",
             "initial_capital": total_capital,
             "total_capital": total_capital,
             "total_assets": latest.get("total_assets", total_capital),
